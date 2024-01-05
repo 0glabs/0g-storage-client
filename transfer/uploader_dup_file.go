@@ -1,4 +1,4 @@
-package file
+package transfer
 
 import (
 	"time"
@@ -8,6 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/zero-gravity-labs/zerog-storage-client/common/blockchain"
 	"github.com/zero-gravity-labs/zerog-storage-client/contract"
+	"github.com/zero-gravity-labs/zerog-storage-client/core"
 	"github.com/zero-gravity-labs/zerog-storage-client/node"
 )
 
@@ -16,9 +17,9 @@ var submissionEventHash = common.HexToHash("0x398e4f14f8588468d3654c03dc3f266e5a
 // uploadDuplicatedFile uploads file to storage node that already exists by root.
 // In this case, user only need to submit transaction on blockchain, and wait for
 // file finality on storage node.
-func (uploader *Uploader) uploadDuplicatedFile(file *File, tags []byte, root common.Hash) error {
+func (uploader *Uploader) uploadDuplicatedFile(data core.IterableData, tags []byte, root common.Hash) error {
 	// submit transaction on blockchain
-	receipt, err := uploader.submitLogEntry(file, tags)
+	receipt, err := uploader.submitLogEntry(data, tags)
 	if err != nil {
 		return errors.WithMessage(err, "Failed to submit log entry")
 	}

@@ -2,13 +2,13 @@ package kv
 
 import (
 	"math"
-	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/zero-gravity-labs/zerog-storage-client/contract"
-	"github.com/zero-gravity-labs/zerog-storage-client/file"
+	"github.com/zero-gravity-labs/zerog-storage-client/core"
 	"github.com/zero-gravity-labs/zerog-storage-client/node"
+	"github.com/zero-gravity-labs/zerog-storage-client/transfer"
 )
 
 // Client is used for users to communicate with server for kv operations.
@@ -145,49 +145,25 @@ func newBatcher(version uint64, client *Client) *Batcher {
 // When it comes to a time sentitive context, it should be executed in a separate go-routine.
 func (b *Batcher) Exec() error {
 	// build stream data
-	data, err := b.Build()
+	streamData, err := b.Build()
 	if err != nil {
 		return errors.WithMessage(err, "Failed to build stream data")
 	}
 
-	// prepare tmp file to upload
-	tmpFilename, err := b.writeTempFile(data)
+	encoded, err := streamData.Encode()
 	if err != nil {
-		return errors.WithMessage(err, "Failed to write stream data to temp file")
+		return errors.WithMessage(err, "Failed to encode data")
 	}
+	data := core.NewDataInMemory(encoded)
 
 	// upload file
-	uploader := file.NewUploader(b.client.flow, b.client.node)
-	opt := file.UploadOption{
+	uploader := transfer.NewUploader(b.client.flow, b.client.node)
+	opt := transfer.UploadOption{
 		Tags:  b.BuildTags(),
 		Force: true,
 	}
-	if err = uploader.Upload(tmpFilename, opt); err != nil {
-		return errors.WithMessagef(err, "Failed to upload file %v", tmpFilename)
+	if err = uploader.Upload(data, opt); err != nil {
+		return errors.WithMessagef(err, "Failed to upload data")
 	}
-
-	// delete tmp file if completed
-	return os.Remove(tmpFilename)
-}
-
-// writeTempFile encodes the specified stream data and write to a temp file.
-//
-// Note, the temp file should be removed via the returned temp file name.
-func (b *Batcher) writeTempFile(data *StreamData) (string, error) {
-	file, err := os.CreateTemp("", "zerog-storage-kv-*")
-	if err != nil {
-		return "", errors.WithMessage(err, "Failed to create temp file")
-	}
-	defer file.Close()
-
-	encoded, err := data.Encode()
-	if err != nil {
-		return "", errors.WithMessage(err, "Failed to encode data")
-	}
-
-	if _, err = file.Write(encoded); err != nil {
-		return "", errors.WithMessagef(err, "Failed to write data to %v", file.Name())
-	}
-
-	return file.Name(), nil
+	return nil
 }

@@ -7,8 +7,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/zero-gravity-labs/zerog-storage-client/common/blockchain"
 	"github.com/zero-gravity-labs/zerog-storage-client/contract"
-	"github.com/zero-gravity-labs/zerog-storage-client/file"
+	"github.com/zero-gravity-labs/zerog-storage-client/core"
 	"github.com/zero-gravity-labs/zerog-storage-client/node"
+	"github.com/zero-gravity-labs/zerog-storage-client/transfer"
 )
 
 var (
@@ -64,12 +65,19 @@ func upload(*cobra.Command, []string) {
 	node := node.MustNewClient(uploadArgs.node)
 	defer node.Close()
 
-	uploader := file.NewUploader(flow, node)
-	opt := file.UploadOption{
+	uploader := transfer.NewUploader(flow, node)
+	opt := transfer.UploadOption{
 		Tags:  hexutil.MustDecode(uploadArgs.tags),
 		Force: uploadArgs.force,
 	}
-	if err := uploader.Upload(uploadArgs.file, opt); err != nil {
+
+	file, err := core.Open(uploadArgs.file)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to open file")
+	}
+	defer file.Close()
+
+	if err := uploader.Upload(file, opt); err != nil {
 		logrus.WithError(err).Fatal("Failed to upload file")
 	}
 }

@@ -3,7 +3,7 @@ package node
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/zero-gravity-labs/zerog-storage-client/file/merkle"
+	"github.com/zero-gravity-labs/zerog-storage-client/core/merkle"
 )
 
 type Status struct {

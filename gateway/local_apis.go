@@ -5,7 +5,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gin-gonic/gin"
-	"github.com/zero-gravity-labs/zerog-storage-client/file"
+	"github.com/zero-gravity-labs/zerog-storage-client/core"
+	"github.com/zero-gravity-labs/zerog-storage-client/transfer"
 )
 
 var LocalFileRepo string = "."
@@ -43,13 +44,13 @@ func getLocalFileInfo(c *gin.Context) (interface{}, error) {
 
 	filename := getFilePath(input.Path, false)
 
-	file, err := file.Open(filename)
+	file, err := core.Open(filename)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	tree, err := file.MerkleTree()
+	tree, err := core.MerkleTree(file)
 	if err != nil {
 		return nil, err
 	}
@@ -112,11 +113,18 @@ func uploadLocalFile(c *gin.Context) (interface{}, error) {
 		return nil, ErrValidation.WithData("node index out of bound")
 	}
 
-	uploader := file.NewUploaderLight(allClients[input.Node])
+	uploader := transfer.NewUploaderLight(allClients[input.Node])
 
 	filename := getFilePath(input.Path, false)
 
-	if err := uploader.Upload(filename); err != nil {
+	// Open file to upload
+	file, err := core.Open(filename)
+	if err != nil {
+		return nil, ErrValidation.WithData(err)
+	}
+	defer file.Close()
+
+	if err := uploader.Upload(file); err != nil {
 		return nil, err
 	}
 
@@ -138,7 +146,7 @@ func downloadFileLocal(c *gin.Context) (interface{}, error) {
 		return nil, ErrValidation.WithData("node index out of bound")
 	}
 
-	downloader := file.NewDownloader(allClients[input.Node])
+	downloader := transfer.NewDownloader(allClients[input.Node])
 
 	filename := getFilePath(input.Path, true)
 

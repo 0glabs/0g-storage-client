@@ -1,4 +1,4 @@
-package file
+package transfer
 
 import (
 	"fmt"
@@ -7,8 +7,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"github.com/zero-gravity-labs/zerog-storage-client/file/download"
+	"github.com/zero-gravity-labs/zerog-storage-client/core"
 	"github.com/zero-gravity-labs/zerog-storage-client/node"
+	"github.com/zero-gravity-labs/zerog-storage-client/transfer/download"
 )
 
 type Downloader struct {
@@ -75,7 +76,7 @@ func (downloader *Downloader) queryFile(root common.Hash) (info *node.FileInfo, 
 }
 
 func (downloader *Downloader) checkExistence(filename string, hash common.Hash) error {
-	file, err := Open(filename)
+	file, err := core.Open(filename)
 	if os.IsNotExist(err) {
 		return nil
 	}
@@ -86,7 +87,7 @@ func (downloader *Downloader) checkExistence(filename string, hash common.Hash) 
 
 	defer file.Close()
 
-	tree, err := file.MerkleTree()
+	tree, err := core.MerkleTree(file)
 	if err != nil {
 		return errors.WithMessage(err, "Failed to create file merkle tree")
 	}
@@ -126,7 +127,7 @@ func (downloader *Downloader) downloadFile(filename string, root common.Hash, si
 }
 
 func (downloader *Downloader) validateDownloadFile(root, filename string, fileSize int64) error {
-	file, err := Open(filename)
+	file, err := core.Open(filename)
 	if err != nil {
 		return errors.WithMessage(err, "Failed to open file")
 	}
@@ -136,7 +137,7 @@ func (downloader *Downloader) validateDownloadFile(root, filename string, fileSi
 		return errors.Errorf("File size mismatch: expected = %v, downloaded = %v", fileSize, file.Size())
 	}
 
-	tree, err := file.MerkleTree()
+	tree, err := core.MerkleTree(file)
 	if err != nil {
 		return errors.WithMessage(err, "Failed to create merkle tree")
 	}

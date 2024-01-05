@@ -1,14 +1,13 @@
 package cmd
 
 import (
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/zero-gravity-labs/zerog-storage-client/file"
+	"github.com/zero-gravity-labs/zerog-storage-client/core"
 )
 
 var (
@@ -34,7 +33,7 @@ func init() {
 }
 
 func generateTempFile(*cobra.Command, []string) {
-	exists, err := file.Exists(genFileArgs.file)
+	exists, err := core.Exists(genFileArgs.file)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to check file existence")
 	}
@@ -48,30 +47,30 @@ func generateTempFile(*cobra.Command, []string) {
 		logrus.Info("Overrite file")
 	}
 
-	rand.Seed(time.Now().UnixNano())
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	if genFileArgs.size == 0 {
 		// [1M, 10M)
-		genFileArgs.size = 1024*1024 + uint64(9.0*1024*1024*rand.Float64())
+		genFileArgs.size = 1024*1024 + uint64(9.0*1024*1024*r.Float64())
 	}
 
 	data := make([]byte, genFileArgs.size)
-	if n, err := rand.Read(data); err != nil {
+	if n, err := r.Read(data); err != nil {
 		logrus.WithError(err).Fatal("Failed to generate random data")
 	} else if n != len(data) {
 		logrus.WithField("n", n).Fatal("Invalid data len")
 	}
 
-	if err = ioutil.WriteFile(genFileArgs.file, data, os.ModePerm); err != nil {
+	if err = os.WriteFile(genFileArgs.file, data, os.ModePerm); err != nil {
 		logrus.WithError(err).Fatal("Failed to write file")
 	}
 
-	file, err := file.Open(genFileArgs.file)
+	file, err := core.Open(genFileArgs.file)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to open file")
 	}
 
-	tree, err := file.MerkleTree()
+	tree, err := core.MerkleTree(file)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to generate merkle tree")
 	}

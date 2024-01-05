@@ -3,8 +3,8 @@ package cmd
 import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/zero-gravity-labs/zerog-storage-client/file"
 	"github.com/zero-gravity-labs/zerog-storage-client/node"
+	"github.com/zero-gravity-labs/zerog-storage-client/transfer"
 )
 
 var (
@@ -37,7 +37,7 @@ func init() {
 func download(*cobra.Command, []string) {
 	nodes := node.MustNewClients(downloadArgs.nodes)
 
-	downloader := file.NewDownloader(nodes...)
+	downloader := transfer.NewDownloader(nodes...)
 
 	if err := downloader.Download(downloadArgs.root, downloadArgs.file, downloadArgs.proof); err != nil {
 		logrus.WithError(err).Fatal("Failed to download file")

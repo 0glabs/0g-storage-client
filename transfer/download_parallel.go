@@ -1,4 +1,4 @@
-package file
+package transfer
 
 import (
 	"fmt"
@@ -7,8 +7,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/zero-gravity-labs/zerog-storage-client/common/parallel"
-	"github.com/zero-gravity-labs/zerog-storage-client/file/download"
+	"github.com/zero-gravity-labs/zerog-storage-client/core"
 	"github.com/zero-gravity-labs/zerog-storage-client/node"
+	"github.com/zero-gravity-labs/zerog-storage-client/transfer/download"
 )
 
 const minBufSize = 8
@@ -26,7 +27,7 @@ type SegmentDownloader struct {
 
 func NewSegmentDownloader(clients []*node.Client, file *download.DownloadingFile, withProof bool) (*SegmentDownloader, error) {
 	offset := file.Metadata().Offset
-	if offset%DefaultSegmentSize > 0 {
+	if offset%core.DefaultSegmentSize > 0 {
 		return nil, errors.Errorf("Invalid data offset in downloading file %v", offset)
 	}
 
@@ -38,9 +39,9 @@ func NewSegmentDownloader(clients []*node.Client, file *download.DownloadingFile
 
 		withProof: withProof,
 
-		segmentOffset: uint64(offset / DefaultSegmentSize),
-		numChunks:     numSplits(fileSize, DefaultChunkSize),
-		numSegments:   numSplits(fileSize, DefaultSegmentSize),
+		segmentOffset: uint64(offset / core.DefaultSegmentSize),
+		numChunks:     core.NumSplits(fileSize, core.DefaultChunkSize),
+		numSegments:   core.NumSplits(fileSize, core.DefaultSegmentSize),
 	}, nil
 }
 
@@ -59,8 +60,8 @@ func (downloader *SegmentDownloader) Download() error {
 // ParallelDo implements the parallel.Interface interface.
 func (downloader *SegmentDownloader) ParallelDo(routine, task int) (interface{}, error) {
 	segmentIndex := downloader.segmentOffset + uint64(task)
-	startIndex := segmentIndex * DefaultSegmentMaxChunks
-	endIndex := startIndex + DefaultSegmentMaxChunks
+	startIndex := segmentIndex * core.DefaultSegmentMaxChunks
+	endIndex := startIndex + core.DefaultSegmentMaxChunks
 	if endIndex > downloader.numChunks {
 		endIndex = downloader.numChunks
 	}
@@ -95,8 +96,8 @@ func (downloader *SegmentDownloader) ParallelDo(routine, task int) (interface{},
 	// remove paddings for the last chunk
 	if err == nil && segmentIndex == downloader.numSegments-1 {
 		fileSize := downloader.file.Metadata().Size
-		if lastChunkSize := fileSize % DefaultChunkSize; lastChunkSize > 0 {
-			paddings := DefaultChunkSize - lastChunkSize
+		if lastChunkSize := fileSize % core.DefaultChunkSize; lastChunkSize > 0 {
+			paddings := core.DefaultChunkSize - lastChunkSize
 			segment = segment[0 : len(segment)-int(paddings)]
 		}
 	}
@@ -110,33 +111,33 @@ func (downloader *SegmentDownloader) ParallelCollect(result *parallel.Result) er
 }
 
 func (downloader *SegmentDownloader) downloadWithProof(client *node.Client, root common.Hash, startIndex, endIndex uint64) ([]byte, error) {
-	segmentIndex := startIndex / DefaultSegmentMaxChunks
+	segmentIndex := startIndex / core.DefaultSegmentMaxChunks
 
 	segment, err := client.ZeroGStorage().DownloadSegmentWithProof(root, segmentIndex)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to download segment with proof from storage node")
 	}
 
-	if expectedDataLen := (endIndex - startIndex) * DefaultChunkSize; int(expectedDataLen) != len(segment.Data) {
+	if expectedDataLen := (endIndex - startIndex) * core.DefaultChunkSize; int(expectedDataLen) != len(segment.Data) {
 		return nil, errors.Errorf("Downloaded data length mismatch, expected = %v, actual = %v", expectedDataLen, len(segment.Data))
 	}
 
-	numChunksFlowPadded, _ := computePaddedSize(downloader.numChunks)
-	numSegmentsFlowPadded := (numChunksFlowPadded-1)/DefaultSegmentMaxChunks + 1
+	numChunksFlowPadded, _ := core.ComputePaddedSize(downloader.numChunks)
+	numSegmentsFlowPadded := (numChunksFlowPadded-1)/core.DefaultSegmentMaxChunks + 1
 
 	// pad empty chunks for the last segment to validate merkle proof
 	var emptyChunksPadded uint64
-	if numChunks := endIndex - startIndex; numChunks < DefaultSegmentMaxChunks {
-		if segmentIndex < numSegmentsFlowPadded-1 || numChunksFlowPadded%DefaultSegmentMaxChunks == 0 {
+	if numChunks := endIndex - startIndex; numChunks < core.DefaultSegmentMaxChunks {
+		if segmentIndex < numSegmentsFlowPadded-1 || numChunksFlowPadded%core.DefaultSegmentMaxChunks == 0 {
 			// pad empty chunks to a full segment
-			emptyChunksPadded = DefaultSegmentMaxChunks - numChunks
-		} else if lastSegmentChunks := numChunksFlowPadded % DefaultSegmentMaxChunks; numChunks < lastSegmentChunks {
+			emptyChunksPadded = core.DefaultSegmentMaxChunks - numChunks
+		} else if lastSegmentChunks := numChunksFlowPadded % core.DefaultSegmentMaxChunks; numChunks < lastSegmentChunks {
 			// pad for the last segment with flow padded empty chunks
 			emptyChunksPadded = lastSegmentChunks - numChunks
 		}
 	}
 
-	segmentRootHash := segmentRoot(segment.Data, emptyChunksPadded)
+	segmentRootHash := core.SegmentRoot(segment.Data, emptyChunksPadded)
 
 	if err := segment.Proof.ValidateHash(root, segmentRootHash, segmentIndex, numSegmentsFlowPadded); err != nil {
 		return nil, errors.WithMessage(err, "Failed to validate proof")

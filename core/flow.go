@@ -1,4 +1,4 @@
-package file
+package core
 
 import (
 	"math"
@@ -6,22 +6,22 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/zero-gravity-labs/zerog-storage-client/contract"
-	"github.com/zero-gravity-labs/zerog-storage-client/file/merkle"
+	"github.com/zero-gravity-labs/zerog-storage-client/core/merkle"
 )
 
 type Flow struct {
-	file *File
+	data IterableData
 	tags []byte
 }
 
-func NewFlow(file *File, tags []byte) *Flow {
-	return &Flow{file, tags}
+func NewFlow(data IterableData, tags []byte) *Flow {
+	return &Flow{data, tags}
 }
 
 func (flow *Flow) CreateSubmission() (*contract.Submission, error) {
 	// TODO(kevin): limit file size, e.g., 2^31
 	submission := contract.Submission{
-		Length: big.NewInt(flow.file.Size()),
+		Length: big.NewInt(flow.data.Size()),
 		Tags:   flow.tags,
 	}
 
@@ -51,7 +51,7 @@ func nextPow2(input uint64) uint64 {
 	return x
 }
 
-func computePaddedSize(chunks uint64) (uint64, uint64) {
+func ComputePaddedSize(chunks uint64) (uint64, uint64) {
 	chunksNextPow2 := nextPow2(chunks)
 	if chunksNextPow2 == chunks {
 		return chunksNextPow2, chunksNextPow2
@@ -72,8 +72,8 @@ func computePaddedSize(chunks uint64) (uint64, uint64) {
 func (flow *Flow) splitNodes() []int64 {
 	var nodes []int64
 
-	chunks := flow.file.NumChunks()
-	paddedChunks, chunksNextPow2 := computePaddedSize(chunks)
+	chunks := flow.data.NumChunks()
+	paddedChunks, chunksNextPow2 := ComputePaddedSize(chunks)
 	nextChunkSize := chunksNextPow2
 
 	for paddedChunks > 0 {
@@ -101,7 +101,7 @@ func (flow *Flow) createNode(offset, chunks int64) (*contract.SubmissionNode, er
 }
 
 func (flow *Flow) createSegmentNode(offset, batch, size int64) (*contract.SubmissionNode, error) {
-	iter := NewIterator(flow.file.underlying, flow.file.Size(), offset, batch, true)
+	iter := flow.data.Iterate(offset, batch, true)
 	var builder merkle.TreeBuilder
 
 	for i := int64(0); i < size; {
@@ -120,7 +120,7 @@ func (flow *Flow) createSegmentNode(offset, batch, size int64) (*contract.Submis
 		}
 
 		segment := iter.Current()
-		builder.AppendHash(segmentRoot(segment))
+		builder.AppendHash(SegmentRoot(segment))
 		i += int64(len(segment))
 	}
 
