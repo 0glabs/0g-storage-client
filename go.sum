@@ -82,7 +82,6 @@ github.com/c-bata/go-prompt v0.2.2/go.mod h1:VzqtzE2ksDBcdln8G7mk2RX9QyGjH+OVqOC
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/cespare/cp v0.1.0 h1:SE+dxFebS7Iik5LK0tsi1k9ZCxEaFX4AjQmoyA+1dJk=
 github.com/cespare/cp v0.1.0/go.mod h1:SOGHArjBr4JWaSDEVpWpo/hNg6RoKrls6Oh40hiwW+s=
-github.com/cespare/xxhash v1.1.0 h1:a6HrQnmkObjyL+Gs60czilIUGqrzKutQD6XZog3p+ko=
 github.com/cespare/xxhash v1.1.0/go.mod h1:XrSqR1VqqWfGrhpAt58auRo0WTKS1nRRg3ghfAqPWnc=
 github.com/cespare/xxhash/v2 v2.1.1 h1:6MnRN8NT7+YBpUIWxHtefFZOKTAPgGjpQSxqLNn0+qY=
 github.com/cespare/xxhash/v2 v2.1.1/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
@@ -371,14 +370,8 @@ github.com/opentracing/opentracing-go v1.1.0/go.mod h1:UkNAQd3GIcIGf0SeVgPpRdFSt
 github.com/openweb3/go-rpc-provider v0.2.2/go.mod h1:DYz40TbzhzyTA06UFqGIKSXp0uFot6ZKh4QarD//eZ0=
 github.com/openweb3/go-rpc-provider v0.2.7 h1:GZeUU7HUdxknv4mz5Z5LfJJk9bb+FKEgzfs/nfnrBLA=
 github.com/openweb3/go-rpc-provider v0.2.7/go.mod h1:DYz40TbzhzyTA06UFqGIKSXp0uFot6ZKh4QarD//eZ0=
-github.com/openweb3/go-sdk-common v0.0.0-20220524083215-d22d44765e44 h1:OmFM0oP0gg43Dus81HaRcGJAuKtGBpeek98+pFH1y0U=
-github.com/openweb3/go-sdk-common v0.0.0-20220524083215-d22d44765e44/go.mod h1:/M7gnCteccqnoBJMBmwTXkj7akVzQIMcD8y6DFX5GmE=
 github.com/openweb3/go-sdk-common v0.0.0-20220720074746-a7134e1d372c h1:BrPXZpkTdmZe5bNjSSnxWqL44X9FcZ3xftLcYNkIJ68=
 github.com/openweb3/go-sdk-common v0.0.0-20220720074746-a7134e1d372c/go.mod h1:0WCVKMiLiYEaHhpQWQ3rgLti/Fv/+JPRiB0sEoovwk8=
-github.com/openweb3/web3go v0.1.2-0.20220627062242-ecc1ba876617 h1:B3Dadwv1b2pe7/AHPoiQj864Egz0HepMtictvrPyoEo=
-github.com/openweb3/web3go v0.1.2-0.20220627062242-ecc1ba876617/go.mod h1:G/vX7crNV+QGZj4s11cM560WB6j4UjCU1z5nuE/mV5U=
-github.com/openweb3/web3go v0.2.1-0.20221026092347-24b4120ddf7c h1:fnM9S81wPo6NrpUi/LFvNW65gRWx0rOT63G09wYh//E=
-github.com/openweb3/web3go v0.2.1-0.20221026092347-24b4120ddf7c/go.mod h1:nzov9bieJKvQFqJ1gIfvNn3LFO63pdp1C8dP4qv0TmA=
 github.com/openweb3/web3go v0.2.1-0.20221026093812-d63d83edcfec h1:iGV6qHw8Bt6WIujflC4ma2ppbB2Rmqzk1vb13iOibtU=
 github.com/openweb3/web3go v0.2.1-0.20221026093812-d63d83edcfec/go.mod h1:nzov9bieJKvQFqJ1gIfvNn3LFO63pdp1C8dP4qv0TmA=
 github.com/paulbellamy/ratecounter v0.2.0/go.mod h1:Hfx1hDpSGoqxkVVpBi/IlYD7kChlfo5C6hzIHwPqfFE=
@@ -455,7 +448,6 @@ github.com/tklauser/numcpus v0.2.2 h1:oyhllyrScuYI6g+h/zUvNXNp1wy7x8qQy3t/piefld
 github.com/tklauser/numcpus v0.2.2/go.mod h1:x3qojaO3uyYt0i56EW/VUYs7uBvdl2fkfZFu0T9wgjM=
 github.com/tyler-smith/go-bip39 v1.0.1-0.20181017060643-dbb3b84ba2ef h1:wHSqTBrZW24CsNJDfeh9Ex6Pm0Rcpc7qrgKBiL44vF4=
 github.com/tyler-smith/go-bip39 v1.0.1-0.20181017060643-dbb3b84ba2ef/go.mod h1:sJ5fKU0s6JVwZjjcUEX2zFOnvq0ASQ2K9Zr6cf67kNs=
-github.com/ugorji/go v1.1.7 h1:/68gy2h+1mWMrwZFeD1kQialdSzAb432dtpeJ42ovdo=
 github.com/ugorji/go v1.1.7/go.mod h1:kZn38zHttfInRq0xu/PH0az30d+z6vm202qpg1oXVMw=
 github.com/ugorji/go/codec v1.1.7 h1:2SvQaVZ1ouYrrKKwoSk2pzd4A9evlKJb9oTL+OaLUSs=
 github.com/ugorji/go/codec v1.1.7/go.mod h1:Ax+UKWsSmolVDwsd+7N3ZtXu+yMGCf907BLYF3GoBXY=
