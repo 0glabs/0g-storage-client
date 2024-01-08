@@ -54,18 +54,17 @@ func init() {
 }
 
 func upload(*cobra.Command, []string) {
-	client := blockchain.MustNewWeb3(uploadArgs.url, uploadArgs.key)
-	defer client.Close()
+	w3client := blockchain.MustNewWeb3(uploadArgs.url, uploadArgs.key)
+	defer w3client.Close()
 	contractAddr := common.HexToAddress(uploadArgs.contract)
-	flow, err := contract.NewFlowContract(contractAddr, client)
+	flow, err := contract.NewFlowContract(contractAddr, w3client)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create flow contract")
 	}
+	client := node.MustNewClient(uploadArgs.node)
+	defer client.Close()
 
-	node := node.MustNewClient(uploadArgs.node)
-	defer node.Close()
-
-	uploader := transfer.NewUploader(flow, node)
+	uploader := transfer.NewUploader(flow, []*node.Client{client})
 	opt := transfer.UploadOption{
 		Tags:  hexutil.MustDecode(uploadArgs.tags),
 		Force: uploadArgs.force,

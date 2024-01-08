@@ -157,7 +157,7 @@ func (b *Batcher) Exec() error {
 	data := core.NewDataInMemory(encoded)
 
 	// upload file
-	uploader := transfer.NewUploader(b.client.flow, b.client.node)
+	uploader := transfer.NewUploader(b.client.flow, []*node.Client{b.client.node})
 	opt := transfer.UploadOption{
 		Tags:  b.BuildTags(),
 		Force: true,

@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gin-gonic/gin"
 	"github.com/zero-gravity-labs/zerog-storage-client/core"
+	"github.com/zero-gravity-labs/zerog-storage-client/node"
 	"github.com/zero-gravity-labs/zerog-storage-client/transfer"
 )
 
@@ -113,7 +114,7 @@ func uploadLocalFile(c *gin.Context) (interface{}, error) {
 		return nil, ErrValidation.WithData("node index out of bound")
 	}
 
-	uploader := transfer.NewUploaderLight(allClients[input.Node])
+	uploader := transfer.NewUploaderLight([]*node.Client{allClients[input.Node]})
 
 	filename := getFilePath(input.Path, false)
 

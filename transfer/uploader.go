@@ -1,6 +1,7 @@
 package transfer
 
 import (
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -17,25 +18,32 @@ import (
 const smallFileSizeThreshold = int64(256 * 1024)
 
 type UploadOption struct {
-	Tags  []byte // for kv operations
-	Force bool   // for kv to upload same file
+	Tags     []byte // for kv operations
+	Force    bool   // for kv to upload same file
+	Disperse bool   // disperse files to different nodes
 }
 
 type Uploader struct {
-	flow   *contract.FlowContract
-	client *node.ZeroGStorageClient
+	flow    *contract.FlowContract
+	clients []*node.ZeroGStorageClient
 }
 
-func NewUploader(flow *contract.FlowContract, client *node.Client) *Uploader {
-	return &Uploader{
-		flow:   flow,
-		client: client.ZeroGStorage(),
+func NewUploader(flow *contract.FlowContract, clients []*node.Client) *Uploader {
+	uploader := NewUploaderLight(clients)
+	uploader.flow = flow
+	return uploader
+}
+
+func NewUploaderLight(clients []*node.Client) *Uploader {
+	if len(clients) == 0 {
+		panic("storage node not specified")
 	}
-}
-
-func NewUploaderLight(client *node.Client) *Uploader {
+	zgClients := make([]*node.ZeroGStorageClient, 0)
+	for _, client := range clients {
+		zgClients = append(zgClients, client.ZeroGStorage())
+	}
 	return &Uploader{
-		client: client.ZeroGStorage(),
+		clients: zgClients,
 	}
 }
 
@@ -58,7 +66,7 @@ func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption)
 	}
 	logrus.WithField("root", tree.Root()).Info("Data merkle root calculated")
 
-	info, err := uploader.client.GetFileInfo(tree.Root())
+	info, err := uploader.clients[0].GetFileInfo(tree.Root())
 	if err != nil {
 		return errors.WithMessage(err, "Failed to get data info from storage node")
 	}
@@ -102,7 +110,7 @@ func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption)
 			if err = uploader.waitForLogEntry(tree.Root(), false); err != nil {
 				return errors.WithMessage(err, "Failed to check if log entry available on storage node")
 			}
-			info, err = uploader.client.GetFileInfo(tree.Root())
+			info, err = uploader.clients[0].GetFileInfo(tree.Root())
 			if err != nil {
 				return errors.WithMessage(err, "Failed to get file info from storage node after waitForLogEntry.")
 			}
@@ -111,12 +119,12 @@ func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption)
 	}
 
 	// Upload file to storage node
-	if err = uploader.uploadFile(data, tree, segNum); err != nil {
+	if err = uploader.uploadFile(data, tree, segNum, opt.Disperse); err != nil {
 		return errors.WithMessage(err, "Failed to upload file")
 	}
 
 	// Wait for transaction finality
-	if err = uploader.waitForLogEntry(tree.Root(), true); err != nil {
+	if err = uploader.waitForLogEntry(tree.Root(), !opt.Disperse); err != nil {
 		return errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
 	}
 
@@ -158,7 +166,7 @@ func (uploader *Uploader) waitForLogEntry(root common.Hash, finalityRequired boo
 	for {
 		time.Sleep(time.Second)
 
-		info, err := uploader.client.GetFileInfo(root)
+		info, err := uploader.clients[0].GetFileInfo(root)
 		if err != nil {
 			return errors.WithMessage(err, "Failed to get file info from storage node")
 		}
@@ -178,11 +186,65 @@ func (uploader *Uploader) waitForLogEntry(root common.Hash, finalityRequired boo
 	return nil
 }
 
+func (uploader *Uploader) uploadSegment(tree *merkle.Tree, segIndex uint64, data core.IterableData, segment []byte, disperse bool) error {
+	proof := tree.ProofAt(int(segIndex))
+	dataSize := uint64(data.Size())
+	numSegments := data.NumSegments()
+
+	segWithProof := node.SegmentWithProof{
+		Root:     tree.Root(),
+		Data:     segment,
+		Index:    segIndex,
+		Proof:    proof,
+		FileSize: dataSize,
+	}
+
+	if !disperse {
+		if _, err := uploader.clients[0].UploadSegment(segWithProof); err != nil {
+			return errors.WithMessage(err, "Failed to upload segment")
+		}
+	} else {
+		clientIndex := segIndex % uint64(len(uploader.clients))
+		ok := false
+		// retry
+		for i := 0; i < len(uploader.clients); i++ {
+			if _, err := uploader.clients[clientIndex].UploadSegment(segWithProof); err != nil {
+				clientIndex = (clientIndex + 1) % uint64(len(uploader.clients))
+			} else {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			if _, err := uploader.clients[clientIndex].UploadSegment(segWithProof); err != nil {
+				return errors.WithMessage(err, "Failed to upload segment")
+			}
+		}
+	}
+
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		chunkIndex := segIndex * core.DefaultSegmentMaxChunks
+		logrus.WithFields(logrus.Fields{
+			"total":      numSegments,
+			"index":      segIndex,
+			"chunkStart": chunkIndex,
+			"chunkEnd":   chunkIndex + uint64(len(segment))/core.DefaultChunkSize,
+			"root":       core.SegmentRoot(segment),
+		}).Debug("Segment uploaded")
+	}
+
+	return nil
+}
+
 // TODO error tolerance
-func (uploader *Uploader) uploadFile(data core.IterableData, tree *merkle.Tree, segIndex uint64) error {
+func (uploader *Uploader) uploadFile(data core.IterableData, tree *merkle.Tree, segIndex uint64, disperse bool) error {
 	logrus.WithField("segIndex", segIndex).Info("Begin to upload file")
 
 	iter := data.Iterate(int64(segIndex*core.DefaultSegmentSize), core.DefaultSegmentSize, true)
+	numChunks := data.NumChunks()
+
+	var wg sync.WaitGroup
+	errs := make(chan error, len(uploader.clients))
 
 	for {
 		ok, err := iter.Next()
@@ -195,10 +257,9 @@ func (uploader *Uploader) uploadFile(data core.IterableData, tree *merkle.Tree, 
 		}
 
 		segment := iter.Current()
-		proof := tree.ProofAt(int(segIndex))
 
 		// Skip upload rear padding data
-		numChunks := data.NumChunks()
+
 		startIndex := segIndex * core.DefaultSegmentMaxChunks
 		allDataUploaded := false
 		if startIndex >= numChunks {
@@ -211,27 +272,27 @@ func (uploader *Uploader) uploadFile(data core.IterableData, tree *merkle.Tree, 
 			allDataUploaded = true
 		}
 
-		segWithProof := node.SegmentWithProof{
-			Root:     tree.Root(),
-			Data:     segment,
-			Index:    segIndex,
-			Proof:    proof,
-			FileSize: uint64(data.Size()),
-		}
-
-		if _, err = uploader.client.UploadSegment(segWithProof); err != nil {
-			return errors.WithMessage(err, "Failed to upload segment")
-		}
-
-		if logrus.IsLevelEnabled(logrus.DebugLevel) {
-			chunkIndex := segIndex * core.DefaultSegmentMaxChunks
-			logrus.WithFields(logrus.Fields{
-				"total":      data.NumSegments(),
-				"index":      segIndex,
-				"chunkStart": chunkIndex,
-				"chunkEnd":   chunkIndex + uint64(len(segment))/core.DefaultChunkSize,
-				"root":       core.SegmentRoot(segment),
-			}).Debug("Segment uploaded")
+		if !disperse {
+			err := uploader.uploadSegment(tree, segIndex, data, segment, disperse)
+			if err != nil {
+				return err
+			}
+		} else {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				errs <- uploader.uploadSegment(tree, segIndex, data, segment, disperse)
+			}()
+			if segIndex%uint64(len(uploader.clients)) == 0 {
+				wg.Wait()
+				close(errs)
+				for e := range errs {
+					if e != nil {
+						return e
+					}
+				}
+				errs = make(chan error, len(uploader.clients))
+			}
 		}
 
 		if allDataUploaded {
