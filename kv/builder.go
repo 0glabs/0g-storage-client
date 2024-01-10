@@ -189,7 +189,7 @@ func (builder *AccessControlBuilder) Build() ([]AccessControl, error) {
 	return builder.controls, nil
 }
 
-func (builder *AccessControlBuilder) withControl(t AccessControlType, streamId common.Hash, account *common.Address, key *[]byte) *AccessControlBuilder {
+func (builder *AccessControlBuilder) withControl(t AccessControlType, streamId common.Hash, account *common.Address, key []byte) *AccessControlBuilder {
 	builder.AddStreamId(streamId)
 
 	builder.controls = append(builder.controls, AccessControl{
@@ -211,11 +211,11 @@ func (builder *AccessControlBuilder) RenounceAdminRole(streamId common.Hash) *Ac
 }
 
 func (builder *AccessControlBuilder) SetKeyToSpecial(streamId common.Hash, key []byte) *AccessControlBuilder {
-	return builder.withControl(AclTypeSetKeyToSpecial, streamId, nil, &key)
+	return builder.withControl(AclTypeSetKeyToSpecial, streamId, nil, key)
 }
 
 func (builder *AccessControlBuilder) SetKeyToNormal(streamId common.Hash, key []byte) *AccessControlBuilder {
-	return builder.withControl(AclTypeSetKeyToNormal, streamId, nil, &key)
+	return builder.withControl(AclTypeSetKeyToNormal, streamId, nil, key)
 }
 
 func (builder *AccessControlBuilder) GrantWriteRole(streamId common.Hash, account common.Address) *AccessControlBuilder {
@@ -231,13 +231,13 @@ func (builder *AccessControlBuilder) RenounceWriteRole(streamId common.Hash) *Ac
 }
 
 func (builder *AccessControlBuilder) GrantSpecialWriteRole(streamId common.Hash, key []byte, account common.Address) *AccessControlBuilder {
-	return builder.withControl(AclTypeGrantSpecialWriteRole, streamId, &account, &key)
+	return builder.withControl(AclTypeGrantSpecialWriteRole, streamId, &account, key)
 }
 
 func (builder *AccessControlBuilder) RevokeSpecialWriteRole(streamId common.Hash, key []byte, account common.Address) *AccessControlBuilder {
-	return builder.withControl(AclTypeRevokeSpecialWriteRole, streamId, &account, &key)
+	return builder.withControl(AclTypeRevokeSpecialWriteRole, streamId, &account, key)
 }
 
 func (builder *AccessControlBuilder) RenounceSpecialWriteRole(streamId common.Hash, key []byte) *AccessControlBuilder {
-	return builder.withControl(AclTypeRenounceSpecialWriteRole, streamId, nil, &key)
+	return builder.withControl(AclTypeRenounceSpecialWriteRole, streamId, nil, key)
 }

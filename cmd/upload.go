@@ -21,9 +21,11 @@ var (
 		contract string
 		key      string
 
-		node string
+		node []string
 
 		force bool
+
+		disperse bool
 	}
 
 	uploadCmd = &cobra.Command{
@@ -45,10 +47,11 @@ func init() {
 	uploadCmd.Flags().StringVar(&uploadArgs.key, "key", "", "Private key to interact with smart contract")
 	uploadCmd.MarkFlagRequired("key")
 
-	uploadCmd.Flags().StringVar(&uploadArgs.node, "node", "", "ZeroGStorage storage node URL")
+	uploadCmd.Flags().StringSliceVar(&uploadArgs.node, "node", []string{}, "ZeroGStorage storage node URL")
 	uploadCmd.MarkFlagRequired("node")
 
 	uploadCmd.Flags().BoolVar(&uploadArgs.force, "force", false, "Force to upload file even already exists")
+	uploadCmd.Flags().BoolVar(&uploadArgs.disperse, "disperse", false, "Disperse file amoung nodes")
 
 	rootCmd.AddCommand(uploadCmd)
 }
@@ -61,13 +64,16 @@ func upload(*cobra.Command, []string) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create flow contract")
 	}
-	client := node.MustNewClient(uploadArgs.node)
-	defer client.Close()
+	clients := node.MustNewClients(uploadArgs.node)
+	for _, client := range clients {
+		defer client.Close()
+	}
 
-	uploader := transfer.NewUploader(flow, []*node.Client{client})
+	uploader := transfer.NewUploader(flow, clients)
 	opt := transfer.UploadOption{
-		Tags:  hexutil.MustDecode(uploadArgs.tags),
-		Force: uploadArgs.force,
+		Tags:     hexutil.MustDecode(uploadArgs.tags),
+		Force:    uploadArgs.force,
+		Disperse: uploadArgs.disperse,
 	}
 
 	file, err := core.Open(uploadArgs.file)

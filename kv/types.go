@@ -59,7 +59,7 @@ type AccessControl struct {
 	Type     AccessControlType
 	StreamId common.Hash
 	Account  *common.Address
-	Key      *[]byte
+	Key      []byte
 }
 
 type StreamData struct {
@@ -97,7 +97,7 @@ func (sd *StreamData) Size() int {
 		}
 
 		if v.Key != nil {
-			size += 3 + len(*v.Key)
+			size += 3 + len(v.Key)
 		}
 	}
 
@@ -171,12 +171,12 @@ func (sd *StreamData) Encode() ([]byte, error) {
 		encoded = append(encoded, v.StreamId.Bytes()...)
 
 		if v.Key != nil {
-			keySize, err := sd.encodeSize24(len(*v.Key))
+			keySize, err := sd.encodeSize24(len(v.Key))
 			if err != nil {
 				return nil, errKeyTooLarge
 			}
 			encoded = append(encoded, keySize...)
-			encoded = append(encoded, *v.Key...)
+			encoded = append(encoded, v.Key...)
 		}
 
 		if v.Account != nil {

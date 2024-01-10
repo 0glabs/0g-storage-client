@@ -208,7 +208,18 @@ func (uploader *Uploader) uploadSegment(tree *merkle.Tree, segIndex uint64, data
 		ok := false
 		// retry
 		for i := 0; i < len(uploader.clients); i++ {
+			logrus.WithFields(logrus.Fields{
+				"total":       numSegments,
+				"index":       segIndex,
+				"clientIndex": clientIndex,
+			}).Info("Uploading segment to node..")
 			if _, err := uploader.clients[clientIndex].UploadSegment(segWithProof); err != nil {
+				logrus.WithFields(logrus.Fields{
+					"total":       numSegments,
+					"index":       segIndex,
+					"clientIndex": clientIndex,
+					"error":       err,
+				}).Warn("Failed to upload segment to node, try next node..")
 				clientIndex = (clientIndex + 1) % uint64(len(uploader.clients))
 			} else {
 				ok = true
@@ -279,11 +290,11 @@ func (uploader *Uploader) uploadFile(data core.IterableData, tree *merkle.Tree, 
 			}
 		} else {
 			wg.Add(1)
-			go func() {
+			go func(tree *merkle.Tree, segIndex uint64, data core.IterableData, segment []byte) {
 				defer wg.Done()
-				errs <- uploader.uploadSegment(tree, segIndex, data, segment, disperse)
-			}()
-			if segIndex%uint64(len(uploader.clients)) == 0 {
+				errs <- uploader.uploadSegment(tree, segIndex, data, segment, true)
+			}(tree, segIndex, data, append([]byte(nil), segment...))
+			if segIndex%uint64(len(uploader.clients)) == uint64(len(uploader.clients))-1 {
 				wg.Wait()
 				close(errs)
 				for e := range errs {
