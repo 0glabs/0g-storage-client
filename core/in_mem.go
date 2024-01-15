@@ -32,9 +32,9 @@ func (data *DataInMemory) Iterate(offset int64, batch int64, flowPadding bool) I
 	return &MemoryDataIterator{
 		data:       data,
 		buf:        make([]byte, batch),
-		offset:     offset,
-		dataSize:   dataSize,
-		paddedSize: IteratorPaddedSize(dataSize, flowPadding),
+		offset:     int(offset),
+		dataSize:   int(dataSize),
+		paddedSize: uint(IteratorPaddedSize(dataSize, flowPadding)),
 	}
 }
 
@@ -42,26 +42,28 @@ type MemoryDataIterator struct {
 	data       *DataInMemory
 	buf        []byte // buffer to read data from file
 	bufSize    int    // actual data size in buffer
-	dataSize   int64
-	paddedSize uint64
-	offset     int64 // offset to read data
+	dataSize   int
+	paddedSize uint
+	offset     int // offset to read data
 }
 
 var _ Iterator = (*MemoryDataIterator)(nil)
 
 func (it *MemoryDataIterator) Next() (bool, error) {
 	// Reject invalid offset
-	if it.offset < 0 || uint64(it.offset) >= it.paddedSize {
+	if it.offset < 0 || uint(it.offset) >= it.paddedSize {
 		return false, nil
 	}
 
 	var expectedBufSize int
-	maxAvailableLength := it.paddedSize - uint64(it.offset)
-	if maxAvailableLength >= uint64(len(it.buf)) {
+	maxAvailableLength := it.paddedSize - uint(it.offset)
+	if maxAvailableLength >= uint(len(it.buf)) {
 		expectedBufSize = len(it.buf)
 	} else {
 		expectedBufSize = int(maxAvailableLength)
 	}
+
+	it.bufSize = 0
 
 	if it.offset >= it.dataSize {
 		it.paddingZeros(expectedBufSize)
@@ -69,7 +71,7 @@ func (it *MemoryDataIterator) Next() (bool, error) {
 	}
 
 	n := copy(it.buf, it.data.underlying[it.offset:])
-	it.offset += int64(n)
+	it.offset += int(n)
 	it.bufSize = n
 
 	if n == expectedBufSize {
@@ -87,7 +89,7 @@ func (it *MemoryDataIterator) paddingZeros(length int) {
 		it.buf[startOffset+i] = 0
 	}
 	it.bufSize += length
-	it.offset += int64(length)
+	it.offset += length
 }
 
 func (it *MemoryDataIterator) Current() []byte {
