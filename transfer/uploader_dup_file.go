@@ -19,7 +19,7 @@ var submissionEventHash = common.HexToHash("0x398e4f14f8588468d3654c03dc3f266e5a
 // file finality on storage node.
 func (uploader *Uploader) uploadDuplicatedFile(data core.IterableData, tags []byte, root common.Hash) error {
 	// submit transaction on blockchain
-	receipt, err := uploader.submitLogEntry(data, tags)
+	receipt, err := uploader.submitLogEntry([]core.IterableData{data}, [][]byte{tags})
 	if err != nil {
 		return errors.WithMessage(err, "Failed to submit log entry")
 	}
