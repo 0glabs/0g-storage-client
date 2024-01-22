@@ -12,14 +12,14 @@ import (
 	"github.com/zero-gravity-labs/zerog-storage-client/node"
 )
 
-var submissionEventHash = common.HexToHash("0x398e4f14f8588468d3654c03dc3f266e5af46083542d34db23fb04953067194b")
+const SubmitEventHash = "0x167ce04d2aa1981994d3a31695da0d785373335b1078cec239a1a3a2c7675555"
 
 // uploadDuplicatedFile uploads file to storage node that already exists by root.
 // In this case, user only need to submit transaction on blockchain, and wait for
 // file finality on storage node.
 func (uploader *Uploader) uploadDuplicatedFile(data core.IterableData, tags []byte, root common.Hash) error {
 	// submit transaction on blockchain
-	receipt, err := uploader.submitLogEntry([]core.IterableData{data}, [][]byte{tags})
+	_, receipt, err := uploader.submitLogEntry([]core.IterableData{data}, [][]byte{tags}, true)
 	if err != nil {
 		return errors.WithMessage(err, "Failed to submit log entry")
 	}
@@ -27,7 +27,7 @@ func (uploader *Uploader) uploadDuplicatedFile(data core.IterableData, tags []by
 	// parse submission from event log
 	var submission *contract.FlowSubmit
 	for _, v := range receipt.Logs {
-		if v.Topics[0] == submissionEventHash {
+		if v.Topics[0] == common.HexToHash(SubmitEventHash) {
 			log := blockchain.ConvertToGethLog(v)
 
 			if submission, err = uploader.flow.ParseSubmit(*log); err != nil {

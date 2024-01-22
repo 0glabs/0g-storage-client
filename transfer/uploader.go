@@ -48,10 +48,10 @@ func NewUploaderLight(clients []*node.Client) *Uploader {
 }
 
 // upload data(batchly in 1 blockchain transaction if there are more than one files)
-func (uploader *Uploader) BatchUpload(datas []core.IterableData, option ...[]UploadOption) error {
+func (uploader *Uploader) BatchUpload(datas []core.IterableData, waitForLogEntry bool, option ...[]UploadOption) (common.Hash, error) {
 	n := len(datas)
 	if n == 0 {
-		return errors.New("empty datas")
+		return common.Hash{}, errors.New("empty datas")
 	}
 	var opts []UploadOption
 	if len(option) > 0 {
@@ -60,7 +60,7 @@ func (uploader *Uploader) BatchUpload(datas []core.IterableData, option ...[]Upl
 		opts = make([]UploadOption, n)
 	}
 	if len(opts) != n {
-		return errors.New("datas and tags length mismatch")
+		return common.Hash{}, errors.New("datas and tags length mismatch")
 	}
 	logrus.WithFields(logrus.Fields{
 		"dataNum": n,
@@ -69,7 +69,6 @@ func (uploader *Uploader) BatchUpload(datas []core.IterableData, option ...[]Upl
 	trees := make([]*merkle.Tree, n)
 	toSubmitDatas := make([]core.IterableData, 0)
 	toSubmitTags := make([][]byte, 0)
-	toUpload := make([]bool, n)
 	var lastTreeToSubmit *merkle.Tree
 	for i := 0; i < n; i++ {
 		data := datas[i]
@@ -84,68 +83,46 @@ func (uploader *Uploader) BatchUpload(datas []core.IterableData, option ...[]Upl
 		// Calculate file merkle root.
 		tree, err := core.MerkleTree(data)
 		if err != nil {
-			return errors.WithMessage(err, "Failed to create data merkle tree")
+			return common.Hash{}, errors.WithMessage(err, "Failed to create data merkle tree")
 		}
 		logrus.WithField("root", tree.Root()).Info("Data merkle root calculated")
 		trees[i] = tree
 
-		info, err := uploader.clients[0].GetFileInfo(tree.Root())
-		if err != nil {
-			return errors.WithMessage(err, "Failed to get data info from storage node")
-		}
-
-		logrus.WithField("info", info).Debug("Log entry retrieved from storage node")
-
-		// In case that user interact with blockchain via Metamask
-		if uploader.flow == nil && info == nil {
-			return errors.New("log entry not available on storage node")
-		}
-
-		// already finalized
-		if info != nil && info.Finalized {
-			if !opt.Force {
-				return errors.New("Data already exists on ZeroGStorage network")
-			}
-			toUpload[i] = false
-		} else {
-			toUpload[i] = true
-		}
-
-		// Log entry unavailable on storage node yet.
-		if info == nil {
-			toSubmitDatas = append(toSubmitDatas, data)
-			toSubmitTags = append(toSubmitTags, opt.Tags)
-			lastTreeToSubmit = trees[i]
-		}
+		toSubmitDatas = append(toSubmitDatas, data)
+		toSubmitTags = append(toSubmitTags, opt.Tags)
+		lastTreeToSubmit = trees[i]
 	}
 
 	// Append log on blockchain
+	var txHash common.Hash
 	if len(toSubmitDatas) > 0 {
-		if _, err := uploader.submitLogEntry(toSubmitDatas, toSubmitTags); err != nil {
-			return errors.WithMessage(err, "Failed to submit log entry")
+		var err error
+		if txHash, _, err = uploader.submitLogEntry(toSubmitDatas, toSubmitTags, waitForLogEntry); err != nil {
+			return common.Hash{}, errors.WithMessage(err, "Failed to submit log entry")
 		}
-		// Wait for storage node to retrieve log entry from blockchain
-		if err := uploader.waitForLogEntry(lastTreeToSubmit.Root(), false); err != nil {
-			return errors.WithMessage(err, "Failed to check if log entry available on storage node")
+		if waitForLogEntry {
+			// Wait for storage node to retrieve log entry from blockchain
+			if err := uploader.waitForLogEntry(lastTreeToSubmit.Root(), false); err != nil {
+				return common.Hash{}, errors.WithMessage(err, "Failed to check if log entry available on storage node")
+			}
 		}
 	}
 
 	for i := 0; i < n; i++ {
-		if !toUpload[i] {
-			continue
-		}
 		// Upload file to storage node
 		if err := uploader.uploadFile(datas[i], trees[i], 0, opts[i].Disperse); err != nil {
-			return errors.WithMessage(err, "Failed to upload file")
+			return common.Hash{}, errors.WithMessage(err, "Failed to upload file")
 		}
 
-		// Wait for transaction finality
-		if err := uploader.waitForLogEntry(trees[i].Root(), !opts[i].Disperse); err != nil {
-			return errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
+		if waitForLogEntry {
+			// Wait for transaction finality
+			if err := uploader.waitForLogEntry(trees[i].Root(), !opts[i].Disperse); err != nil {
+				return common.Hash{}, errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
+			}
 		}
 	}
 
-	return nil
+	return txHash, nil
 }
 
 func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption) error {
@@ -197,7 +174,7 @@ func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption)
 	segNum := uint64(0)
 	if info == nil {
 		// Append log on blockchain
-		if _, err = uploader.submitLogEntry([]core.IterableData{data}, [][]byte{opt.Tags}); err != nil {
+		if _, _, err = uploader.submitLogEntry([]core.IterableData{data}, [][]byte{opt.Tags}, true); err != nil {
 			return errors.WithMessage(err, "Failed to submit log entry")
 		}
 
@@ -232,14 +209,14 @@ func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption)
 	return nil
 }
 
-func (uploader *Uploader) submitLogEntry(datas []core.IterableData, tags [][]byte) (*types.Receipt, error) {
+func (uploader *Uploader) submitLogEntry(datas []core.IterableData, tags [][]byte, waitForReceipt bool) (common.Hash, *types.Receipt, error) {
 	// Construct submission
 	submissions := make([]contract.Submission, len(datas))
 	for i := 0; i < len(datas); i++ {
 		flow := core.NewFlow(datas[i], tags[i])
 		submission, err := flow.CreateSubmission()
 		if err != nil {
-			return nil, errors.WithMessage(err, "Failed to create flow submission")
+			return common.Hash{}, nil, errors.WithMessage(err, "Failed to create flow submission")
 		}
 		submissions[i] = *submission
 	}
@@ -247,7 +224,7 @@ func (uploader *Uploader) submitLogEntry(datas []core.IterableData, tags [][]byt
 	// Submit log entry to smart contract.
 	opts, err := uploader.flow.CreateTransactOpts()
 	if err != nil {
-		return nil, errors.WithMessage(err, "Failed to create opts to send transaction")
+		return common.Hash{}, nil, errors.WithMessage(err, "Failed to create opts to send transaction")
 	}
 
 	var tx *types.Transaction
@@ -257,14 +234,17 @@ func (uploader *Uploader) submitLogEntry(datas []core.IterableData, tags [][]byt
 		tx, err = uploader.flow.BatchSubmit(opts, submissions)
 	}
 	if err != nil {
-		return nil, errors.WithMessage(err, "Failed to send transaction to append log entry")
+		return common.Hash{}, nil, errors.WithMessage(err, "Failed to send transaction to append log entry")
 	}
 
 	logrus.WithField("hash", tx.Hash().Hex()).Info("Succeeded to send transaction to append log entry")
 
-	// Wait for successful execution
-	return uploader.flow.WaitForReceipt(tx.Hash(), true)
-
+	if waitForReceipt {
+		// Wait for successful execution
+		receipt, err := uploader.flow.WaitForReceipt(tx.Hash(), true)
+		return tx.Hash(), receipt, err
+	}
+	return tx.Hash(), nil, nil
 }
 
 // Wait for log entry ready on storage node.
