@@ -1,8 +1,11 @@
 package core
 
 import (
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/sirupsen/logrus"
 	"github.com/zero-gravity-labs/zerog-storage-client/core/merkle"
 )
 
@@ -30,6 +33,7 @@ type IterableData interface {
 }
 
 func MerkleTree(data IterableData) (*merkle.Tree, error) {
+	stageTimer := time.Now()
 	iter := data.Iterate(0, DefaultSegmentSize, true)
 	var builder merkle.TreeBuilder
 
@@ -47,8 +51,13 @@ func MerkleTree(data IterableData) (*merkle.Tree, error) {
 
 		builder.AppendHash(segRoot)
 	}
+	logrus.WithField("duration", time.Since(stageTimer)).Info("create segment root took")
 
-	return builder.Build(), nil
+	stageTimer = time.Now()
+	tree := builder.Build()
+	logrus.WithField("duration", time.Since(stageTimer)).Info("build merkle tree took")
+
+	return tree, nil
 }
 
 func NumSplits(total int64, unit int) uint64 {

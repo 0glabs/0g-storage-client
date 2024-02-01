@@ -3,6 +3,7 @@ package core
 import (
 	"math"
 	"math/big"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/zero-gravity-labs/zerog-storage-client/contract"
@@ -25,6 +26,7 @@ func (flow *Flow) CreateSubmission() (*contract.Submission, error) {
 		Tags:   flow.tags,
 	}
 
+	stageTimer := time.Now()
 	var offset int64
 	for _, chunks := range flow.splitNodes() {
 		node, err := flow.createNode(offset, chunks)
@@ -34,6 +36,7 @@ func (flow *Flow) CreateSubmission() (*contract.Submission, error) {
 		submission.Nodes = append(submission.Nodes, *node)
 		offset += chunks * DefaultChunkSize
 	}
+	logrus.WithField("duration", time.Since(stageTimer)).Info("create submission nodes took")
 
 	return &submission, nil
 }

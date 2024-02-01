@@ -49,6 +49,8 @@ func NewUploaderLight(clients []*node.Client) *Uploader {
 
 // upload data(batchly in 1 blockchain transaction if there are more than one files)
 func (uploader *Uploader) BatchUpload(datas []core.IterableData, waitForLogEntry bool, option ...[]UploadOption) (common.Hash, error) {
+	stageTimer := time.Now()
+
 	n := len(datas)
 	if n == 0 {
 		return common.Hash{}, errors.New("empty datas")
@@ -122,10 +124,14 @@ func (uploader *Uploader) BatchUpload(datas []core.IterableData, waitForLogEntry
 		}
 	}
 
+	logrus.WithField("duration", time.Since(stageTimer)).Info("batch upload took")
+
 	return txHash, nil
 }
 
 func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption) error {
+	stageTimer := time.Now()
+
 	var opt UploadOption
 	if len(option) > 0 {
 		opt = option[0]
@@ -205,6 +211,8 @@ func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption)
 	if err = uploader.waitForLogEntry(tree.Root(), !opt.Disperse); err != nil {
 		return errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
 	}
+
+	logrus.WithField("duration", time.Since(stageTimer)).Info("upload took")
 
 	return nil
 }
@@ -340,6 +348,8 @@ func (uploader *Uploader) uploadSegment(tree *merkle.Tree, segIndex uint64, data
 
 // TODO error tolerance
 func (uploader *Uploader) uploadFile(data core.IterableData, tree *merkle.Tree, segIndex uint64, disperse bool) error {
+	stageTimer := time.Now()
+
 	logrus.WithFields(logrus.Fields{
 		"segIndex": segIndex,
 		"disperse": disperse,
@@ -409,6 +419,8 @@ func (uploader *Uploader) uploadFile(data core.IterableData, tree *merkle.Tree, 
 	}
 
 	logrus.Info("Completed to upload file")
+
+	logrus.WithField("duration", time.Since(stageTimer)).Info("upload file took")
 
 	return nil
 }
