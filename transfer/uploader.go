@@ -17,7 +17,6 @@ import (
 
 // smallFileSizeThreshold is the maximum file size to upload without log entry available on storage node.
 const smallFileSizeThreshold = int64(256 * 1024)
-const routines = 20
 
 var AlreadyExistsError = "Invalid params: root; data: already uploaded and finalized"
 
