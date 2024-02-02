@@ -1,15 +1,27 @@
 package core
 
+import "errors"
+
 type DataInMemory struct {
 	underlying []byte
+	paddedSize uint64
 }
 
 var _ IterableData = (*DataInMemory)(nil)
 
-func NewDataInMemory(data []byte) *DataInMemory {
+func NewDataInMemory(data []byte) (*DataInMemory, error) {
+	if len(data) == 0 {
+		return nil, errors.New("data is empty")
+	}
 	return &DataInMemory{
 		underlying: data,
-	}
+		paddedSize: IteratorPaddedSize(int64(len(data)), true),
+	}, nil
+}
+
+func (data *DataInMemory) Read(buf []byte, offset int64) (int, error) {
+	n := copy(buf, data.underlying[offset:])
+	return n, nil
 }
 
 func (data *DataInMemory) NumChunks() uint64 {
@@ -22,6 +34,10 @@ func (data *DataInMemory) NumSegments() uint64 {
 
 func (data *DataInMemory) Size() int64 {
 	return int64(len(data.underlying))
+}
+
+func (data *DataInMemory) PaddedSize() uint64 {
+	return data.paddedSize
 }
 
 func (data *DataInMemory) Iterate(offset int64, batch int64, flowPadding bool) Iterator {
@@ -84,10 +100,7 @@ func (it *MemoryDataIterator) Next() (bool, error) {
 }
 
 func (it *MemoryDataIterator) paddingZeros(length int) {
-	startOffset := it.bufSize
-	for i := 0; i < length; i++ {
-		it.buf[startOffset+i] = 0
-	}
+	paddingZeros(it.buf, it.bufSize, length)
 	it.bufSize += length
 	it.offset += length
 }

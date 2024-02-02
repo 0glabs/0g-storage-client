@@ -16,6 +16,7 @@ import (
 
 // smallFileSizeThreshold is the maximum file size to upload without log entry available on storage node.
 const smallFileSizeThreshold = int64(256 * 1024)
+const routines = 20
 
 type UploadOption struct {
 	Tags     []byte // for kv operations
@@ -311,7 +312,7 @@ func (uploader *Uploader) uploadSegment(tree *merkle.Tree, segIndex uint64, data
 				"total":       numSegments,
 				"index":       segIndex,
 				"clientIndex": clientIndex,
-			}).Info("Uploading segment to node..")
+			}).Debug("Uploading segment to node..")
 			if _, err := uploader.clients[clientIndex].UploadSegment(segWithProof); err != nil {
 				logrus.WithFields(logrus.Fields{
 					"total":       numSegments,
@@ -360,7 +361,7 @@ func (uploader *Uploader) uploadFile(data core.IterableData, tree *merkle.Tree, 
 	numChunks := data.NumChunks()
 
 	var wg sync.WaitGroup
-	errs := make(chan error, len(uploader.clients))
+	errs := make(chan error, routines)
 
 	for {
 		ok, err := iter.Next()
@@ -399,7 +400,8 @@ func (uploader *Uploader) uploadFile(data core.IterableData, tree *merkle.Tree, 
 				defer wg.Done()
 				errs <- uploader.uploadSegment(tree, segIndex, data, segment, true)
 			}(tree, segIndex, data, append([]byte(nil), segment...))
-			if segIndex%uint64(len(uploader.clients)) == uint64(len(uploader.clients))-1 {
+			// if segIndex%uint64(len(uploader.clients)) == uint64(len(uploader.clients))-1 || allDataUploaded {
+			if segIndex%uint64(routines) == 0 || allDataUploaded {
 				wg.Wait()
 				close(errs)
 				for e := range errs {
@@ -407,7 +409,7 @@ func (uploader *Uploader) uploadFile(data core.IterableData, tree *merkle.Tree, 
 						return e
 					}
 				}
-				errs = make(chan error, len(uploader.clients))
+				errs = make(chan error, routines)
 			}
 		}
 

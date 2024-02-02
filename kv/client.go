@@ -154,7 +154,10 @@ func (b *Batcher) Exec() error {
 	if err != nil {
 		return errors.WithMessage(err, "Failed to encode data")
 	}
-	data := core.NewDataInMemory(encoded)
+	data, err := core.NewDataInMemory(encoded)
+	if err != nil {
+		return err
+	}
 
 	// upload file
 	uploader := transfer.NewUploader(b.client.flow, []*node.Client{b.client.node})

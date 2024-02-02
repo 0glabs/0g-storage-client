@@ -32,7 +32,7 @@ func TestFileAndInMemoryData(t *testing.T) {
 	fileTree, err := MerkleTree(file)
 	assert.NoError(t, err)
 
-	inMem := NewDataInMemory(data)
+	inMem, _ := NewDataInMemory(data)
 	inMemTree, err := MerkleTree(inMem)
 	assert.NoError(t, err)
 
