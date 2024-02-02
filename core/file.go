@@ -17,6 +17,18 @@ var (
 type File struct {
 	os.FileInfo
 	underlying *os.File
+	paddedSize uint64
+}
+
+var _ IterableData = (*File)(nil)
+
+func (file *File) Read(buf []byte, offset int64) (int, error) {
+	n, err := file.underlying.ReadAt(buf, offset)
+	// unexpected IO error
+	if !errors.Is(err, io.EOF) {
+		return 0, err
+	}
+	return n, nil
 }
 
 func Exists(name string) (bool, error) {
@@ -56,6 +68,7 @@ func Open(name string) (*File, error) {
 	return &File{
 		FileInfo:   info,
 		underlying: file,
+		paddedSize: IteratorPaddedSize(info.Size(), true),
 	}, nil
 }
 
@@ -69,6 +82,10 @@ func (file *File) NumChunks() uint64 {
 
 func (file *File) NumSegments() uint64 {
 	return NumSplits(file.Size(), DefaultSegmentSize)
+}
+
+func (file *File) PaddedSize() uint64 {
+	return file.paddedSize
 }
 
 func (file *File) Iterate(offset int64, batch int64, flowPadding bool) Iterator {
@@ -146,10 +163,7 @@ func (it *FileIterator) clearBuffer() {
 }
 
 func (it *FileIterator) paddingZeros(length int) {
-	startOffset := it.bufSize
-	for i := 0; i < length; i++ {
-		it.buf[startOffset+i] = 0
-	}
+	paddingZeros(it.buf, it.bufSize, length)
 	it.bufSize += length
 	it.offset += int64(length)
 }

@@ -18,13 +18,14 @@ func Serial(parallelizable Interface, tasks, routines, window int) error {
 		routines = tasks
 	}
 
-	if window < routines {
+	channelLen := max(routines, window)
+	if window > 0 && window < routines {
 		window = routines
 	}
 
-	taskCh := make(chan int, window)
+	taskCh := make(chan int, channelLen)
 	defer close(taskCh)
-	resultCh := make(chan *Result, window)
+	resultCh := make(chan *Result, channelLen)
 	defer close(resultCh)
 
 	var wg sync.WaitGroup
@@ -36,7 +37,7 @@ func Serial(parallelizable Interface, tasks, routines, window int) error {
 		go work(ctx, i, parallelizable, taskCh, resultCh, &wg)
 	}
 
-	err := collect(parallelizable, taskCh, resultCh, tasks, window)
+	err := collect(parallelizable, taskCh, resultCh, tasks, channelLen, window > 0)
 
 	// notify all routines to terminate
 	cancel()
@@ -64,13 +65,14 @@ func work(ctx context.Context, routine int, parallelizable Interface, taskCh <-c
 	}
 }
 
-func collect(parallelizable Interface, taskCh chan<- int, resultCh <-chan *Result, tasks, window int) error {
-	// fill window at first
-	for i := 0; i < window && i < tasks; i++ {
+func collect(parallelizable Interface, taskCh chan<- int, resultCh <-chan *Result, tasks, channelLen int, hasWindow bool) error {
+	// if hasWindow = true, channelLen == window, fill window first
+	// if hasWindow = false, channelLen = routines
+	for i := 0; i < channelLen && i < tasks; i++ {
 		taskCh <- i
 	}
 
-	var next int
+	var next, cnt int
 	cache := map[int]*Result{}
 
 	for result := range resultCh {
@@ -87,15 +89,22 @@ func collect(parallelizable Interface, taskCh chan<- int, resultCh <-chan *Resul
 			}
 
 			// dispatch new task
-			if newTask := next + window; newTask < tasks {
-				taskCh <- newTask
+			if hasWindow {
+				if newTask := next + channelLen; newTask < tasks {
+					taskCh <- newTask
+				}
 			}
 
 			// clear cache and move window forward
 			delete(cache, next)
 			next++
 		}
-
+		if !hasWindow {
+			if newTask := cnt + channelLen; newTask < tasks {
+				taskCh <- newTask
+			}
+		}
+		cnt += 1
 		if next >= tasks {
 			break
 		}

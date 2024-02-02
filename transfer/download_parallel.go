@@ -25,6 +25,8 @@ type SegmentDownloader struct {
 	numSegments   uint64
 }
 
+var _ parallel.Interface = (*SegmentDownloader)(nil)
+
 func NewSegmentDownloader(clients []*node.Client, file *download.DownloadingFile, withProof bool) (*SegmentDownloader, error) {
 	offset := file.Metadata().Offset
 	if offset%core.DefaultSegmentSize > 0 {
