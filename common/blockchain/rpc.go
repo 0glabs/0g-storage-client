@@ -16,6 +16,11 @@ import (
 
 var Web3LogEnabled bool
 
+type RetryOption struct {
+	Rounds   uint
+	Interval time.Duration
+}
+
 func MustNewWeb3(url, key string) *web3go.Client {
 	client, err := NewWeb3(url, key)
 	if err != nil {
@@ -52,18 +57,25 @@ func NewWeb3WithOption(url, key string, option ...providers.Option) (*web3go.Cli
 	return web3go.NewClientWithOption(url, *opt.WithSignerManager(sm))
 }
 
-func WaitForReceipt(client *web3go.Client, txHash common.Hash, successRequired bool, pollInterval ...time.Duration) (receipt *types.Receipt, err error) {
-	interval := time.Second
-	if len(pollInterval) > 0 && pollInterval[0] > 0 {
-		interval = pollInterval[0]
+func WaitForReceipt(client *web3go.Client, txHash common.Hash, successRequired bool, opts ...RetryOption) (receipt *types.Receipt, err error) {
+	var opt RetryOption
+	if len(opts) > 0 {
+		opt = opts[0]
+	} else {
+		opt.Rounds = 0
+		opt.Interval = time.Second
 	}
 
+	var tries uint
 	for receipt == nil {
-		time.Sleep(interval)
-
+		if tries > opt.Rounds+1 {
+			return nil, errors.New("no receipt after max retries")
+		}
+		time.Sleep(opt.Interval)
 		if receipt, err = client.Eth.TransactionReceipt(txHash); err != nil {
 			return nil, err
 		}
+		tries++
 	}
 
 	if receipt.Status == nil {

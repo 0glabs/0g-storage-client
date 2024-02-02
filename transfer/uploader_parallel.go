@@ -52,7 +52,7 @@ func (uploader *SegmentUploader) ParallelDo(routine int, task int) (interface{},
 	}
 	// upload
 	if !uploader.disperse {
-		if _, err := uploader.clients[0].UploadSegment(segWithProof); err != nil {
+		if _, err := uploader.clients[0].UploadSegment(segWithProof); err != nil && !isDuplicateError(err.Error()) {
 			return nil, errors.WithMessage(err, "Failed to upload segment")
 		}
 	} else {

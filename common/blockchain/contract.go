@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"math/big"
 	"strings"
-	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -135,6 +134,6 @@ func (c *Contract) CreateTransactOpts() (*bind.TransactOpts, error) {
 	}, nil
 }
 
-func (c *Contract) WaitForReceipt(txHash common.Hash, successRequired bool, pollInterval ...time.Duration) (*types.Receipt, error) {
-	return WaitForReceipt(c.client, txHash, successRequired, pollInterval...)
+func (c *Contract) WaitForReceipt(txHash common.Hash, successRequired bool, opts ...RetryOption) (*types.Receipt, error) {
+	return WaitForReceipt(c.client, txHash, successRequired, opts...)
 }

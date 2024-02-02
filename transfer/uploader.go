@@ -56,12 +56,12 @@ func NewUploaderLight(clients []*node.Client) *Uploader {
 }
 
 // upload data(batchly in 1 blockchain transaction if there are more than one files)
-func (uploader *Uploader) BatchUpload(datas []core.IterableData, waitForLogEntry bool, option ...[]UploadOption) (common.Hash, error) {
+func (uploader *Uploader) BatchUpload(datas []core.IterableData, waitForLogEntry bool, option ...[]UploadOption) (common.Hash, []common.Hash, error) {
 	stageTimer := time.Now()
 
 	n := len(datas)
 	if n == 0 {
-		return common.Hash{}, errors.New("empty datas")
+		return common.Hash{}, nil, errors.New("empty datas")
 	}
 	var opts []UploadOption
 	if len(option) > 0 {
@@ -70,7 +70,7 @@ func (uploader *Uploader) BatchUpload(datas []core.IterableData, waitForLogEntry
 		opts = make([]UploadOption, n)
 	}
 	if len(opts) != n {
-		return common.Hash{}, errors.New("datas and tags length mismatch")
+		return common.Hash{}, nil, errors.New("datas and tags length mismatch")
 	}
 	logrus.WithFields(logrus.Fields{
 		"dataNum": n,
@@ -79,6 +79,7 @@ func (uploader *Uploader) BatchUpload(datas []core.IterableData, waitForLogEntry
 	trees := make([]*merkle.Tree, n)
 	toSubmitDatas := make([]core.IterableData, 0)
 	toSubmitTags := make([][]byte, 0)
+	dataRoots := make([]common.Hash, n)
 	var lastTreeToSubmit *merkle.Tree
 	for i := 0; i < n; i++ {
 		data := datas[i]
@@ -93,10 +94,11 @@ func (uploader *Uploader) BatchUpload(datas []core.IterableData, waitForLogEntry
 		// Calculate file merkle root.
 		tree, err := core.MerkleTree(data)
 		if err != nil {
-			return common.Hash{}, errors.WithMessage(err, "Failed to create data merkle tree")
+			return common.Hash{}, nil, errors.WithMessage(err, "Failed to create data merkle tree")
 		}
 		logrus.WithField("root", tree.Root()).Info("Data merkle root calculated")
 		trees[i] = tree
+		dataRoots[i] = trees[i].Root()
 
 		toSubmitDatas = append(toSubmitDatas, data)
 		toSubmitTags = append(toSubmitTags, opt.Tags)
@@ -108,12 +110,12 @@ func (uploader *Uploader) BatchUpload(datas []core.IterableData, waitForLogEntry
 	if len(toSubmitDatas) > 0 {
 		var err error
 		if txHash, _, err = uploader.submitLogEntry(toSubmitDatas, toSubmitTags, waitForLogEntry); err != nil {
-			return common.Hash{}, errors.WithMessage(err, "Failed to submit log entry")
+			return common.Hash{}, nil, errors.WithMessage(err, "Failed to submit log entry")
 		}
 		if waitForLogEntry {
 			// Wait for storage node to retrieve log entry from blockchain
 			if err := uploader.waitForLogEntry(lastTreeToSubmit.Root(), false); err != nil {
-				return common.Hash{}, errors.WithMessage(err, "Failed to check if log entry available on storage node")
+				return common.Hash{}, nil, errors.WithMessage(err, "Failed to check if log entry available on storage node")
 			}
 		}
 	}
@@ -121,20 +123,20 @@ func (uploader *Uploader) BatchUpload(datas []core.IterableData, waitForLogEntry
 	for i := 0; i < n; i++ {
 		// Upload file to storage node
 		if err := uploader.uploadFile(datas[i], trees[i], 0, opts[i].Disperse); err != nil {
-			return common.Hash{}, errors.WithMessage(err, "Failed to upload file")
+			return common.Hash{}, nil, errors.WithMessage(err, "Failed to upload file")
 		}
 
 		if waitForLogEntry {
 			// Wait for transaction finality
 			if err := uploader.waitForLogEntry(trees[i].Root(), !opts[i].Disperse); err != nil {
-				return common.Hash{}, errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
+				return common.Hash{}, nil, errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
 			}
 		}
 	}
 
 	logrus.WithField("duration", time.Since(stageTimer)).Info("batch upload took")
 
-	return txHash, nil
+	return txHash, dataRoots, nil
 }
 
 func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption) error {
@@ -314,14 +316,17 @@ func (uploader *Uploader) uploadFile(data core.IterableData, tree *merkle.Tree, 
 	}
 
 	numTasks := (data.Size()-offset-1)/core.DefaultSegmentSize + 1
-	err := parallel.Serial(segmentUploader, int(numTasks), runtime.GOMAXPROCS(0), 0)
+	err := parallel.Serial(segmentUploader, int(numTasks), min(runtime.GOMAXPROCS(0), len(uploader.clients)*5), 0)
 	if err != nil {
 		return err
 	}
 
 	logrus.Info("Completed to upload file")
 
-	logrus.WithField("duration", time.Since(stageTimer)).Info("upload file took")
+	logrus.WithFields(logrus.Fields{
+		"duration": time.Since(stageTimer),
+		"segNum":   numTasks,
+	}).Info("upload file took")
 
 	return nil
 }
