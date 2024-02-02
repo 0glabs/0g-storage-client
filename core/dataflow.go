@@ -42,6 +42,8 @@ func MerkleTree(data IterableData) (*merkle.Tree, error) {
 	var builder merkle.TreeBuilder
 	initializer := &TreeBuilderInitializer{
 		data:    data,
+		offset:  0,
+		batch:   DefaultSegmentSize,
 		builder: &builder,
 	}
 
@@ -52,11 +54,7 @@ func MerkleTree(data IterableData) (*merkle.Tree, error) {
 
 	logrus.WithField("duration", time.Since(stageTimer)).Info("create segment root took")
 
-	stageTimer = time.Now()
-	tree := builder.Build()
-	logrus.WithField("duration", time.Since(stageTimer)).Info("build merkle tree took")
-
-	return tree, nil
+	return builder.Build(), nil
 }
 
 func NumSplits(total int64, unit int) uint64 {

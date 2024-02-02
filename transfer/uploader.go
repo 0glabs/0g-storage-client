@@ -1,13 +1,14 @@
 package transfer
 
 import (
-	"sync"
+	"runtime"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"github.com/zero-gravity-labs/zerog-storage-client/common/parallel"
 	"github.com/zero-gravity-labs/zerog-storage-client/contract"
 	"github.com/zero-gravity-labs/zerog-storage-client/core"
 	"github.com/zero-gravity-labs/zerog-storage-client/core/merkle"
@@ -17,6 +18,8 @@ import (
 // smallFileSizeThreshold is the maximum file size to upload without log entry available on storage node.
 const smallFileSizeThreshold = int64(256 * 1024)
 const routines = 20
+
+var AlreadyExistsError = "Invalid params: root; data: already uploaded and finalized"
 
 type UploadOption struct {
 	Tags     []byte // for kv operations
@@ -286,67 +289,6 @@ func (uploader *Uploader) waitForLogEntry(root common.Hash, finalityRequired boo
 	return nil
 }
 
-func (uploader *Uploader) uploadSegment(tree *merkle.Tree, segIndex uint64, data core.IterableData, segment []byte, disperse bool) error {
-	proof := tree.ProofAt(int(segIndex))
-	dataSize := uint64(data.Size())
-	numSegments := data.NumSegments()
-
-	segWithProof := node.SegmentWithProof{
-		Root:     tree.Root(),
-		Data:     segment,
-		Index:    segIndex,
-		Proof:    proof,
-		FileSize: dataSize,
-	}
-
-	if !disperse {
-		if _, err := uploader.clients[0].UploadSegment(segWithProof); err != nil {
-			return errors.WithMessage(err, "Failed to upload segment")
-		}
-	} else {
-		clientIndex := segIndex % uint64(len(uploader.clients))
-		ok := false
-		// retry
-		for i := 0; i < len(uploader.clients); i++ {
-			logrus.WithFields(logrus.Fields{
-				"total":       numSegments,
-				"index":       segIndex,
-				"clientIndex": clientIndex,
-			}).Debug("Uploading segment to node..")
-			if _, err := uploader.clients[clientIndex].UploadSegment(segWithProof); err != nil {
-				logrus.WithFields(logrus.Fields{
-					"total":       numSegments,
-					"index":       segIndex,
-					"clientIndex": clientIndex,
-					"error":       err,
-				}).Warn("Failed to upload segment to node, try next node..")
-				clientIndex = (clientIndex + 1) % uint64(len(uploader.clients))
-			} else {
-				ok = true
-				break
-			}
-		}
-		if !ok {
-			if _, err := uploader.clients[clientIndex].UploadSegment(segWithProof); err != nil {
-				return errors.WithMessage(err, "Failed to upload segment")
-			}
-		}
-	}
-
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		chunkIndex := segIndex * core.DefaultSegmentMaxChunks
-		logrus.WithFields(logrus.Fields{
-			"total":      numSegments,
-			"index":      segIndex,
-			"chunkStart": chunkIndex,
-			"chunkEnd":   chunkIndex + uint64(len(segment))/core.DefaultChunkSize,
-			"root":       core.SegmentRoot(segment),
-		}).Debug("Segment uploaded")
-	}
-
-	return nil
-}
-
 // TODO error tolerance
 func (uploader *Uploader) uploadFile(data core.IterableData, tree *merkle.Tree, segIndex uint64, disperse bool) error {
 	stageTimer := time.Now()
@@ -357,67 +299,20 @@ func (uploader *Uploader) uploadFile(data core.IterableData, tree *merkle.Tree, 
 		"nodeNum":  len(uploader.clients),
 	}).Info("Begin to upload file")
 
-	iter := data.Iterate(int64(segIndex*core.DefaultSegmentSize), core.DefaultSegmentSize, true)
-	numChunks := data.NumChunks()
+	offset := int64(segIndex * core.DefaultSegmentSize)
 
-	var wg sync.WaitGroup
-	errs := make(chan error, routines)
+	segmentUploader := &SegmentUploader{
+		data:     data,
+		tree:     tree,
+		clients:  uploader.clients,
+		offset:   offset,
+		disperse: disperse,
+	}
 
-	for {
-		ok, err := iter.Next()
-		if err != nil {
-			return errors.WithMessage(err, "Failed to read segment")
-		}
-
-		if !ok {
-			break
-		}
-
-		segment := iter.Current()
-
-		// Skip upload rear padding data
-
-		startIndex := segIndex * core.DefaultSegmentMaxChunks
-		allDataUploaded := false
-		if startIndex >= numChunks {
-			// file real data already uploaded
-			break
-		} else if startIndex+uint64(len(segment))/core.DefaultChunkSize >= numChunks {
-			// last segment has real data
-			expectedLen := core.DefaultChunkSize * int(numChunks-startIndex)
-			segment = segment[:expectedLen]
-			allDataUploaded = true
-		}
-
-		if !disperse {
-			err := uploader.uploadSegment(tree, segIndex, data, segment, disperse)
-			if err != nil {
-				return err
-			}
-		} else {
-			wg.Add(1)
-			go func(tree *merkle.Tree, segIndex uint64, data core.IterableData, segment []byte) {
-				defer wg.Done()
-				errs <- uploader.uploadSegment(tree, segIndex, data, segment, true)
-			}(tree, segIndex, data, append([]byte(nil), segment...))
-			// if segIndex%uint64(len(uploader.clients)) == uint64(len(uploader.clients))-1 || allDataUploaded {
-			if segIndex%uint64(routines) == 0 || allDataUploaded {
-				wg.Wait()
-				close(errs)
-				for e := range errs {
-					if e != nil {
-						return e
-					}
-				}
-				errs = make(chan error, routines)
-			}
-		}
-
-		if allDataUploaded {
-			break
-		}
-
-		segIndex++
+	numTasks := (data.Size()-offset-1)/core.DefaultSegmentSize + 1
+	err := parallel.Serial(segmentUploader, int(numTasks), runtime.GOMAXPROCS(0), 0)
+	if err != nil {
+		return err
 	}
 
 	logrus.Info("Completed to upload file")

@@ -8,6 +8,8 @@ import (
 
 type TreeBuilderInitializer struct {
 	data    IterableData
+	offset  int64
+	batch   int64
 	builder *merkle.TreeBuilder
 }
 
@@ -21,8 +23,8 @@ func (t *TreeBuilderInitializer) ParallelCollect(result *parallel.Result) error 
 
 // ParallelDo implements parallel.Interface.
 func (t *TreeBuilderInitializer) ParallelDo(routine int, task int) (interface{}, error) {
-	offset := int64(task) * DefaultSegmentSize
-	buf, err := ReadAt(t.data, DefaultSegmentSize, offset, t.data.PaddedSize())
+	offset := t.offset + int64(task)*t.batch
+	buf, err := ReadAt(t.data, int(t.batch), offset, t.data.PaddedSize())
 	if err != nil {
 		return nil, err
 	}

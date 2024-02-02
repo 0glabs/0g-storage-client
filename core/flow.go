@@ -3,9 +3,11 @@ package core
 import (
 	"math"
 	"math/big"
+	"runtime"
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/zero-gravity-labs/zerog-storage-client/common/parallel"
 	"github.com/zero-gravity-labs/zerog-storage-client/contract"
 	"github.com/zero-gravity-labs/zerog-storage-client/core/merkle"
 )
@@ -34,6 +36,7 @@ func (flow *Flow) CreateSubmission() (*contract.Submission, error) {
 			return nil, err
 		}
 		submission.Nodes = append(submission.Nodes, *node)
+		logrus.Info(*node)
 		offset += chunks * DefaultChunkSize
 	}
 	logrus.WithField("duration", time.Since(stageTimer)).Info("create submission nodes took")
@@ -104,27 +107,17 @@ func (flow *Flow) createNode(offset, chunks int64) (*contract.SubmissionNode, er
 }
 
 func (flow *Flow) createSegmentNode(offset, batch, size int64) (*contract.SubmissionNode, error) {
-	iter := flow.data.Iterate(offset, batch, true)
 	var builder merkle.TreeBuilder
+	initializer := &TreeBuilderInitializer{
+		data:    flow.data,
+		offset:  offset,
+		batch:   batch,
+		builder: &builder,
+	}
 
-	for i := int64(0); i < size; {
-		ok, err := iter.Next()
-		if err != nil {
-			return nil, err
-		}
-
-		// should always load data
-		if !ok {
-			logrus.WithFields(logrus.Fields{
-				"offset": offset,
-				"size":   size,
-			}).Error("Not enough data to create submission node")
-			break
-		}
-
-		segment := iter.Current()
-		builder.AppendHash(SegmentRoot(segment))
-		i += int64(len(segment))
+	err := parallel.Serial(initializer, int((size-1)/batch+1), runtime.GOMAXPROCS(0), 0)
+	if err != nil {
+		return nil, err
 	}
 
 	numChunks := size / DefaultChunkSize
