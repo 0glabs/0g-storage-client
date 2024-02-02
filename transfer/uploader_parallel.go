@@ -65,7 +65,7 @@ func (uploader *SegmentUploader) ParallelDo(routine int, task int) (interface{},
 				"index":       segIndex,
 				"clientIndex": clientIndex,
 			}).Debug("Uploading segment to node..")
-			if _, err := uploader.clients[clientIndex].UploadSegment(segWithProof); err != nil && err.Error() != AlreadyExistsError {
+			if _, err := uploader.clients[clientIndex].UploadSegment(segWithProof); err != nil && !isDuplicateError(err.Error()) {
 				logrus.WithFields(logrus.Fields{
 					"total":       numSegments,
 					"index":       segIndex,

@@ -36,7 +36,6 @@ func (flow *Flow) CreateSubmission() (*contract.Submission, error) {
 			return nil, err
 		}
 		submission.Nodes = append(submission.Nodes, *node)
-		logrus.Info(*node)
 		offset += chunks * DefaultChunkSize
 	}
 	logrus.WithField("duration", time.Since(stageTimer)).Info("create submission nodes took")

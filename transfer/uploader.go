@@ -18,7 +18,12 @@ import (
 // smallFileSizeThreshold is the maximum file size to upload without log entry available on storage node.
 const smallFileSizeThreshold = int64(256 * 1024)
 
-var AlreadyExistsError = "Invalid params: root; data: already uploaded and finalized"
+var DataAlreadyExistsError = "Invalid params: root; data: already uploaded and finalized"
+var SegmentAlreadyExistsError = "segment has already been uploaded or is being uploaded"
+
+func isDuplicateError(msg string) bool {
+	return msg == DataAlreadyExistsError || msg == SegmentAlreadyExistsError
+}
 
 type UploadOption struct {
 	Tags     []byte // for kv operations
