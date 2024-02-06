@@ -23,9 +23,9 @@ var (
 
 		node []string
 
-		force bool
-
+		force    bool
 		disperse bool
+		taskSize uint
 	}
 
 	uploadCmd = &cobra.Command{
@@ -52,6 +52,7 @@ func init() {
 
 	uploadCmd.Flags().BoolVar(&uploadArgs.force, "force", false, "Force to upload file even already exists")
 	uploadCmd.Flags().BoolVar(&uploadArgs.disperse, "disperse", false, "Disperse file amoung nodes")
+	uploadCmd.Flags().UintVar(&uploadArgs.taskSize, "task-size", 10, "Number of segments to upload in single rpc request")
 
 	rootCmd.AddCommand(uploadCmd)
 }
@@ -74,6 +75,7 @@ func upload(*cobra.Command, []string) {
 		Tags:     hexutil.MustDecode(uploadArgs.tags),
 		Force:    uploadArgs.force,
 		Disperse: uploadArgs.disperse,
+		TaskSize: uploadArgs.taskSize,
 	}
 
 	file, err := core.Open(uploadArgs.file)

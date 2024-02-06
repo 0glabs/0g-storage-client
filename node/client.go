@@ -99,6 +99,11 @@ func (c *ZeroGStorageClient) UploadSegment(segment SegmentWithProof) (ret int, e
 	return
 }
 
+func (c *ZeroGStorageClient) UploadSegments(segments []SegmentWithProof) (ret int, err error) {
+	err = c.provider.CallContext(context.Background(), &ret, "zgs_uploadSegments", segments)
+	return
+}
+
 func (c *ZeroGStorageClient) DownloadSegment(root common.Hash, startIndex, endIndex uint64) (data []byte, err error) {
 	err = c.provider.CallContext(context.Background(), &data, "zgs_downloadSegment", root, startIndex, endIndex)
 	return

@@ -17,6 +17,7 @@ import (
 
 // smallFileSizeThreshold is the maximum file size to upload without log entry available on storage node.
 const smallFileSizeThreshold = int64(256 * 1024)
+const defaultTaskSize = uint(10)
 
 var DataAlreadyExistsError = "Invalid params: root; data: already uploaded and finalized"
 var SegmentAlreadyExistsError = "segment has already been uploaded or is being uploaded"
@@ -29,6 +30,7 @@ type UploadOption struct {
 	Tags     []byte // for kv operations
 	Force    bool   // for kv to upload same file
 	Disperse bool   // disperse files to different nodes
+	TaskSize uint   // number of segment to upload in single rpc request
 }
 
 type Uploader struct {
@@ -122,7 +124,7 @@ func (uploader *Uploader) BatchUpload(datas []core.IterableData, waitForLogEntry
 
 	for i := 0; i < n; i++ {
 		// Upload file to storage node
-		if err := uploader.uploadFile(datas[i], trees[i], 0, opts[i].Disperse); err != nil {
+		if err := uploader.uploadFile(datas[i], trees[i], 0, opts[i].Disperse, opts[i].TaskSize); err != nil {
 			return common.Hash{}, nil, errors.WithMessage(err, "Failed to upload file")
 		}
 
@@ -213,7 +215,7 @@ func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption)
 	}
 
 	// Upload file to storage node
-	if err = uploader.uploadFile(data, tree, segNum, opt.Disperse); err != nil {
+	if err = uploader.uploadFile(data, tree, segNum, opt.Disperse, opt.TaskSize); err != nil {
 		return errors.WithMessage(err, "Failed to upload file")
 	}
 
@@ -296,8 +298,12 @@ func (uploader *Uploader) waitForLogEntry(root common.Hash, finalityRequired boo
 }
 
 // TODO error tolerance
-func (uploader *Uploader) uploadFile(data core.IterableData, tree *merkle.Tree, segIndex uint64, disperse bool) error {
+func (uploader *Uploader) uploadFile(data core.IterableData, tree *merkle.Tree, segIndex uint64, disperse bool, taskSize uint) error {
 	stageTimer := time.Now()
+
+	if taskSize == 0 {
+		taskSize = defaultTaskSize
+	}
 
 	logrus.WithFields(logrus.Fields{
 		"segIndex": segIndex,
@@ -313,10 +319,12 @@ func (uploader *Uploader) uploadFile(data core.IterableData, tree *merkle.Tree, 
 		clients:  uploader.clients,
 		offset:   offset,
 		disperse: disperse,
+		taskSize: taskSize,
 	}
 
-	numTasks := (data.Size()-offset-1)/core.DefaultSegmentSize + 1
-	err := parallel.Serial(segmentUploader, int(numTasks), min(runtime.GOMAXPROCS(0), len(uploader.clients)*5), 0)
+	numSegments := (data.Size()-offset-1)/core.DefaultSegmentSize + 1
+	numTasks := int(numSegments-1)/int(taskSize) + 1
+	err := parallel.Serial(segmentUploader, numTasks, min(runtime.GOMAXPROCS(0), len(uploader.clients)*5), 0)
 	if err != nil {
 		return err
 	}
@@ -325,7 +333,7 @@ func (uploader *Uploader) uploadFile(data core.IterableData, tree *merkle.Tree, 
 
 	logrus.WithFields(logrus.Fields{
 		"duration": time.Since(stageTimer),
-		"segNum":   numTasks,
+		"segNum":   numSegments,
 	}).Info("upload file took")
 
 	return nil
