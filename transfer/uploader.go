@@ -313,6 +313,8 @@ func (uploader *Uploader) uploadFile(data core.IterableData, tree *merkle.Tree, 
 
 	offset := int64(segIndex * core.DefaultSegmentSize)
 
+	numSegments := (data.Size()-offset-1)/core.DefaultSegmentSize + 1
+	numTasks := int(numSegments-1)/int(taskSize) + 1
 	segmentUploader := &SegmentUploader{
 		data:     data,
 		tree:     tree,
@@ -320,10 +322,9 @@ func (uploader *Uploader) uploadFile(data core.IterableData, tree *merkle.Tree, 
 		offset:   offset,
 		disperse: disperse,
 		taskSize: taskSize,
+		numTasks: numTasks,
 	}
 
-	numSegments := (data.Size()-offset-1)/core.DefaultSegmentSize + 1
-	numTasks := int(numSegments-1)/int(taskSize) + 1
 	err := parallel.Serial(segmentUploader, numTasks, min(runtime.GOMAXPROCS(0), len(uploader.clients)*5), 0)
 	if err != nil {
 		return err
