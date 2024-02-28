@@ -111,7 +111,7 @@ func (uploader *Uploader) BatchUpload(datas []core.IterableData, waitForLogEntry
 	var txHash common.Hash
 	if len(toSubmitDatas) > 0 {
 		var err error
-		if txHash, _, err = uploader.submitLogEntry(toSubmitDatas, toSubmitTags, waitForLogEntry); err != nil {
+		if txHash, _, err = uploader.SubmitLogEntry(toSubmitDatas, toSubmitTags, waitForLogEntry); err != nil {
 			return common.Hash{}, nil, errors.WithMessage(err, "Failed to submit log entry")
 		}
 		if waitForLogEntry {
@@ -124,7 +124,7 @@ func (uploader *Uploader) BatchUpload(datas []core.IterableData, waitForLogEntry
 
 	for i := 0; i < n; i++ {
 		// Upload file to storage node
-		if err := uploader.uploadFile(datas[i], trees[i], 0, opts[i].Disperse, opts[i].TaskSize); err != nil {
+		if err := uploader.UploadFile(datas[i], trees[i], 0, opts[i].Disperse, opts[i].TaskSize); err != nil {
 			return common.Hash{}, nil, errors.WithMessage(err, "Failed to upload file")
 		}
 
@@ -192,7 +192,7 @@ func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption)
 	segNum := uint64(0)
 	if info == nil {
 		// Append log on blockchain
-		if _, _, err = uploader.submitLogEntry([]core.IterableData{data}, [][]byte{opt.Tags}, true); err != nil {
+		if _, _, err = uploader.SubmitLogEntry([]core.IterableData{data}, [][]byte{opt.Tags}, true); err != nil {
 			return errors.WithMessage(err, "Failed to submit log entry")
 		}
 
@@ -215,7 +215,7 @@ func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption)
 	}
 
 	// Upload file to storage node
-	if err = uploader.uploadFile(data, tree, segNum, opt.Disperse, opt.TaskSize); err != nil {
+	if err = uploader.UploadFile(data, tree, segNum, opt.Disperse, opt.TaskSize); err != nil {
 		return errors.WithMessage(err, "Failed to upload file")
 	}
 
@@ -229,7 +229,7 @@ func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption)
 	return nil
 }
 
-func (uploader *Uploader) submitLogEntry(datas []core.IterableData, tags [][]byte, waitForReceipt bool) (common.Hash, *types.Receipt, error) {
+func (uploader *Uploader) SubmitLogEntry(datas []core.IterableData, tags [][]byte, waitForReceipt bool) (common.Hash, *types.Receipt, error) {
 	// Construct submission
 	submissions := make([]contract.Submission, len(datas))
 	for i := 0; i < len(datas); i++ {
@@ -298,7 +298,7 @@ func (uploader *Uploader) waitForLogEntry(root common.Hash, finalityRequired boo
 }
 
 // TODO error tolerance
-func (uploader *Uploader) uploadFile(data core.IterableData, tree *merkle.Tree, segIndex uint64, disperse bool, taskSize uint) error {
+func (uploader *Uploader) UploadFile(data core.IterableData, tree *merkle.Tree, segIndex uint64, disperse bool, taskSize uint) error {
 	stageTimer := time.Now()
 
 	if taskSize == 0 {

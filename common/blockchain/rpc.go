@@ -62,13 +62,14 @@ func WaitForReceipt(client *web3go.Client, txHash common.Hash, successRequired b
 	if len(opts) > 0 {
 		opt = opts[0]
 	} else {
+		// default infinite wait
 		opt.Rounds = 0
-		opt.Interval = time.Second
+		opt.Interval = time.Second * 3
 	}
 
 	var tries uint
 	for receipt == nil {
-		if tries > opt.Rounds+1 {
+		if tries > opt.Rounds+1 && opt.Rounds != 0 {
 			return nil, errors.New("no receipt after max retries")
 		}
 		time.Sleep(opt.Interval)
