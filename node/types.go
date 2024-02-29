@@ -7,15 +7,18 @@ import (
 )
 
 type Status struct {
-	ConnectedPeers uint `json:"connectedPeers"`
+	ConnectedPeers uint        `json:"connectedPeers"`
+	LogSyncHeight  uint64      `json:"logSyncHeight"`
+	LogSyncBlock   common.Hash `json:"logSyncBlock"`
 }
 
 type Transaction struct {
-	StreamIds      []*hexutil.Big `json:"streamIds"`
-	Data           []byte         `json:"data"` // in-place data
-	DataMerkleRoot common.Hash    `json:"dataMerkleRoot"`
-	Size           uint64         `json:"size"` // file size in bytes
-	Seq            uint64         `json:"seq"`
+	StreamIds       []*hexutil.Big `json:"streamIds"`
+	Data            []byte         `json:"data"` // in-place data
+	DataMerkleRoot  common.Hash    `json:"dataMerkleRoot"`
+	StartEntryIndex uint64         `json:"startEntryIndex"`
+	Size            uint64         `json:"size"` // file size in bytes
+	Seq             uint64         `json:"seq"`
 }
 
 type FileInfo struct {
