@@ -26,7 +26,7 @@ func TestMetadataSerde(t *testing.T) {
 
 func TestMetadata(t *testing.T) {
 	// create tmp file to test
-	tmpFile, err := os.CreateTemp(os.TempDir(), "zerog-storage-client-test-*")
+	tmpFile, err := os.CreateTemp(os.TempDir(), "0g-storage-client-test-*")
 	assert.NoError(t, err)
 	tmpFilename := tmpFile.Name()
 

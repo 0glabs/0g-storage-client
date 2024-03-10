@@ -3,11 +3,11 @@ package gateway
 import (
 	"net/http"
 
+	"github.com/0glabs/0g-storage-client/node"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 	"github.com/sirupsen/logrus"
-	"github.com/zero-gravity-labs/zerog-storage-client/node"
 )
 
 const httpStatusInternalError = 600

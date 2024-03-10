@@ -1,9 +1,9 @@
 package cmd
 
 import (
+	"github.com/0glabs/0g-storage-client/gateway"
+	"github.com/0glabs/0g-storage-client/node"
 	"github.com/spf13/cobra"
-	"github.com/zero-gravity-labs/zerog-storage-client/gateway"
-	"github.com/zero-gravity-labs/zerog-storage-client/node"
 )
 
 var (

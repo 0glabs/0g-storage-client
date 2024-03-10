@@ -3,11 +3,11 @@ package gateway
 import (
 	"path/filepath"
 
+	"github.com/0glabs/0g-storage-client/core"
+	"github.com/0glabs/0g-storage-client/node"
+	"github.com/0glabs/0g-storage-client/transfer"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gin-gonic/gin"
-	"github.com/zero-gravity-labs/zerog-storage-client/core"
-	"github.com/zero-gravity-labs/zerog-storage-client/node"
-	"github.com/zero-gravity-labs/zerog-storage-client/transfer"
 )
 
 var LocalFileRepo string = "."

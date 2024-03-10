@@ -1,15 +1,15 @@
 package cmd
 
 import (
+	"github.com/0glabs/0g-storage-client/common/blockchain"
+	"github.com/0glabs/0g-storage-client/contract"
+	"github.com/0glabs/0g-storage-client/core"
+	"github.com/0glabs/0g-storage-client/node"
+	"github.com/0glabs/0g-storage-client/transfer"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/zero-gravity-labs/zerog-storage-client/common/blockchain"
-	"github.com/zero-gravity-labs/zerog-storage-client/contract"
-	"github.com/zero-gravity-labs/zerog-storage-client/core"
-	"github.com/zero-gravity-labs/zerog-storage-client/node"
-	"github.com/zero-gravity-labs/zerog-storage-client/transfer"
 )
 
 var (

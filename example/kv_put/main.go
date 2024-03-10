@@ -3,11 +3,11 @@ package main
 import (
 	"fmt"
 
+	"github.com/0glabs/0g-storage-client/common/blockchain"
+	"github.com/0glabs/0g-storage-client/contract"
+	"github.com/0glabs/0g-storage-client/kv"
+	"github.com/0glabs/0g-storage-client/node"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/zero-gravity-labs/zerog-storage-client/common/blockchain"
-	"github.com/zero-gravity-labs/zerog-storage-client/contract"
-	"github.com/zero-gravity-labs/zerog-storage-client/kv"
-	"github.com/zero-gravity-labs/zerog-storage-client/node"
 )
 
 const ZgsClientAddr = "http://127.0.0.1:5678"

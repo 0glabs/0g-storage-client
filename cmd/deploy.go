@@ -1,9 +1,9 @@
 package cmd
 
 import (
+	"github.com/0glabs/0g-storage-client/common/blockchain"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/zero-gravity-labs/zerog-storage-client/common/blockchain"
 )
 
 var (

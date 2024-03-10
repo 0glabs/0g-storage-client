@@ -1,12 +1,12 @@
 package transfer
 
 import (
+	"github.com/0glabs/0g-storage-client/common/parallel"
+	"github.com/0glabs/0g-storage-client/core"
+	"github.com/0glabs/0g-storage-client/core/merkle"
+	"github.com/0glabs/0g-storage-client/node"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"github.com/zero-gravity-labs/zerog-storage-client/common/parallel"
-	"github.com/zero-gravity-labs/zerog-storage-client/core"
-	"github.com/zero-gravity-labs/zerog-storage-client/core/merkle"
-	"github.com/zero-gravity-labs/zerog-storage-client/node"
 )
 
 type SegmentUploader struct {

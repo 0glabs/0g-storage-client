@@ -19,7 +19,7 @@ func TestFileAndInMemoryData(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, n, len(data))
 
-	tmpFile, err := os.CreateTemp("", "zerog-storage-client-*")
+	tmpFile, err := os.CreateTemp("", "0g-storage-client-*")
 	assert.NoError(t, err)
 	defer os.Remove(tmpFile.Name())
 
