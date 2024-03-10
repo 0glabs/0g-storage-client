@@ -4,15 +4,15 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/0glabs/0g-storage-client/common/parallel"
+	"github.com/0glabs/0g-storage-client/contract"
+	"github.com/0glabs/0g-storage-client/core"
+	"github.com/0glabs/0g-storage-client/core/merkle"
+	"github.com/0glabs/0g-storage-client/node"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"github.com/zero-gravity-labs/zerog-storage-client/common/parallel"
-	"github.com/zero-gravity-labs/zerog-storage-client/contract"
-	"github.com/zero-gravity-labs/zerog-storage-client/core"
-	"github.com/zero-gravity-labs/zerog-storage-client/core/merkle"
-	"github.com/zero-gravity-labs/zerog-storage-client/node"
 )
 
 // smallFileSizeThreshold is the maximum file size to upload without log entry available on storage node.

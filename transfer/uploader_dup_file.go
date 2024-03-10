@@ -3,13 +3,13 @@ package transfer
 import (
 	"time"
 
+	"github.com/0glabs/0g-storage-client/common/blockchain"
+	"github.com/0glabs/0g-storage-client/contract"
+	"github.com/0glabs/0g-storage-client/core"
+	"github.com/0glabs/0g-storage-client/node"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"github.com/zero-gravity-labs/zerog-storage-client/common/blockchain"
-	"github.com/zero-gravity-labs/zerog-storage-client/contract"
-	"github.com/zero-gravity-labs/zerog-storage-client/core"
-	"github.com/zero-gravity-labs/zerog-storage-client/node"
 )
 
 const SubmitEventHash = "0x167ce04d2aa1981994d3a31695da0d785373335b1078cec239a1a3a2c7675555"

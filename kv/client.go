@@ -3,12 +3,12 @@ package kv
 import (
 	"math"
 
+	"github.com/0glabs/0g-storage-client/contract"
+	"github.com/0glabs/0g-storage-client/core"
+	"github.com/0glabs/0g-storage-client/node"
+	"github.com/0glabs/0g-storage-client/transfer"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
-	"github.com/zero-gravity-labs/zerog-storage-client/contract"
-	"github.com/zero-gravity-labs/zerog-storage-client/core"
-	"github.com/zero-gravity-labs/zerog-storage-client/node"
-	"github.com/zero-gravity-labs/zerog-storage-client/transfer"
 )
 
 // Client is used for users to communicate with server for kv operations.

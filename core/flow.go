@@ -6,10 +6,10 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/0glabs/0g-storage-client/common/parallel"
+	"github.com/0glabs/0g-storage-client/contract"
+	"github.com/0glabs/0g-storage-client/core/merkle"
 	"github.com/sirupsen/logrus"
-	"github.com/zero-gravity-labs/zerog-storage-client/common/parallel"
-	"github.com/zero-gravity-labs/zerog-storage-client/contract"
-	"github.com/zero-gravity-labs/zerog-storage-client/core/merkle"
 )
 
 type Flow struct {

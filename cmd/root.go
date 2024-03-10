@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/0glabs/0g-storage-client/common/blockchain"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/zero-gravity-labs/zerog-storage-client/common/blockchain"
 )
 
 var (
@@ -14,7 +14,7 @@ var (
 	logColorForced bool
 
 	rootCmd = &cobra.Command{
-		Use:   "zerog-storage-client",
+		Use:   "0g-storage-client",
 		Short: "ZeroGStorage client to interact with ZeroGStorage network",
 		PersistentPreRun: func(*cobra.Command, []string) {
 			initLog()

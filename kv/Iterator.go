@@ -3,8 +3,8 @@ package kv
 import (
 	"errors"
 
+	"github.com/0glabs/0g-storage-client/node"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/zero-gravity-labs/zerog-storage-client/node"
 )
 
 var errIteratorInvalid = errors.New("iterator is invalid")

@@ -1,6 +1,6 @@
 package main
 
-import "github.com/zero-gravity-labs/zerog-storage-client/cmd"
+import "github.com/0glabs/0g-storage-client/cmd"
 
 func main() {
 	cmd.Execute()

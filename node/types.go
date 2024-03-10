@@ -1,9 +1,9 @@
 package node
 
 import (
+	"github.com/0glabs/0g-storage-client/core/merkle"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/zero-gravity-labs/zerog-storage-client/core/merkle"
 )
 
 type Status struct {

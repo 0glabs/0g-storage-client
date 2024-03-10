@@ -3,13 +3,13 @@ package transfer
 import (
 	"fmt"
 
+	"github.com/0glabs/0g-storage-client/common/parallel"
+	"github.com/0glabs/0g-storage-client/core"
+	"github.com/0glabs/0g-storage-client/node"
+	"github.com/0glabs/0g-storage-client/transfer/download"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"github.com/zero-gravity-labs/zerog-storage-client/common/parallel"
-	"github.com/zero-gravity-labs/zerog-storage-client/core"
-	"github.com/zero-gravity-labs/zerog-storage-client/node"
-	"github.com/zero-gravity-labs/zerog-storage-client/transfer/download"
 )
 
 const minBufSize = 8

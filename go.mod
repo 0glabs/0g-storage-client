@@ -1,4 +1,4 @@
-module github.com/zero-gravity-labs/zerog-storage-client
+module github.com/0glabs/0g-storage-client
 
 go 1.21
 

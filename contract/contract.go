@@ -3,10 +3,10 @@ package contract
 import (
 	"fmt"
 
+	"github.com/0glabs/0g-storage-client/common/blockchain"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/openweb3/web3go"
-	"github.com/zero-gravity-labs/zerog-storage-client/common/blockchain"
 )
 
 type FlowContract struct {

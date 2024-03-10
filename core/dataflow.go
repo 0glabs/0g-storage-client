@@ -5,11 +5,11 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/0glabs/0g-storage-client/common/parallel"
+	"github.com/0glabs/0g-storage-client/core/merkle"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/sirupsen/logrus"
-	"github.com/zero-gravity-labs/zerog-storage-client/common/parallel"
-	"github.com/zero-gravity-labs/zerog-storage-client/core/merkle"
 )
 
 const (

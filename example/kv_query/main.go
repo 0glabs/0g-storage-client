@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 
+	"github.com/0glabs/0g-storage-client/kv"
+	"github.com/0glabs/0g-storage-client/node"
 	ethCommon "github.com/ethereum/go-ethereum/common"
-	"github.com/zero-gravity-labs/zerog-storage-client/kv"
-	"github.com/zero-gravity-labs/zerog-storage-client/node"
 )
 
 const KvClientAddr = "http://127.0.0.1:6789"
