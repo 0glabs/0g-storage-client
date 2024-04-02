@@ -2,6 +2,7 @@ package contract
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/0glabs/0g-storage-client/common/blockchain"
 	"github.com/ethereum/go-ethereum/common"
@@ -55,4 +56,29 @@ func (submission Submission) Root() common.Hash {
 	}
 
 	return root
+}
+
+const (
+	LIFETIME_MONTHES         = 3
+	BYTES_PER_SECTOR         = 256
+	ANNUAL_ZGS_TOKENS_PER_GB = 10
+	GB                       = 1024 * 1024 * 1024
+	MONTH_PER_YEAR           = 12
+)
+
+var pricePerSector = new(big.Int).Div(
+	new(big.Int).Mul(
+		big.NewInt(LIFETIME_MONTHES*BYTES_PER_SECTOR*ANNUAL_ZGS_TOKENS_PER_GB/MONTH_PER_YEAR),
+		new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil), // ether: 10^18
+	),
+	big.NewInt(GB),
+)
+
+func (submission Submission) Fee() *big.Int {
+	var sectors int64
+	for _, node := range submission.Nodes {
+		sectors += 1 << node.Height.Int64()
+	}
+
+	return big.NewInt(0).Mul(big.NewInt(sectors), pricePerSector)
 }
