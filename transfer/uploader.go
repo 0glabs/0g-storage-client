@@ -1,6 +1,7 @@
 package transfer
 
 import (
+	"math/big"
 	"runtime"
 	"time"
 
@@ -249,8 +250,13 @@ func (uploader *Uploader) SubmitLogEntry(datas []core.IterableData, tags [][]byt
 
 	var tx *types.Transaction
 	if len(datas) == 1 {
+		opts.Value = submissions[0].Fee()
 		tx, err = uploader.flow.Submit(opts, submissions[0])
 	} else {
+		opts.Value = big.NewInt(0)
+		for _, v := range submissions {
+			opts.Value = new(big.Int).Add(opts.Value, v.Fee())
+		}
 		tx, err = uploader.flow.BatchSubmit(opts, submissions)
 	}
 	if err != nil {
