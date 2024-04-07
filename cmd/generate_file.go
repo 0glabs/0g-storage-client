@@ -25,9 +25,9 @@ var (
 )
 
 func init() {
-	genFileCmd.Flags().Uint64Var(&genFileArgs.size, "size", 0, "File size in bytes")
+	genFileCmd.Flags().Uint64Var(&genFileArgs.size, "size", 0, "File size in bytes (default \"[1M, 10M)\")")
 	genFileCmd.Flags().StringVar(&genFileArgs.file, "file", "tmp123456", "File name to generate")
-	genFileCmd.Flags().BoolVar(&genFileArgs.overwrite, "overwrite", true, "Whether to overwrite existing file")
+	genFileCmd.Flags().BoolVar(&genFileArgs.overwrite, "overwrite", false, "Whether to overwrite existing file")
 
 	rootCmd.AddCommand(genFileCmd)
 }
@@ -40,11 +40,11 @@ func generateTempFile(*cobra.Command, []string) {
 
 	if exists {
 		if !genFileArgs.overwrite {
-			logrus.Warn("File already exists")
+			logrus.WithField("file", genFileArgs.file).Warn("File already exists")
 			return
 		}
 
-		logrus.Info("Overrite file")
+		logrus.WithField("file", genFileArgs.file).Info("Overrite file")
 	}
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -61,7 +61,7 @@ func generateTempFile(*cobra.Command, []string) {
 		logrus.WithField("n", n).Fatal("Invalid data len")
 	}
 
-	if err = os.WriteFile(genFileArgs.file, data, os.ModePerm); err != nil {
+	if err := os.WriteFile(genFileArgs.file, data, os.ModePerm); err != nil {
 		logrus.WithError(err).Fatal("Failed to write file")
 	}
 
@@ -75,5 +75,5 @@ func generateTempFile(*cobra.Command, []string) {
 		logrus.WithError(err).Fatal("Failed to generate merkle tree")
 	}
 
-	logrus.WithField("root", tree.Root()).Info("Succeeded to write file")
+	logrus.WithField("root", tree.Root()).WithField("file", genFileArgs.file).Info("Succeeded to write file")
 }
