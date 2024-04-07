@@ -10,8 +10,8 @@ import (
 )
 
 var (
-	logLevel       string
-	logColorForced bool
+	logLevel         string
+	logColorDisabled bool
 
 	rootCmd = &cobra.Command{
 		Use:   "0g-storage-client",
@@ -27,19 +27,24 @@ var (
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", logrus.InfoLevel.String(), "Log level")
-	rootCmd.PersistentFlags().BoolVar(&logColorForced, "log-force-color", false, "Force to output colorful logs")
+	rootCmd.PersistentFlags().BoolVar(&logColorDisabled, "log-color-disabled", false, "Force to disable colorful logs")
 	rootCmd.PersistentFlags().Uint64Var(&blockchain.CustomGasPrice, "gas-price", 0, "Custom gas price to send transaction")
 	rootCmd.PersistentFlags().Uint64Var(&blockchain.CustomGasLimit, "gas-limit", 0, "Custom gas limit to send transaction")
 	rootCmd.PersistentFlags().BoolVar(&blockchain.Web3LogEnabled, "web3-log-enabled", false, "Enable log for web3 RPC")
 }
 
 func initLog() {
-	if logColorForced {
-		logrus.SetFormatter(&logrus.TextFormatter{
-			ForceColors:   true,
-			FullTimestamp: true,
-		})
+	formatter := logrus.TextFormatter{
+		FullTimestamp: true,
 	}
+
+	if logColorDisabled {
+		formatter.DisableColors = true
+	} else {
+		formatter.ForceColors = true
+	}
+
+	logrus.SetFormatter(&formatter)
 
 	level, err := logrus.ParseLevel(logLevel)
 	if err != nil {
