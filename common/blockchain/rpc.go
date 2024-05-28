@@ -3,6 +3,7 @@ package blockchain
 import (
 	"time"
 
+	"github.com/0glabs/0g-storage-client/common/util"
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	providers "github.com/openweb3/go-rpc-provider/provider_wrapper"
@@ -68,6 +69,7 @@ func WaitForReceipt(client *web3go.Client, txHash common.Hash, successRequired b
 	}
 
 	var tries uint
+	reminder := util.NewReminder(logrus.TraceLevel, time.Minute)
 	for receipt == nil {
 		if tries > opt.Rounds+1 && opt.Rounds != 0 {
 			return nil, errors.New("no receipt after max retries")
@@ -78,8 +80,9 @@ func WaitForReceipt(client *web3go.Client, txHash common.Hash, successRequired b
 		}
 		tries++
 
-		if receipt == nil && logrus.IsLevelEnabled(logrus.TraceLevel) {
-			logrus.WithField("hash", txHash).Trace("Transaction not executed yet")
+		// remind
+		if receipt == nil {
+			reminder.RemindWith("Transaction not executed yet", "hash", txHash)
 		}
 	}
 
