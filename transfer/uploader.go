@@ -290,10 +290,19 @@ func (uploader *Uploader) waitForLogEntry(root common.Hash, finalityRequired boo
 
 		// log entry unavailable yet
 		if info == nil {
+			if logrus.IsLevelEnabled(logrus.TraceLevel) {
+				logrus.Trace("Log entry is unavailable yet")
+			}
 			continue
 		}
 
 		if finalityRequired && !info.Finalized {
+			if logrus.IsLevelEnabled(logrus.TraceLevel) {
+				logrus.WithFields(logrus.Fields{
+					"cached":           info.IsCached,
+					"uploadedSegments": info.UploadedSegNum,
+				}).Trace("Log entry is available, but not finalized yet")
+			}
 			continue
 		}
 
@@ -336,12 +345,10 @@ func (uploader *Uploader) UploadFile(data core.IterableData, tree *merkle.Tree, 
 		return err
 	}
 
-	logrus.Info("Completed to upload file")
-
 	logrus.WithFields(logrus.Fields{
 		"duration": time.Since(stageTimer),
 		"segNum":   numSegments,
-	}).Info("upload file took")
+	}).Info("Completed to upload file")
 
 	return nil
 }

@@ -77,6 +77,10 @@ func WaitForReceipt(client *web3go.Client, txHash common.Hash, successRequired b
 			return nil, err
 		}
 		tries++
+
+		if receipt == nil && logrus.IsLevelEnabled(logrus.TraceLevel) {
+			logrus.WithField("hash", txHash).Trace("Transaction not executed yet")
+		}
 	}
 
 	if receipt.Status == nil {
