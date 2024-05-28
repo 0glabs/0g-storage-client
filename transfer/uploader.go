@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/0glabs/0g-storage-client/common/parallel"
+	"github.com/0glabs/0g-storage-client/common/util"
 	"github.com/0glabs/0g-storage-client/contract"
 	"github.com/0glabs/0g-storage-client/core"
 	"github.com/0glabs/0g-storage-client/core/merkle"
@@ -280,6 +281,8 @@ func (uploader *Uploader) waitForLogEntry(root common.Hash, finalityRequired boo
 		"finality": finalityRequired,
 	}).Info("Wait for log entry on storage node")
 
+	reminder := util.NewReminder(logrus.TraceLevel, time.Minute)
+
 	for {
 		time.Sleep(time.Second)
 
@@ -290,10 +293,15 @@ func (uploader *Uploader) waitForLogEntry(root common.Hash, finalityRequired boo
 
 		// log entry unavailable yet
 		if info == nil {
+			reminder.Remind("Log entry is unavailable yet")
 			continue
 		}
 
 		if finalityRequired && !info.Finalized {
+			reminder.Remind("Log entry is available, but not finalized yet", logrus.Fields{
+				"cached":           info.IsCached,
+				"uploadedSegments": info.UploadedSegNum,
+			})
 			continue
 		}
 
@@ -336,12 +344,10 @@ func (uploader *Uploader) UploadFile(data core.IterableData, tree *merkle.Tree, 
 		return err
 	}
 
-	logrus.Info("Completed to upload file")
-
 	logrus.WithFields(logrus.Fields{
 		"duration": time.Since(stageTimer),
 		"segNum":   numSegments,
-	}).Info("upload file took")
+	}).Info("Completed to upload file")
 
 	return nil
 }
