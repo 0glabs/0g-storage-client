@@ -111,14 +111,15 @@ func (uploader *Uploader) BatchUpload(datas []core.IterableData, waitForLogEntry
 
 	// Append log on blockchain
 	var txHash common.Hash
+	var receipt *types.Receipt
 	if len(toSubmitDatas) > 0 {
 		var err error
-		if txHash, _, err = uploader.SubmitLogEntry(toSubmitDatas, toSubmitTags, waitForLogEntry); err != nil {
+		if txHash, receipt, err = uploader.SubmitLogEntry(toSubmitDatas, toSubmitTags, waitForLogEntry); err != nil {
 			return common.Hash{}, nil, errors.WithMessage(err, "Failed to submit log entry")
 		}
 		if waitForLogEntry {
 			// Wait for storage node to retrieve log entry from blockchain
-			if err := uploader.waitForLogEntry(lastTreeToSubmit.Root(), false); err != nil {
+			if err := uploader.waitForLogEntry(lastTreeToSubmit.Root(), false, receipt); err != nil {
 				return common.Hash{}, nil, errors.WithMessage(err, "Failed to check if log entry available on storage node")
 			}
 		}
@@ -132,7 +133,7 @@ func (uploader *Uploader) BatchUpload(datas []core.IterableData, waitForLogEntry
 
 		if waitForLogEntry {
 			// Wait for transaction finality
-			if err := uploader.waitForLogEntry(trees[i].Root(), !opts[i].Disperse); err != nil {
+			if err := uploader.waitForLogEntry(trees[i].Root(), !opts[i].Disperse, receipt); err != nil {
 				return common.Hash{}, nil, errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
 			}
 		}
@@ -194,7 +195,9 @@ func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption)
 	segNum := uint64(0)
 	if info == nil {
 		// Append log on blockchain
-		if _, _, err = uploader.SubmitLogEntry([]core.IterableData{data}, [][]byte{opt.Tags}, true); err != nil {
+		var receipt *types.Receipt
+
+		if _, receipt, err = uploader.SubmitLogEntry([]core.IterableData{data}, [][]byte{opt.Tags}, true); err != nil {
 			return errors.WithMessage(err, "Failed to submit log entry")
 		}
 
@@ -205,7 +208,7 @@ func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption)
 			logrus.Info("Upload small data immediately")
 		} else {
 			// Wait for storage node to retrieve log entry from blockchain
-			if err = uploader.waitForLogEntry(tree.Root(), false); err != nil {
+			if err = uploader.waitForLogEntry(tree.Root(), false, receipt); err != nil {
 				return errors.WithMessage(err, "Failed to check if log entry available on storage node")
 			}
 			info, err = uploader.clients[0].GetFileInfo(tree.Root())
@@ -222,7 +225,7 @@ func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption)
 	}
 
 	// Wait for transaction finality
-	if err = uploader.waitForLogEntry(tree.Root(), !opt.Disperse); err != nil {
+	if err = uploader.waitForLogEntry(tree.Root(), !opt.Disperse, nil); err != nil {
 		return errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
 	}
 
@@ -275,7 +278,7 @@ func (uploader *Uploader) SubmitLogEntry(datas []core.IterableData, tags [][]byt
 }
 
 // Wait for log entry ready on storage node.
-func (uploader *Uploader) waitForLogEntry(root common.Hash, finalityRequired bool) error {
+func (uploader *Uploader) waitForLogEntry(root common.Hash, finalityRequired bool, receipt *types.Receipt) error {
 	logrus.WithFields(logrus.Fields{
 		"root":     root,
 		"finality": finalityRequired,
@@ -293,7 +296,16 @@ func (uploader *Uploader) waitForLogEntry(root common.Hash, finalityRequired boo
 
 		// log entry unavailable yet
 		if info == nil {
-			reminder.Remind("Log entry is unavailable yet")
+			fields := logrus.Fields{}
+			if receipt != nil {
+				if status, err := uploader.clients[0].GetStatus(); err == nil {
+					fields["txBlockNumber"] = receipt.BlockNumber
+					fields["zgsNodeSyncHeight"] = status.LogSyncHeight
+				}
+			}
+
+			reminder.Remind("Log entry is unavailable yet", fields)
+
 			continue
 		}
 
