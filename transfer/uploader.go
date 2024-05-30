@@ -3,6 +3,7 @@ package transfer
 import (
 	"math/big"
 	"runtime"
+	"sort"
 	"time"
 
 	"github.com/0glabs/0g-storage-client/common/parallel"
@@ -342,7 +343,7 @@ func (uploader *Uploader) waitForLogEntry(root common.Hash, finalityRequired boo
 
 func (uploader *Uploader) NewSegmentUploader(data core.IterableData, tree *merkle.Tree, startSegIndex uint64, taskSize uint) *SegmentUploader {
 	numSegments := data.NumSegments()
-	tasks := make([]*UploadTask, 0)
+	clientTasks := make([][]*UploadTask, 0)
 	for clientIndex, shardConfig := range uploader.shardConfigs {
 		var segIndex uint64
 		r := startSegIndex % shardConfig.NumShard
@@ -351,6 +352,7 @@ func (uploader *Uploader) NewSegmentUploader(data core.IterableData, tree *merkl
 		} else {
 			segIndex = startSegIndex - r + shardConfig.ShardId + shardConfig.NumShard
 		}
+		tasks := make([]*UploadTask, 0)
 		for ; segIndex < numSegments; segIndex += shardConfig.NumShard * uint64(taskSize) {
 			tasks = append(tasks, &UploadTask{
 				clientIndex: clientIndex,
@@ -358,7 +360,18 @@ func (uploader *Uploader) NewSegmentUploader(data core.IterableData, tree *merkl
 				numShard:    shardConfig.NumShard,
 			})
 		}
+		clientTasks = append(clientTasks, tasks)
 	}
+	sort.SliceStable(clientTasks, func(i, j int) bool {
+		return len(clientTasks[i]) > len(clientTasks[j])
+	})
+	tasks := make([]*UploadTask, 0)
+	for taskIndex := 0; taskIndex < len(clientTasks[0]); taskIndex += 1 {
+		for i := 0; i < len(clientTasks) && taskIndex < len(clientTasks[i]); i += 1 {
+			tasks = append(tasks, clientTasks[i][taskIndex])
+		}
+	}
+
 	return &SegmentUploader{
 		data:     data,
 		tree:     tree,
