@@ -114,6 +114,11 @@ func (c *ZeroGStorageClient) DownloadSegmentWithProof(root common.Hash, index ui
 	return
 }
 
+func (c *ZeroGStorageClient) GetShardConfig() (shardConfig *ShardConfig, err error) {
+	err = c.provider.CallContext(context.Background(), &shardConfig, "zgs_getShardConfig")
+	return
+}
+
 // Admin RPCs
 type AdminClient struct {
 	provider *providers.MiddlewarableProvider

@@ -24,7 +24,6 @@ var (
 		node []string
 
 		force    bool
-		disperse bool
 		taskSize uint
 	}
 
@@ -51,7 +50,6 @@ func init() {
 	uploadCmd.MarkFlagRequired("node")
 
 	uploadCmd.Flags().BoolVar(&uploadArgs.force, "force", false, "Force to upload file even already exists")
-	uploadCmd.Flags().BoolVar(&uploadArgs.disperse, "disperse", false, "Disperse file amoung nodes")
 	uploadCmd.Flags().UintVar(&uploadArgs.taskSize, "task-size", 10, "Number of segments to upload in single rpc request")
 
 	rootCmd.AddCommand(uploadCmd)
@@ -70,11 +68,13 @@ func upload(*cobra.Command, []string) {
 		defer client.Close()
 	}
 
-	uploader := transfer.NewUploader(flow, clients)
+	uploader, err := transfer.NewUploader(flow, clients)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to initialize uploader")
+	}
 	opt := transfer.UploadOption{
 		Tags:     hexutil.MustDecode(uploadArgs.tags),
 		Force:    uploadArgs.force,
-		Disperse: uploadArgs.disperse,
 		TaskSize: uploadArgs.taskSize,
 	}
 

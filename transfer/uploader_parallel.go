@@ -9,14 +9,18 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+type UploadTask struct {
+	clientIndex int
+	segIndex    uint64
+	numShard    uint64
+}
+
 type SegmentUploader struct {
 	data     core.IterableData
 	tree     *merkle.Tree
 	clients  []*node.ZeroGStorageClient
-	offset   int64
-	disperse bool
+	tasks    []*UploadTask
 	taskSize uint
-	numTasks int
 }
 
 var _ parallel.Interface = (*SegmentUploader)(nil)
@@ -28,10 +32,10 @@ func (uploader *SegmentUploader) ParallelCollect(result *parallel.Result) error 
 
 // ParallelDo implements parallel.Interface.
 func (uploader *SegmentUploader) ParallelDo(routine int, task int) (interface{}, error) {
-	offset := uploader.offset + int64(task)*core.DefaultSegmentSize
 	numChunks := uploader.data.NumChunks()
 	numSegments := uploader.data.NumSegments()
-	segIndex := uint64(offset / core.DefaultSegmentSize)
+	uploadTask := uploader.tasks[task]
+	segIndex := uploadTask.segIndex
 	startSegIndex := segIndex
 	segments := make([]node.SegmentWithProof, 0)
 	for i := 0; i < int(uploader.taskSize); i++ {
@@ -43,7 +47,7 @@ func (uploader *SegmentUploader) ParallelDo(routine int, task int) (interface{},
 			break
 		}
 		// get segment
-		segment, err := core.ReadAt(uploader.data, core.DefaultSegmentSize, offset, uploader.data.PaddedSize())
+		segment, err := core.ReadAt(uploader.data, core.DefaultSegmentSize, int64(segIndex*core.DefaultSegmentSize), uploader.data.PaddedSize())
 		if err != nil {
 			return nil, err
 		}
@@ -66,46 +70,10 @@ func (uploader *SegmentUploader) ParallelDo(routine int, task int) (interface{},
 		if allDataUploaded {
 			break
 		}
-		segIndex += uint64(uploader.numTasks)
-		offset += core.DefaultSegmentSize * int64(uploader.numTasks)
+		segIndex += uploadTask.numShard
 	}
-	// upload
-	if !uploader.disperse {
-		if _, err := uploader.clients[0].UploadSegments(segments); err != nil && !isDuplicateError(err.Error()) {
-			return nil, errors.WithMessage(err, "Failed to upload segment")
-		}
-	} else {
-		clientIndex := task % (len(uploader.clients))
-		ok := false
-		// retry
-		for i := 0; i < len(uploader.clients); i++ {
-			logrus.WithFields(logrus.Fields{
-				"total":          numSegments,
-				"from_seg_index": startSegIndex,
-				"to_seg_index":   segIndex,
-				"step":           uploader.numTasks,
-				"clientIndex":    clientIndex,
-			}).Debug("Uploading segment to node..")
-			if _, err := uploader.clients[clientIndex].UploadSegments(segments); err != nil && !isDuplicateError(err.Error()) {
-				logrus.WithFields(logrus.Fields{
-					"total":          numSegments,
-					"from_seg_index": startSegIndex,
-					"to_seg_index":   segIndex,
-					"step":           uploader.numTasks,
-					"clientIndex":    clientIndex,
-					"error":          err,
-				}).Warn("Failed to upload segment to node, try next node..")
-				clientIndex = (clientIndex + 1) % (len(uploader.clients))
-			} else {
-				ok = true
-				break
-			}
-		}
-		if !ok {
-			if _, err := uploader.clients[clientIndex].UploadSegments(segments); err != nil {
-				return nil, errors.WithMessage(err, "Failed to upload segment")
-			}
-		}
+	if _, err := uploader.clients[uploadTask.clientIndex].UploadSegments(segments); err != nil && !isDuplicateError(err.Error()) {
+		return nil, errors.WithMessage(err, "Failed to upload segment")
 	}
 
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
@@ -113,7 +81,7 @@ func (uploader *SegmentUploader) ParallelDo(routine int, task int) (interface{},
 			"total":          numSegments,
 			"from_seg_index": startSegIndex,
 			"to_seg_index":   segIndex,
-			"step":           uploader.numTasks,
+			"step":           uploadTask.numShard,
 			"root":           core.SegmentRoot(segments[0].Data),
 		}).Debug("Segments uploaded")
 	}
