@@ -114,7 +114,10 @@ func uploadLocalFile(c *gin.Context) (interface{}, error) {
 		return nil, ErrValidation.WithData("node index out of bound")
 	}
 
-	uploader := transfer.NewUploaderLight([]*node.Client{allClients[input.Node]})
+	uploader, err := transfer.NewUploaderLight([]*node.Client{allClients[input.Node]})
+	if err != nil {
+		return nil, ErrValidation.WithData(err)
+	}
 
 	filename := getFilePath(input.Path, false)
 

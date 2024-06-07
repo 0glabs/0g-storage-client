@@ -48,3 +48,8 @@ type KeyValue struct {
 	Data    []byte `json:"data"`    // value data
 	Size    uint64 `json:"size"`    // value total size
 }
+
+type ShardConfig struct {
+	ShardId  uint64 `json:"shardId"`
+	NumShard uint64 `json:"numShard"`
+}

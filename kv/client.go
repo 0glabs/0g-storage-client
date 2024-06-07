@@ -160,7 +160,10 @@ func (b *Batcher) Exec() error {
 	}
 
 	// upload file
-	uploader := transfer.NewUploader(b.client.flow, []*node.Client{b.client.node})
+	uploader, err := transfer.NewUploader(b.client.flow, []*node.Client{b.client.node})
+	if err != nil {
+		return err
+	}
 	opt := transfer.UploadOption{
 		Tags:  b.BuildTags(),
 		Force: true,

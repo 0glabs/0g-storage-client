@@ -3,6 +3,7 @@ package transfer
 import (
 	"math/big"
 	"runtime"
+	"sort"
 	"time"
 
 	"github.com/0glabs/0g-storage-client/common/parallel"
@@ -31,32 +32,49 @@ func isDuplicateError(msg string) bool {
 type UploadOption struct {
 	Tags     []byte // for kv operations
 	Force    bool   // for kv to upload same file
-	Disperse bool   // disperse files to different nodes
 	TaskSize uint   // number of segment to upload in single rpc request
 }
 
 type Uploader struct {
-	flow    *contract.FlowContract
-	clients []*node.ZeroGStorageClient
+	flow         *contract.FlowContract
+	clients      []*node.ZeroGStorageClient
+	shardConfigs []*node.ShardConfig
 }
 
-func NewUploader(flow *contract.FlowContract, clients []*node.Client) *Uploader {
-	uploader := NewUploaderLight(clients)
+func NewUploader(flow *contract.FlowContract, clients []*node.Client) (*Uploader, error) {
+	uploader, err := NewUploaderLight(clients)
+	if err != nil {
+		return nil, err
+	}
 	uploader.flow = flow
-	return uploader
+	return uploader, nil
 }
 
-func NewUploaderLight(clients []*node.Client) *Uploader {
+func NewUploaderLight(clients []*node.Client) (*Uploader, error) {
 	if len(clients) == 0 {
 		panic("storage node not specified")
 	}
 	zgClients := make([]*node.ZeroGStorageClient, 0)
+	shardConfigs := make([]*node.ShardConfig, 0)
 	for _, client := range clients {
 		zgClients = append(zgClients, client.ZeroGStorage())
+		shardConfig, err := client.ZeroGStorage().GetShardConfig()
+		if err != nil {
+			return nil, err
+		}
+		if shardConfig.NumShard == 0 {
+			return nil, errors.New("NumShard is zero")
+		}
+		shardConfigs = append(shardConfigs, shardConfig)
 	}
 	return &Uploader{
-		clients: zgClients,
-	}
+		clients:      zgClients,
+		shardConfigs: shardConfigs,
+	}, nil
+}
+
+func (uploader *Uploader) needFinality() bool {
+	return uploader.shardConfigs[0].NumShard == 1
 }
 
 // upload data(batchly in 1 blockchain transaction if there are more than one files)
@@ -127,13 +145,13 @@ func (uploader *Uploader) BatchUpload(datas []core.IterableData, waitForLogEntry
 
 	for i := 0; i < n; i++ {
 		// Upload file to storage node
-		if err := uploader.UploadFile(datas[i], trees[i], 0, opts[i].Disperse, opts[i].TaskSize); err != nil {
+		if err := uploader.UploadFile(datas[i], trees[i], 0, opts[i].TaskSize); err != nil {
 			return common.Hash{}, nil, errors.WithMessage(err, "Failed to upload file")
 		}
 
 		if waitForLogEntry {
 			// Wait for transaction finality
-			if err := uploader.waitForLogEntry(trees[i].Root(), !opts[i].Disperse, receipt); err != nil {
+			if err := uploader.waitForLogEntry(trees[i].Root(), uploader.needFinality(), receipt); err != nil {
 				return common.Hash{}, nil, errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
 			}
 		}
@@ -220,12 +238,12 @@ func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption)
 	}
 
 	// Upload file to storage node
-	if err = uploader.UploadFile(data, tree, segNum, opt.Disperse, opt.TaskSize); err != nil {
+	if err = uploader.UploadFile(data, tree, segNum, opt.TaskSize); err != nil {
 		return errors.WithMessage(err, "Failed to upload file")
 	}
 
 	// Wait for transaction finality
-	if err = uploader.waitForLogEntry(tree.Root(), !opt.Disperse, nil); err != nil {
+	if err = uploader.waitForLogEntry(tree.Root(), uploader.needFinality(), nil); err != nil {
 		return errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
 	}
 
@@ -323,8 +341,48 @@ func (uploader *Uploader) waitForLogEntry(root common.Hash, finalityRequired boo
 	return nil
 }
 
+func (uploader *Uploader) NewSegmentUploader(data core.IterableData, tree *merkle.Tree, startSegIndex uint64, taskSize uint) *SegmentUploader {
+	numSegments := data.NumSegments()
+	clientTasks := make([][]*UploadTask, 0)
+	for clientIndex, shardConfig := range uploader.shardConfigs {
+		var segIndex uint64
+		r := startSegIndex % shardConfig.NumShard
+		if r <= shardConfig.ShardId {
+			segIndex = startSegIndex + shardConfig.ShardId - r
+		} else {
+			segIndex = startSegIndex - r + shardConfig.ShardId + shardConfig.NumShard
+		}
+		tasks := make([]*UploadTask, 0)
+		for ; segIndex < numSegments; segIndex += shardConfig.NumShard * uint64(taskSize) {
+			tasks = append(tasks, &UploadTask{
+				clientIndex: clientIndex,
+				segIndex:    segIndex,
+				numShard:    shardConfig.NumShard,
+			})
+		}
+		clientTasks = append(clientTasks, tasks)
+	}
+	sort.SliceStable(clientTasks, func(i, j int) bool {
+		return len(clientTasks[i]) > len(clientTasks[j])
+	})
+	tasks := make([]*UploadTask, 0)
+	for taskIndex := 0; taskIndex < len(clientTasks[0]); taskIndex += 1 {
+		for i := 0; i < len(clientTasks) && taskIndex < len(clientTasks[i]); i += 1 {
+			tasks = append(tasks, clientTasks[i][taskIndex])
+		}
+	}
+
+	return &SegmentUploader{
+		data:     data,
+		tree:     tree,
+		clients:  uploader.clients,
+		tasks:    tasks,
+		taskSize: taskSize,
+	}
+}
+
 // TODO error tolerance
-func (uploader *Uploader) UploadFile(data core.IterableData, tree *merkle.Tree, segIndex uint64, disperse bool, taskSize uint) error {
+func (uploader *Uploader) UploadFile(data core.IterableData, tree *merkle.Tree, segIndex uint64, taskSize uint) error {
 	stageTimer := time.Now()
 
 	if taskSize == 0 {
@@ -333,32 +391,19 @@ func (uploader *Uploader) UploadFile(data core.IterableData, tree *merkle.Tree, 
 
 	logrus.WithFields(logrus.Fields{
 		"segIndex": segIndex,
-		"disperse": disperse,
 		"nodeNum":  len(uploader.clients),
 	}).Info("Begin to upload file")
 
-	offset := int64(segIndex * core.DefaultSegmentSize)
+	segmentUploader := uploader.NewSegmentUploader(data, tree, segIndex, taskSize)
 
-	numSegments := (data.Size()-offset-1)/core.DefaultSegmentSize + 1
-	numTasks := int(numSegments-1)/int(taskSize) + 1
-	segmentUploader := &SegmentUploader{
-		data:     data,
-		tree:     tree,
-		clients:  uploader.clients,
-		offset:   offset,
-		disperse: disperse,
-		taskSize: taskSize,
-		numTasks: numTasks,
-	}
-
-	err := parallel.Serial(segmentUploader, numTasks, min(runtime.GOMAXPROCS(0), len(uploader.clients)*5), 0)
+	err := parallel.Serial(segmentUploader, len(segmentUploader.tasks), min(runtime.GOMAXPROCS(0), len(uploader.clients)*5), 0)
 	if err != nil {
 		return err
 	}
 
 	logrus.WithFields(logrus.Fields{
 		"duration": time.Since(stageTimer),
-		"segNum":   numSegments,
+		"segNum":   data.NumSegments() - segIndex,
 	}).Info("Completed to upload file")
 
 	return nil
