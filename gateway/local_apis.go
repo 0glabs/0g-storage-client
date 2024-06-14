@@ -150,7 +150,10 @@ func downloadFileLocal(c *gin.Context) (interface{}, error) {
 		return nil, ErrValidation.WithData("node index out of bound")
 	}
 
-	downloader := transfer.NewDownloader(allClients[input.Node])
+	downloader, err := transfer.NewDownloader(allClients[input.Node])
+	if err != nil {
+		return nil, err
+	}
 
 	filename := getFilePath(input.Path, true)
 

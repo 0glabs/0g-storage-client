@@ -41,6 +41,21 @@ type Uploader struct {
 	shardConfigs []*node.ShardConfig
 }
 
+func getShardConfigs(clients []*node.Client) ([]*node.ShardConfig, error) {
+	shardConfigs := make([]*node.ShardConfig, 0)
+	for _, client := range clients {
+		shardConfig, err := client.ZeroGStorage().GetShardConfig()
+		if err != nil {
+			return nil, err
+		}
+		if shardConfig.NumShard == 0 {
+			return nil, errors.New("NumShard is zero")
+		}
+		shardConfigs = append(shardConfigs, shardConfig)
+	}
+	return shardConfigs, nil
+}
+
 func NewUploader(flow *contract.FlowContract, clients []*node.Client) (*Uploader, error) {
 	uploader, err := NewUploaderLight(clients)
 	if err != nil {
@@ -55,17 +70,12 @@ func NewUploaderLight(clients []*node.Client) (*Uploader, error) {
 		panic("storage node not specified")
 	}
 	zgClients := make([]*node.ZeroGStorageClient, 0)
-	shardConfigs := make([]*node.ShardConfig, 0)
 	for _, client := range clients {
 		zgClients = append(zgClients, client.ZeroGStorage())
-		shardConfig, err := client.ZeroGStorage().GetShardConfig()
-		if err != nil {
-			return nil, err
-		}
-		if shardConfig.NumShard == 0 {
-			return nil, errors.New("NumShard is zero")
-		}
-		shardConfigs = append(shardConfigs, shardConfig)
+	}
+	shardConfigs, err := getShardConfigs(clients)
+	if err != nil {
+		return nil, err
 	}
 	return &Uploader{
 		clients:      zgClients,

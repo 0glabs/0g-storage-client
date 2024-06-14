@@ -13,20 +13,27 @@ import (
 )
 
 type Downloader struct {
-	clients []*node.Client
+	clients      []*node.Client
+	shardConfigs []*node.ShardConfig
 }
 
-func NewDownloader(clients ...*node.Client) *Downloader {
+func NewDownloader(clients ...*node.Client) (*Downloader, error) {
 	if len(clients) == 0 {
 		panic("storage node not specified")
 	}
 
-	return &Downloader{
-		clients: clients,
+	shardConfigs, err := getShardConfigs(clients)
+	if err != nil {
+		return nil, err
 	}
+
+	return &Downloader{
+		clients:      clients,
+		shardConfigs: shardConfigs,
+	}, nil
 }
 
-func (downloader *Downloader) Download(root, filename string, proof bool) error {
+func (downloader *Downloader) Download(root, filename string, withProof bool) error {
 	hash := common.HexToHash(root)
 
 	// Query file info from storage node
@@ -41,7 +48,7 @@ func (downloader *Downloader) Download(root, filename string, proof bool) error 
 	}
 
 	// Download segments
-	if err = downloader.downloadFile(filename, hash, int64(info.Tx.Size), proof); err != nil {
+	if err = downloader.downloadFile(filename, hash, int64(info.Tx.Size), withProof); err != nil {
 		return errors.WithMessage(err, "Failed to download file")
 	}
 
@@ -54,7 +61,7 @@ func (downloader *Downloader) Download(root, filename string, proof bool) error 
 }
 
 func (downloader *Downloader) queryFile(root common.Hash) (info *node.FileInfo, err error) {
-	// requires file finalized on all storage nodes
+	// do not require file finalized
 	for _, v := range downloader.clients {
 		info, err = v.ZeroGStorage().GetFileInfo(root)
 		if err != nil {
@@ -63,10 +70,6 @@ func (downloader *Downloader) queryFile(root common.Hash) (info *node.FileInfo, 
 
 		if info == nil {
 			return nil, fmt.Errorf("file not found on node %v", v.URL())
-		}
-
-		if !info.Finalized {
-			return nil, fmt.Errorf("file not finalized on node %v", v.URL())
 		}
 	}
 
@@ -99,7 +102,7 @@ func (downloader *Downloader) checkExistence(filename string, hash common.Hash) 
 	return errors.New("File already exists with different hash")
 }
 
-func (downloader *Downloader) downloadFile(filename string, root common.Hash, size int64, proof bool) error {
+func (downloader *Downloader) downloadFile(filename string, root common.Hash, size int64, withProof bool) error {
 	file, err := download.CreateDownloadingFile(filename, root, size)
 	if err != nil {
 		return errors.WithMessage(err, "Failed to create downloading file")
@@ -108,7 +111,7 @@ func (downloader *Downloader) downloadFile(filename string, root common.Hash, si
 
 	logrus.WithField("threads", len(downloader.clients)).Info("Begin to download file from storage node")
 
-	sd, err := NewSegmentDownloader(downloader.clients, file, proof)
+	sd, err := NewSegmentDownloader(downloader.clients, downloader.shardConfigs, file, withProof)
 	if err != nil {
 		return errors.WithMessage(err, "Failed to create segment downloader")
 	}
