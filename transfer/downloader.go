@@ -109,7 +109,7 @@ func (downloader *Downloader) downloadFile(filename string, root common.Hash, si
 	}
 	defer file.Close()
 
-	logrus.WithField("threads", len(downloader.clients)).Info("Begin to download file from storage node")
+	logrus.WithField("clients", len(downloader.clients)).Info("Begin to download file from storage node")
 
 	sd, err := NewSegmentDownloader(downloader.clients, downloader.shardConfigs, file, withProof)
 	if err != nil {
