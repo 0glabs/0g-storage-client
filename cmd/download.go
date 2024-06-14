@@ -37,7 +37,10 @@ func init() {
 func download(*cobra.Command, []string) {
 	nodes := node.MustNewClients(downloadArgs.nodes)
 
-	downloader := transfer.NewDownloader(nodes...)
+	downloader, err := transfer.NewDownloader(nodes...)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to initialize downloader")
+	}
 
 	if err := downloader.Download(downloadArgs.root, downloadArgs.file, downloadArgs.proof); err != nil {
 		logrus.WithError(err).Fatal("Failed to download file")

@@ -2,6 +2,7 @@ package transfer
 
 import (
 	"fmt"
+	"runtime"
 
 	"github.com/0glabs/0g-storage-client/common/parallel"
 	"github.com/0glabs/0g-storage-client/core"
@@ -12,11 +13,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const minBufSize = 8
-
 type SegmentDownloader struct {
-	clients []*node.Client
-	file    *download.DownloadingFile
+	clients      []*node.Client
+	shardConfigs []*node.ShardConfig
+	file         *download.DownloadingFile
 
 	withProof bool
 
@@ -27,7 +27,7 @@ type SegmentDownloader struct {
 
 var _ parallel.Interface = (*SegmentDownloader)(nil)
 
-func NewSegmentDownloader(clients []*node.Client, file *download.DownloadingFile, withProof bool) (*SegmentDownloader, error) {
+func NewSegmentDownloader(clients []*node.Client, shardConfigs []*node.ShardConfig, file *download.DownloadingFile, withProof bool) (*SegmentDownloader, error) {
 	offset := file.Metadata().Offset
 	if offset%core.DefaultSegmentSize > 0 {
 		return nil, errors.Errorf("Invalid data offset in downloading file %v", offset)
@@ -36,8 +36,9 @@ func NewSegmentDownloader(clients []*node.Client, file *download.DownloadingFile
 	fileSize := file.Metadata().Size
 
 	return &SegmentDownloader{
-		clients: clients,
-		file:    file,
+		clients:      clients,
+		shardConfigs: shardConfigs,
+		file:         file,
 
 		withProof: withProof,
 
@@ -50,13 +51,8 @@ func NewSegmentDownloader(clients []*node.Client, file *download.DownloadingFile
 // Download downloads segments in parallel.
 func (downloader *SegmentDownloader) Download() error {
 	numTasks := downloader.numSegments - downloader.segmentOffset
-	numNodes := len(downloader.clients)
-	bufSize := numNodes * 2
-	if bufSize < minBufSize {
-		bufSize = minBufSize
-	}
 
-	return parallel.Serial(downloader, int(numTasks), numNodes, bufSize)
+	return parallel.Serial(downloader, int(numTasks), runtime.GOMAXPROCS(0), 0)
 }
 
 // ParallelDo implements the parallel.Interface interface.
@@ -70,28 +66,36 @@ func (downloader *SegmentDownloader) ParallelDo(routine, task int) (interface{},
 
 	root := downloader.file.Metadata().Root
 
+	clientIndex := routine % len(downloader.shardConfigs)
+	for segmentIndex%downloader.shardConfigs[clientIndex].NumShard != downloader.shardConfigs[clientIndex].ShardId {
+		clientIndex = (clientIndex + 1) % len(downloader.shardConfigs)
+		if clientIndex == routine%len(downloader.shardConfigs) {
+			return nil, fmt.Errorf("no storage node holds segment with index %v", segmentIndex)
+		}
+	}
+
 	var (
 		segment []byte
 		err     error
 	)
 
 	if downloader.withProof {
-		segment, err = downloader.downloadWithProof(downloader.clients[routine], root, startIndex, endIndex)
+		segment, err = downloader.downloadWithProof(downloader.clients[clientIndex], root, startIndex, endIndex)
 	} else {
-		segment, err = downloader.clients[routine].ZeroGStorage().DownloadSegment(root, startIndex, endIndex)
+		segment, err = downloader.clients[clientIndex].ZeroGStorage().DownloadSegment(root, startIndex, endIndex)
 	}
 
 	if err != nil {
 		logrus.WithError(err).WithFields(logrus.Fields{
-			"routine": routine,
-			"segment": fmt.Sprintf("%v/%v", segmentIndex, downloader.numSegments),
-			"chunks":  fmt.Sprintf("[%v, %v)", startIndex, endIndex),
+			"client index": clientIndex,
+			"segment":      fmt.Sprintf("%v/%v", segmentIndex, downloader.numSegments),
+			"chunks":       fmt.Sprintf("[%v, %v)", startIndex, endIndex),
 		}).Error("Failed to download segment")
 	} else if logrus.IsLevelEnabled(logrus.TraceLevel) {
 		logrus.WithFields(logrus.Fields{
-			"routine": routine,
-			"segment": fmt.Sprintf("%v/%v", segmentIndex, downloader.numSegments),
-			"chunks":  fmt.Sprintf("[%v, %v)", startIndex, endIndex),
+			"client index": clientIndex,
+			"segment":      fmt.Sprintf("%v/%v", segmentIndex, downloader.numSegments),
+			"chunks":       fmt.Sprintf("[%v, %v)", startIndex, endIndex),
 		}).Trace("Succeeded to download segment")
 	}
 
