@@ -53,3 +53,7 @@ type ShardConfig struct {
 	ShardId  uint64 `json:"shardId"`
 	NumShard uint64 `json:"numShard"`
 }
+
+func (config *ShardConfig) HasSegment(segmentIndex uint64) bool {
+	return config.NumShard < 2 || segmentIndex%config.NumShard == config.ShardId
+}

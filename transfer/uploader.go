@@ -51,7 +51,7 @@ func getShardConfigs(clients []*node.Client) ([]*node.ShardConfig, error) {
 		if shardConfig.NumShard == 0 {
 			return nil, errors.New("NumShard is zero")
 		}
-		shardConfigs = append(shardConfigs, shardConfig)
+		shardConfigs = append(shardConfigs, &shardConfig)
 	}
 	return shardConfigs, nil
 }
