@@ -58,7 +58,7 @@ func (uploader *Uploader) waitForFileFinalityByTxSeq(txSeq uint64) (*node.FileIn
 	for {
 		time.Sleep(time.Second)
 
-		info, err := uploader.clients[0].GetFileInfoByTxSeq(txSeq)
+		info, err := uploader.clients[0].ZeroGStorage().GetFileInfoByTxSeq(txSeq)
 		if err != nil {
 			return nil, errors.WithMessage(err, "Failed to get file info from storage node")
 		}

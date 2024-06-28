@@ -18,7 +18,7 @@ type UploadTask struct {
 type SegmentUploader struct {
 	data     core.IterableData
 	tree     *merkle.Tree
-	clients  []*node.ZeroGStorageClient
+	clients  []*node.Client
 	tasks    []*UploadTask
 	taskSize uint
 }
@@ -72,7 +72,7 @@ func (uploader *SegmentUploader) ParallelDo(routine int, task int) (interface{},
 		}
 		segIndex += uploadTask.numShard
 	}
-	if _, err := uploader.clients[uploadTask.clientIndex].UploadSegments(segments); err != nil && !isDuplicateError(err.Error()) {
+	if _, err := uploader.clients[uploadTask.clientIndex].ZeroGStorage().UploadSegments(segments); err != nil && !isDuplicateError(err.Error()) {
 		return nil, errors.WithMessage(err, "Failed to upload segment")
 	}
 
