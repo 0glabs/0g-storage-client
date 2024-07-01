@@ -13,24 +13,17 @@ import (
 )
 
 type Downloader struct {
-	clients      []*node.Client
-	shardConfigs []*node.ShardConfig
+	clients []*node.Client
 }
 
-func NewDownloader(clients ...*node.Client) (*Downloader, error) {
+func NewDownloader(clients []*node.Client) (*Downloader, error) {
 	if len(clients) == 0 {
-		panic("storage node not specified")
+		return nil, errors.New("storage node not specified")
 	}
-
-	shardConfigs, err := getShardConfigs(clients)
-	if err != nil {
-		return nil, err
+	downloader := &Downloader{
+		clients: clients,
 	}
-
-	return &Downloader{
-		clients:      clients,
-		shardConfigs: shardConfigs,
-	}, nil
+	return downloader, nil
 }
 
 func (downloader *Downloader) Download(root, filename string, withProof bool) error {
@@ -111,7 +104,12 @@ func (downloader *Downloader) downloadFile(filename string, root common.Hash, si
 
 	logrus.WithField("clients", len(downloader.clients)).Info("Begin to download file from storage node")
 
-	sd, err := NewSegmentDownloader(downloader.clients, downloader.shardConfigs, file, withProof)
+	shardConfigs, err := getShardConfigs(downloader.clients)
+	if err != nil {
+		return err
+	}
+
+	sd, err := NewSegmentDownloader(downloader.clients, shardConfigs, file, withProof)
 	if err != nil {
 		return errors.WithMessage(err, "Failed to create segment downloader")
 	}

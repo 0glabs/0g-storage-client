@@ -25,11 +25,13 @@ func (api *IndexerApi) GetNodes() ([]ShardedNode, error) {
 		if err != nil {
 			return nil, errors.WithMessage(err, "Failed to query shard config from storage node")
 		}
+		if config.IsValid() {
+			result = append(result, ShardedNode{
+				URL:    v.URL(),
+				Config: config,
+			})
+		}
 
-		result = append(result, ShardedNode{
-			URL:    v.URL(),
-			Config: config,
-		})
 	}
 
 	return result, nil
