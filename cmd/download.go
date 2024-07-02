@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/node"
 	"github.com/0glabs/0g-storage-client/transfer"
 	"github.com/sirupsen/logrus"
@@ -37,7 +38,7 @@ func init() {
 func download(*cobra.Command, []string) {
 	nodes := node.MustNewClients(downloadArgs.nodes)
 
-	downloader, err := transfer.NewDownloader(nodes)
+	downloader, err := transfer.NewDownloader(nodes, common.LogOption{Logger: logrus.StandardLogger()})
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to initialize downloader")
 	}

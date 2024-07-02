@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	zg_common "github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/core"
 	"github.com/0glabs/0g-storage-client/node"
 	"github.com/0glabs/0g-storage-client/transfer/download"
@@ -14,14 +15,17 @@ import (
 
 type Downloader struct {
 	clients []*node.Client
+
+	logger *logrus.Logger
 }
 
-func NewDownloader(clients []*node.Client) (*Downloader, error) {
+func NewDownloader(clients []*node.Client, opts ...zg_common.LogOption) (*Downloader, error) {
 	if len(clients) == 0 {
 		return nil, errors.New("storage node not specified")
 	}
 	downloader := &Downloader{
 		clients: clients,
+		logger:  zg_common.NewLogger(opts...),
 	}
 	return downloader, nil
 }
@@ -66,7 +70,7 @@ func (downloader *Downloader) queryFile(root common.Hash) (info *node.FileInfo, 
 		}
 	}
 
-	logrus.WithField("file", info).Debug("File found by root hash")
+	downloader.logger.WithField("file", info).Debug("File found by root hash")
 
 	return
 }
@@ -102,14 +106,14 @@ func (downloader *Downloader) downloadFile(filename string, root common.Hash, si
 	}
 	defer file.Close()
 
-	logrus.WithField("clients", len(downloader.clients)).Info("Begin to download file from storage node")
+	downloader.logger.WithField("clients", len(downloader.clients)).Info("Begin to download file from storage node")
 
 	shardConfigs, err := getShardConfigs(downloader.clients)
 	if err != nil {
 		return err
 	}
 
-	sd, err := NewSegmentDownloader(downloader.clients, shardConfigs, file, withProof)
+	sd, err := newSegmentDownloader(downloader.clients, shardConfigs, file, withProof, downloader.logger)
 	if err != nil {
 		return errors.WithMessage(err, "Failed to create segment downloader")
 	}
@@ -122,7 +126,7 @@ func (downloader *Downloader) downloadFile(filename string, root common.Hash, si
 		return errors.WithMessage(err, "Failed to seal downloading file")
 	}
 
-	logrus.Info("Completed to download file")
+	downloader.logger.Info("Completed to download file")
 
 	return nil
 }
@@ -147,7 +151,7 @@ func (downloader *Downloader) validateDownloadFile(root, filename string, fileSi
 		return errors.Errorf("Merkle root mismatch, downloaded = %v", rootHex)
 	}
 
-	logrus.Info("Succeeded to validate the downloaded file")
+	downloader.logger.Info("Succeeded to validate the downloaded file")
 
 	return nil
 }

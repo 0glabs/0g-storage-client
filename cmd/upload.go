@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	zg_common "github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/common/blockchain"
 	"github.com/0glabs/0g-storage-client/contract"
 	"github.com/0glabs/0g-storage-client/core"
@@ -68,7 +69,7 @@ func upload(*cobra.Command, []string) {
 		defer client.Close()
 	}
 
-	uploader, err := transfer.NewUploader(flow, clients)
+	uploader, err := transfer.NewUploader(flow, clients, zg_common.LogOption{Logger: logrus.StandardLogger()})
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to initialize uploader")
 	}

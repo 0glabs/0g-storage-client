@@ -3,12 +3,14 @@ package kv
 import (
 	"math"
 
+	zg_common "github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/contract"
 	"github.com/0glabs/0g-storage-client/core"
 	"github.com/0glabs/0g-storage-client/node"
 	"github.com/0glabs/0g-storage-client/transfer"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 // Client is used for users to communicate with server for kv operations.
@@ -130,12 +132,14 @@ func (c *Client) Batcher() *Batcher {
 type Batcher struct {
 	*StreamDataBuilder
 	client *Client
+	logger *logrus.Logger
 }
 
-func newBatcher(version uint64, client *Client) *Batcher {
+func newBatcher(version uint64, client *Client, opts ...zg_common.LogOption) *Batcher {
 	return &Batcher{
 		StreamDataBuilder: NewStreamDataBuilder(version),
 		client:            client,
+		logger:            zg_common.NewLogger(opts...),
 	}
 }
 
@@ -160,7 +164,7 @@ func (b *Batcher) Exec() error {
 	}
 
 	// upload file
-	uploader, err := transfer.NewUploader(b.client.flow, []*node.Client{b.client.node})
+	uploader, err := transfer.NewUploader(b.client.flow, []*node.Client{b.client.node}, zg_common.LogOption{Logger: b.logger})
 	if err != nil {
 		return err
 	}

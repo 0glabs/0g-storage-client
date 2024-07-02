@@ -23,11 +23,13 @@ type SegmentDownloader struct {
 	segmentOffset uint64
 	numChunks     uint64
 	numSegments   uint64
+
+	logger *logrus.Logger
 }
 
 var _ parallel.Interface = (*SegmentDownloader)(nil)
 
-func NewSegmentDownloader(clients []*node.Client, shardConfigs []*node.ShardConfig, file *download.DownloadingFile, withProof bool) (*SegmentDownloader, error) {
+func newSegmentDownloader(clients []*node.Client, shardConfigs []*node.ShardConfig, file *download.DownloadingFile, withProof bool, logger *logrus.Logger) (*SegmentDownloader, error) {
 	offset := file.Metadata().Offset
 	if offset%core.DefaultSegmentSize > 0 {
 		return nil, errors.Errorf("Invalid data offset in downloading file %v", offset)
@@ -45,6 +47,8 @@ func NewSegmentDownloader(clients []*node.Client, shardConfigs []*node.ShardConf
 		segmentOffset: uint64(offset / core.DefaultSegmentSize),
 		numChunks:     core.NumSplits(fileSize, core.DefaultChunkSize),
 		numSegments:   core.NumSplits(fileSize, core.DefaultSegmentSize),
+
+		logger: logger,
 	}, nil
 }
 
@@ -86,13 +90,13 @@ func (downloader *SegmentDownloader) ParallelDo(routine, task int) (interface{},
 	}
 
 	if err != nil {
-		logrus.WithError(err).WithFields(logrus.Fields{
+		downloader.logger.WithError(err).WithFields(logrus.Fields{
 			"client index": clientIndex,
 			"segment":      fmt.Sprintf("%v/%v", segmentIndex, downloader.numSegments),
 			"chunks":       fmt.Sprintf("[%v, %v)", startIndex, endIndex),
 		}).Error("Failed to download segment")
-	} else if logrus.IsLevelEnabled(logrus.TraceLevel) {
-		logrus.WithFields(logrus.Fields{
+	} else if downloader.logger.IsLevelEnabled(logrus.TraceLevel) {
+		downloader.logger.WithFields(logrus.Fields{
 			"client index": clientIndex,
 			"segment":      fmt.Sprintf("%v/%v", segmentIndex, downloader.numSegments),
 			"chunks":       fmt.Sprintf("[%v, %v)", startIndex, endIndex),

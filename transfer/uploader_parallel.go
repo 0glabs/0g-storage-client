@@ -21,6 +21,7 @@ type SegmentUploader struct {
 	clients  []*node.Client
 	tasks    []*UploadTask
 	taskSize uint
+	logger   *logrus.Logger
 }
 
 var _ parallel.Interface = (*SegmentUploader)(nil)
@@ -76,8 +77,8 @@ func (uploader *SegmentUploader) ParallelDo(routine int, task int) (interface{},
 		return nil, errors.WithMessage(err, "Failed to upload segment")
 	}
 
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		logrus.WithFields(logrus.Fields{
+	if uploader.logger.IsLevelEnabled(logrus.DebugLevel) {
+		uploader.logger.WithFields(logrus.Fields{
 			"total":          numSegments,
 			"from_seg_index": startSegIndex,
 			"to_seg_index":   segIndex,

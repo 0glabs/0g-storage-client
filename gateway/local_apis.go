@@ -3,11 +3,13 @@ package gateway
 import (
 	"path/filepath"
 
+	zg_common "github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/core"
 	"github.com/0glabs/0g-storage-client/node"
 	"github.com/0glabs/0g-storage-client/transfer"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
 
 var LocalFileRepo string = "."
@@ -114,7 +116,7 @@ func uploadLocalFile(c *gin.Context) (interface{}, error) {
 		return nil, ErrValidation.WithData("node index out of bound")
 	}
 
-	uploader, err := transfer.NewUploaderLight([]*node.Client{allClients[input.Node]})
+	uploader, err := transfer.NewUploader(nil, []*node.Client{allClients[input.Node]}, zg_common.LogOption{Logger: logrus.StandardLogger()})
 	if err != nil {
 		return nil, ErrValidation.WithData(err)
 	}
@@ -150,7 +152,7 @@ func downloadFileLocal(c *gin.Context) (interface{}, error) {
 		return nil, ErrValidation.WithData("node index out of bound")
 	}
 
-	downloader, err := transfer.NewDownloader([]*node.Client{allClients[input.Node]})
+	downloader, err := transfer.NewDownloader([]*node.Client{allClients[input.Node]}, zg_common.LogOption{Logger: logrus.StandardLogger()})
 	if err != nil {
 		return nil, err
 	}

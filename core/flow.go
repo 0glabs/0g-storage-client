@@ -4,8 +4,8 @@ import (
 	"math"
 	"math/big"
 	"runtime"
-	"time"
 
+	"github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/common/parallel"
 	"github.com/0glabs/0g-storage-client/contract"
 	"github.com/0glabs/0g-storage-client/core/merkle"
@@ -15,10 +15,12 @@ import (
 type Flow struct {
 	data IterableData
 	tags []byte
+
+	logger *logrus.Logger
 }
 
-func NewFlow(data IterableData, tags []byte) *Flow {
-	return &Flow{data, tags}
+func NewFlow(data IterableData, tags []byte, opts ...common.LogOption) *Flow {
+	return &Flow{data: data, tags: tags, logger: common.NewLogger(opts...)}
 }
 
 func (flow *Flow) CreateSubmission() (*contract.Submission, error) {
@@ -28,7 +30,6 @@ func (flow *Flow) CreateSubmission() (*contract.Submission, error) {
 		Tags:   flow.tags,
 	}
 
-	stageTimer := time.Now()
 	var offset int64
 	for _, chunks := range flow.splitNodes() {
 		node, err := flow.createNode(offset, chunks)
@@ -38,7 +39,6 @@ func (flow *Flow) CreateSubmission() (*contract.Submission, error) {
 		submission.Nodes = append(submission.Nodes, *node)
 		offset += chunks * DefaultChunkSize
 	}
-	logrus.WithField("duration", time.Since(stageTimer)).Info("create submission nodes took")
 
 	return &submission, nil
 }
@@ -88,7 +88,7 @@ func (flow *Flow) splitNodes() []int64 {
 		}
 		nextChunkSize /= 2
 	}
-	logrus.WithFields(logrus.Fields{
+	flow.logger.WithFields(logrus.Fields{
 		"chunks":   chunks,
 		"nodeSize": nodes,
 	}).Debug("SplitNodes")

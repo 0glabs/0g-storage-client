@@ -9,7 +9,6 @@ import (
 	"github.com/0glabs/0g-storage-client/node"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 const SubmitEventHash = "0x167ce04d2aa1981994d3a31695da0d785373335b1078cec239a1a3a2c7675555"
@@ -53,7 +52,7 @@ func (uploader *Uploader) uploadDuplicatedFile(data core.IterableData, tags []by
 }
 
 func (uploader *Uploader) waitForFileFinalityByTxSeq(txSeq uint64) (*node.FileInfo, error) {
-	logrus.WithField("txSeq", txSeq).Info("Wait for finality on storage node")
+	uploader.logger.WithField("txSeq", txSeq).Info("Wait for finality on storage node")
 
 	for {
 		time.Sleep(time.Second)
