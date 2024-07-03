@@ -1,6 +1,7 @@
 package transfer
 
 import (
+	"context"
 	"time"
 
 	"github.com/0glabs/0g-storage-client/common/blockchain"
@@ -16,7 +17,7 @@ const SubmitEventHash = "0x167ce04d2aa1981994d3a31695da0d785373335b1078cec239a1a
 // uploadDuplicatedFile uploads file to storage node that already exists by root.
 // In this case, user only need to submit transaction on blockchain, and wait for
 // file finality on storage node.
-func (uploader *Uploader) uploadDuplicatedFile(data core.IterableData, tags []byte, root common.Hash) error {
+func (uploader *Uploader) uploadDuplicatedFile(ctx context.Context, data core.IterableData, tags []byte, root common.Hash) error {
 	// submit transaction on blockchain
 	_, receipt, err := uploader.SubmitLogEntry([]core.IterableData{data}, [][]byte{tags}, true)
 	if err != nil {
@@ -39,7 +40,7 @@ func (uploader *Uploader) uploadDuplicatedFile(data core.IterableData, tags []by
 
 	// wait for finality from storage node
 	txSeq := submission.SubmissionIndex.Uint64()
-	info, err := uploader.waitForFileFinalityByTxSeq(txSeq)
+	info, err := uploader.waitForFileFinalityByTxSeq(ctx, txSeq)
 	if err != nil {
 		return errors.WithMessagef(err, "Failed to wait for finality for tx %v", txSeq)
 	}
@@ -51,13 +52,13 @@ func (uploader *Uploader) uploadDuplicatedFile(data core.IterableData, tags []by
 	return nil
 }
 
-func (uploader *Uploader) waitForFileFinalityByTxSeq(txSeq uint64) (*node.FileInfo, error) {
+func (uploader *Uploader) waitForFileFinalityByTxSeq(ctx context.Context, txSeq uint64) (*node.FileInfo, error) {
 	uploader.logger.WithField("txSeq", txSeq).Info("Wait for finality on storage node")
 
 	for {
 		time.Sleep(time.Second)
 
-		info, err := uploader.clients[0].ZeroGStorage().GetFileInfoByTxSeq(txSeq)
+		info, err := uploader.clients[0].ZeroGStorage().GetFileInfoByTxSeq(ctx, txSeq)
 		if err != nil {
 			return nil, errors.WithMessage(err, "Failed to get file info from storage node")
 		}

@@ -1,6 +1,8 @@
 package transfer
 
 import (
+	"context"
+
 	"github.com/0glabs/0g-storage-client/common/parallel"
 	"github.com/0glabs/0g-storage-client/core"
 	"github.com/0glabs/0g-storage-client/core/merkle"
@@ -32,7 +34,7 @@ func (uploader *SegmentUploader) ParallelCollect(result *parallel.Result) error 
 }
 
 // ParallelDo implements parallel.Interface.
-func (uploader *SegmentUploader) ParallelDo(routine int, task int) (interface{}, error) {
+func (uploader *SegmentUploader) ParallelDo(ctx context.Context, routine int, task int) (interface{}, error) {
 	numChunks := uploader.data.NumChunks()
 	numSegments := uploader.data.NumSegments()
 	uploadTask := uploader.tasks[task]
@@ -73,7 +75,7 @@ func (uploader *SegmentUploader) ParallelDo(routine int, task int) (interface{},
 		}
 		segIndex += uploadTask.numShard
 	}
-	if _, err := uploader.clients[uploadTask.clientIndex].ZeroGStorage().UploadSegments(segments); err != nil && !isDuplicateError(err.Error()) {
+	if _, err := uploader.clients[uploadTask.clientIndex].ZeroGStorage().UploadSegments(ctx, segments); err != nil && !isDuplicateError(err.Error()) {
 		return nil, errors.WithMessage(err, "Failed to upload segment")
 	}
 

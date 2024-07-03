@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"errors"
 	"runtime"
 
@@ -44,7 +45,7 @@ func MerkleTree(data IterableData) (*merkle.Tree, error) {
 		builder: &builder,
 	}
 
-	err := parallel.Serial(initializer, NumSegmentsPadded(data), runtime.GOMAXPROCS(0), 0)
+	err := parallel.Serial(context.Background(), initializer, NumSegmentsPadded(data), runtime.GOMAXPROCS(0), 0)
 	if err != nil {
 		return nil, err
 	}

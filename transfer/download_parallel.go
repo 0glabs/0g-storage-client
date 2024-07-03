@@ -1,6 +1,7 @@
 package transfer
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 
@@ -53,14 +54,14 @@ func newSegmentDownloader(clients []*node.Client, shardConfigs []*node.ShardConf
 }
 
 // Download downloads segments in parallel.
-func (downloader *SegmentDownloader) Download() error {
+func (downloader *SegmentDownloader) Download(ctx context.Context) error {
 	numTasks := downloader.numSegments - downloader.segmentOffset
 
-	return parallel.Serial(downloader, int(numTasks), runtime.GOMAXPROCS(0), 0)
+	return parallel.Serial(ctx, downloader, int(numTasks), runtime.GOMAXPROCS(0), 0)
 }
 
 // ParallelDo implements the parallel.Interface interface.
-func (downloader *SegmentDownloader) ParallelDo(routine, task int) (interface{}, error) {
+func (downloader *SegmentDownloader) ParallelDo(ctx context.Context, routine, task int) (interface{}, error) {
 	segmentIndex := downloader.segmentOffset + uint64(task)
 	startIndex := segmentIndex * core.DefaultSegmentMaxChunks
 	endIndex := startIndex + core.DefaultSegmentMaxChunks
@@ -84,9 +85,9 @@ func (downloader *SegmentDownloader) ParallelDo(routine, task int) (interface{},
 	)
 
 	if downloader.withProof {
-		segment, err = downloader.downloadWithProof(downloader.clients[clientIndex], root, startIndex, endIndex)
+		segment, err = downloader.downloadWithProof(ctx, downloader.clients[clientIndex], root, startIndex, endIndex)
 	} else {
-		segment, err = downloader.clients[clientIndex].ZeroGStorage().DownloadSegment(root, startIndex, endIndex)
+		segment, err = downloader.clients[clientIndex].ZeroGStorage().DownloadSegment(ctx, root, startIndex, endIndex)
 	}
 
 	if err != nil {
@@ -120,10 +121,10 @@ func (downloader *SegmentDownloader) ParallelCollect(result *parallel.Result) er
 	return downloader.file.Write(result.Value.([]byte))
 }
 
-func (downloader *SegmentDownloader) downloadWithProof(client *node.Client, root common.Hash, startIndex, endIndex uint64) ([]byte, error) {
+func (downloader *SegmentDownloader) downloadWithProof(ctx context.Context, client *node.Client, root common.Hash, startIndex, endIndex uint64) ([]byte, error) {
 	segmentIndex := startIndex / core.DefaultSegmentMaxChunks
 
-	segment, err := client.ZeroGStorage().DownloadSegmentWithProof(root, segmentIndex)
+	segment, err := client.ZeroGStorage().DownloadSegmentWithProof(ctx, root, segmentIndex)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to download segment with proof from storage node")
 	}

@@ -1,6 +1,7 @@
 package kv
 
 import (
+	"context"
 	"math"
 
 	zg_common "github.com/0glabs/0g-storage-client/common"
@@ -44,7 +45,7 @@ func (c *Client) NewIterator(streamId common.Hash, version ...uint64) *Iterator 
 	}
 }
 
-func (c *Client) GetValue(streamId common.Hash, key []byte, version ...uint64) (val *node.Value, err error) {
+func (c *Client) GetValue(ctx context.Context, streamId common.Hash, key []byte, version ...uint64) (val *node.Value, err error) {
 	var v uint64
 	v = math.MaxUint64
 	if len(version) > 0 {
@@ -57,7 +58,7 @@ func (c *Client) GetValue(streamId common.Hash, key []byte, version ...uint64) (
 	}
 	for {
 		var seg *node.Value
-		seg, err = c.node.KV().GetValue(streamId, key, uint64(len(val.Data)), maxQuerySize, val.Version)
+		seg, err = c.node.KV().GetValue(ctx, streamId, key, uint64(len(val.Data)), maxQuerySize, val.Version)
 		if err != nil {
 			return
 		}
@@ -76,52 +77,52 @@ func (c *Client) GetValue(streamId common.Hash, key []byte, version ...uint64) (
 }
 
 // Get returns paginated value for the specified stream key and offset.
-func (c *Client) Get(streamId common.Hash, key []byte, startIndex, length uint64, version ...uint64) (val *node.Value, err error) {
-	return c.node.KV().GetValue(streamId, key, startIndex, length, version...)
+func (c *Client) Get(ctx context.Context, streamId common.Hash, key []byte, startIndex, length uint64, version ...uint64) (val *node.Value, err error) {
+	return c.node.KV().GetValue(ctx, streamId, key, startIndex, length, version...)
 }
 
-func (c *Client) GetNext(streamId common.Hash, key []byte, startIndex, length uint64, inclusive bool, version ...uint64) (val *node.KeyValue, err error) {
-	return c.node.KV().GetNext(streamId, key, startIndex, length, inclusive, version...)
+func (c *Client) GetNext(ctx context.Context, streamId common.Hash, key []byte, startIndex, length uint64, inclusive bool, version ...uint64) (val *node.KeyValue, err error) {
+	return c.node.KV().GetNext(ctx, streamId, key, startIndex, length, inclusive, version...)
 }
 
-func (c *Client) GetPrev(streamId common.Hash, key []byte, startIndex, length uint64, inclusive bool, version ...uint64) (val *node.KeyValue, err error) {
-	return c.node.KV().GetPrev(streamId, key, startIndex, length, inclusive, version...)
+func (c *Client) GetPrev(ctx context.Context, streamId common.Hash, key []byte, startIndex, length uint64, inclusive bool, version ...uint64) (val *node.KeyValue, err error) {
+	return c.node.KV().GetPrev(ctx, streamId, key, startIndex, length, inclusive, version...)
 }
 
-func (c *Client) GetFirst(streamId common.Hash, startIndex, length uint64, version ...uint64) (val *node.KeyValue, err error) {
-	return c.node.KV().GetFirst(streamId, startIndex, length, version...)
+func (c *Client) GetFirst(ctx context.Context, streamId common.Hash, startIndex, length uint64, version ...uint64) (val *node.KeyValue, err error) {
+	return c.node.KV().GetFirst(ctx, streamId, startIndex, length, version...)
 }
 
-func (c *Client) GetLast(streamId common.Hash, startIndex, length uint64, version ...uint64) (val *node.KeyValue, err error) {
-	return c.node.KV().GetLast(streamId, startIndex, length, version...)
+func (c *Client) GetLast(ctx context.Context, streamId common.Hash, startIndex, length uint64, version ...uint64) (val *node.KeyValue, err error) {
+	return c.node.KV().GetLast(ctx, streamId, startIndex, length, version...)
 }
 
-func (c *Client) GetTransactionResult(txSeq uint64) (result string, err error) {
-	return c.node.KV().GetTransactionResult(txSeq)
+func (c *Client) GetTransactionResult(ctx context.Context, txSeq uint64) (result string, err error) {
+	return c.node.KV().GetTransactionResult(ctx, txSeq)
 }
 
-func (c *Client) GetHoldingStreamIds() (streamIds []common.Hash, err error) {
-	return c.node.KV().GetHoldingStreamIds()
+func (c *Client) GetHoldingStreamIds(ctx context.Context) (streamIds []common.Hash, err error) {
+	return c.node.KV().GetHoldingStreamIds(ctx)
 }
 
-func (c *Client) HasWritePermission(account common.Address, streamId common.Hash, key []byte, version ...uint64) (hasPermission bool, err error) {
-	return c.node.KV().HasWritePermission(account, streamId, key, version...)
+func (c *Client) HasWritePermission(ctx context.Context, account common.Address, streamId common.Hash, key []byte, version ...uint64) (hasPermission bool, err error) {
+	return c.node.KV().HasWritePermission(ctx, account, streamId, key, version...)
 }
 
-func (c *Client) IsAdmin(account common.Address, streamId common.Hash, version ...uint64) (isAdmin bool, err error) {
-	return c.node.KV().IsAdmin(account, streamId, version...)
+func (c *Client) IsAdmin(ctx context.Context, account common.Address, streamId common.Hash, version ...uint64) (isAdmin bool, err error) {
+	return c.node.KV().IsAdmin(ctx, account, streamId, version...)
 }
 
-func (c *Client) IsSpecialKey(streamId common.Hash, key []byte, version ...uint64) (isSpecialKey bool, err error) {
-	return c.node.KV().IsSpecialKey(streamId, key, version...)
+func (c *Client) IsSpecialKey(ctx context.Context, streamId common.Hash, key []byte, version ...uint64) (isSpecialKey bool, err error) {
+	return c.node.KV().IsSpecialKey(ctx, streamId, key, version...)
 }
 
-func (c *Client) IsWriterOfKey(account common.Address, streamId common.Hash, key []byte, version ...uint64) (isWriter bool, err error) {
-	return c.node.KV().IsWriterOfKey(account, streamId, key, version...)
+func (c *Client) IsWriterOfKey(ctx context.Context, account common.Address, streamId common.Hash, key []byte, version ...uint64) (isWriter bool, err error) {
+	return c.node.KV().IsWriterOfKey(ctx, account, streamId, key, version...)
 }
 
-func (c *Client) IsWriterOfStream(account common.Address, streamId common.Hash, version ...uint64) (isWriter bool, err error) {
-	return c.node.KV().IsWriterOfStream(account, streamId, version...)
+func (c *Client) IsWriterOfStream(ctx context.Context, account common.Address, streamId common.Hash, version ...uint64) (isWriter bool, err error) {
+	return c.node.KV().IsWriterOfStream(ctx, account, streamId, version...)
 }
 
 // Batcher returns a Batcher instance for kv operations in batch.
@@ -147,7 +148,7 @@ func newBatcher(version uint64, client *Client, opts ...zg_common.LogOption) *Ba
 //
 // Note, this is a time consuming operation, e.g. several seconds or even longer.
 // When it comes to a time sentitive context, it should be executed in a separate go-routine.
-func (b *Batcher) Exec() error {
+func (b *Batcher) Exec(ctx context.Context) error {
 	// build stream data
 	streamData, err := b.Build()
 	if err != nil {
@@ -172,7 +173,7 @@ func (b *Batcher) Exec() error {
 		Tags:  b.BuildTags(),
 		Force: true,
 	}
-	if err = uploader.Upload(data, opt); err != nil {
+	if err = uploader.Upload(ctx, data, opt); err != nil {
 		return errors.WithMessagef(err, "Failed to upload data")
 	}
 	return nil

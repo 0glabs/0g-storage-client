@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"path/filepath"
 
 	zg_common "github.com/0glabs/0g-storage-client/common"
@@ -80,7 +81,7 @@ func getFileStatus(c *gin.Context) (interface{}, error) {
 	var notFinalized bool
 
 	for _, client := range allClients {
-		info, err := client.ZeroGStorage().GetFileInfo(root)
+		info, err := client.ZeroGStorage().GetFileInfo(context.Background(), root)
 		if err != nil {
 			return nil, err
 		}
@@ -130,7 +131,7 @@ func uploadLocalFile(c *gin.Context) (interface{}, error) {
 	}
 	defer file.Close()
 
-	if err := uploader.Upload(file); err != nil {
+	if err := uploader.Upload(context.Background(), file); err != nil {
 		return nil, err
 	}
 
@@ -159,7 +160,7 @@ func downloadFileLocal(c *gin.Context) (interface{}, error) {
 
 	filename := getFilePath(input.Path, true)
 
-	if err := downloader.Download(input.Root, filename, false); err != nil {
+	if err := downloader.Download(context.Background(), input.Root, filename, false); err != nil {
 		return nil, err
 	}
 

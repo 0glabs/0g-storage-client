@@ -1,6 +1,7 @@
 package transfer
 
 import (
+	"context"
 	"math/big"
 	"runtime"
 	"sort"
@@ -42,10 +43,10 @@ type Uploader struct {
 	logger  *logrus.Logger
 }
 
-func getShardConfigs(clients []*node.Client) ([]*node.ShardConfig, error) {
+func getShardConfigs(ctx context.Context, clients []*node.Client) ([]*node.ShardConfig, error) {
 	shardConfigs := make([]*node.ShardConfig, 0)
 	for _, client := range clients {
-		shardConfig, err := client.ZeroGStorage().GetShardConfig()
+		shardConfig, err := client.ZeroGStorage().GetShardConfig(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -70,7 +71,7 @@ func NewUploader(flow *contract.FlowContract, clients []*node.Client, opts ...zg
 }
 
 // upload data(batchly in 1 blockchain transaction if there are more than one files)
-func (uploader *Uploader) BatchUpload(datas []core.IterableData, waitForLogEntry bool, option ...[]UploadOption) (common.Hash, []common.Hash, error) {
+func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.IterableData, waitForLogEntry bool, option ...[]UploadOption) (common.Hash, []common.Hash, error) {
 	stageTimer := time.Now()
 
 	n := len(datas)
@@ -129,7 +130,7 @@ func (uploader *Uploader) BatchUpload(datas []core.IterableData, waitForLogEntry
 		}
 		if waitForLogEntry {
 			// Wait for storage node to retrieve log entry from blockchain
-			if err := uploader.waitForLogEntry(lastTreeToSubmit.Root(), false, receipt); err != nil {
+			if err := uploader.waitForLogEntry(ctx, lastTreeToSubmit.Root(), false, receipt); err != nil {
 				return common.Hash{}, nil, errors.WithMessage(err, "Failed to check if log entry available on storage node")
 			}
 		}
@@ -137,13 +138,13 @@ func (uploader *Uploader) BatchUpload(datas []core.IterableData, waitForLogEntry
 
 	for i := 0; i < n; i++ {
 		// Upload file to storage node
-		if err := uploader.UploadFile(datas[i], trees[i], 0, opts[i].TaskSize); err != nil {
+		if err := uploader.UploadFile(ctx, datas[i], trees[i], 0, opts[i].TaskSize); err != nil {
 			return common.Hash{}, nil, errors.WithMessage(err, "Failed to upload file")
 		}
 
 		if waitForLogEntry {
 			// Wait for transaction finality
-			if err := uploader.waitForLogEntry(trees[i].Root(), false, receipt); err != nil {
+			if err := uploader.waitForLogEntry(ctx, trees[i].Root(), false, receipt); err != nil {
 				return common.Hash{}, nil, errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
 			}
 		}
@@ -154,7 +155,7 @@ func (uploader *Uploader) BatchUpload(datas []core.IterableData, waitForLogEntry
 	return txHash, dataRoots, nil
 }
 
-func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption) error {
+func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, option ...UploadOption) error {
 	stageTimer := time.Now()
 
 	var opt UploadOption
@@ -175,7 +176,7 @@ func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption)
 	}
 	uploader.logger.WithField("root", tree.Root()).Info("Data merkle root calculated")
 
-	info, err := uploader.clients[0].ZeroGStorage().GetFileInfo(tree.Root())
+	info, err := uploader.clients[0].ZeroGStorage().GetFileInfo(ctx, tree.Root())
 	if err != nil {
 		return errors.WithMessage(err, "Failed to get data info from storage node")
 	}
@@ -194,7 +195,7 @@ func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption)
 		}
 
 		// Allow to upload duplicated file for KV scenario
-		if err = uploader.uploadDuplicatedFile(data, opt.Tags, tree.Root()); err != nil {
+		if err = uploader.uploadDuplicatedFile(ctx, data, opt.Tags, tree.Root()); err != nil {
 			return errors.WithMessage(err, "Failed to upload duplicated data")
 		}
 
@@ -218,10 +219,10 @@ func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption)
 			uploader.logger.Info("Upload small data immediately")
 		} else {
 			// Wait for storage node to retrieve log entry from blockchain
-			if err = uploader.waitForLogEntry(tree.Root(), false, receipt); err != nil {
+			if err = uploader.waitForLogEntry(ctx, tree.Root(), false, receipt); err != nil {
 				return errors.WithMessage(err, "Failed to check if log entry available on storage node")
 			}
-			info, err = uploader.clients[0].ZeroGStorage().GetFileInfo(tree.Root())
+			info, err = uploader.clients[0].ZeroGStorage().GetFileInfo(ctx, tree.Root())
 			if err != nil {
 				return errors.WithMessage(err, "Failed to get file info from storage node after waitForLogEntry.")
 			}
@@ -230,12 +231,12 @@ func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption)
 	}
 
 	// Upload file to storage node
-	if err = uploader.UploadFile(data, tree, segNum, opt.TaskSize); err != nil {
+	if err = uploader.UploadFile(ctx, data, tree, segNum, opt.TaskSize); err != nil {
 		return errors.WithMessage(err, "Failed to upload file")
 	}
 
 	// Wait for transaction finality
-	if err = uploader.waitForLogEntry(tree.Root(), false, nil); err != nil {
+	if err = uploader.waitForLogEntry(ctx, tree.Root(), false, nil); err != nil {
 		return errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
 	}
 
@@ -288,7 +289,7 @@ func (uploader *Uploader) SubmitLogEntry(datas []core.IterableData, tags [][]byt
 }
 
 // Wait for log entry ready on storage node.
-func (uploader *Uploader) waitForLogEntry(root common.Hash, finalityRequired bool, receipt *types.Receipt) error {
+func (uploader *Uploader) waitForLogEntry(ctx context.Context, root common.Hash, finalityRequired bool, receipt *types.Receipt) error {
 	uploader.logger.WithFields(logrus.Fields{
 		"root":     root,
 		"finality": finalityRequired,
@@ -299,7 +300,7 @@ func (uploader *Uploader) waitForLogEntry(root common.Hash, finalityRequired boo
 	for {
 		time.Sleep(time.Second)
 
-		info, err := uploader.clients[0].ZeroGStorage().GetFileInfo(root)
+		info, err := uploader.clients[0].ZeroGStorage().GetFileInfo(ctx, root)
 		if err != nil {
 			return errors.WithMessage(err, "Failed to get file info from storage node")
 		}
@@ -308,7 +309,7 @@ func (uploader *Uploader) waitForLogEntry(root common.Hash, finalityRequired boo
 		if info == nil {
 			fields := logrus.Fields{}
 			if receipt != nil {
-				if status, err := uploader.clients[0].ZeroGStorage().GetStatus(); err == nil {
+				if status, err := uploader.clients[0].ZeroGStorage().GetStatus(ctx); err == nil {
 					fields["txBlockNumber"] = receipt.BlockNumber
 					fields["zgsNodeSyncHeight"] = status.LogSyncHeight
 				}
@@ -333,9 +334,9 @@ func (uploader *Uploader) waitForLogEntry(root common.Hash, finalityRequired boo
 	return nil
 }
 
-func (uploader *Uploader) NewSegmentUploader(data core.IterableData, tree *merkle.Tree, startSegIndex uint64, taskSize uint) (*SegmentUploader, error) {
+func (uploader *Uploader) NewSegmentUploader(ctx context.Context, data core.IterableData, tree *merkle.Tree, startSegIndex uint64, taskSize uint) (*SegmentUploader, error) {
 	numSegments := data.NumSegments()
-	shardConfigs, err := getShardConfigs(uploader.clients)
+	shardConfigs, err := getShardConfigs(ctx, uploader.clients)
 	if err != nil {
 		return nil, err
 	}
@@ -379,7 +380,7 @@ func (uploader *Uploader) NewSegmentUploader(data core.IterableData, tree *merkl
 }
 
 // TODO error tolerance
-func (uploader *Uploader) UploadFile(data core.IterableData, tree *merkle.Tree, segIndex uint64, taskSize uint) error {
+func (uploader *Uploader) UploadFile(ctx context.Context, data core.IterableData, tree *merkle.Tree, segIndex uint64, taskSize uint) error {
 	stageTimer := time.Now()
 
 	if taskSize == 0 {
@@ -391,12 +392,12 @@ func (uploader *Uploader) UploadFile(data core.IterableData, tree *merkle.Tree, 
 		"nodeNum":  len(uploader.clients),
 	}).Info("Begin to upload file")
 
-	segmentUploader, err := uploader.NewSegmentUploader(data, tree, segIndex, taskSize)
+	segmentUploader, err := uploader.NewSegmentUploader(ctx, data, tree, segIndex, taskSize)
 	if err != nil {
 		return err
 	}
 
-	err = parallel.Serial(segmentUploader, len(segmentUploader.tasks), min(runtime.GOMAXPROCS(0), len(uploader.clients)*5), 0)
+	err = parallel.Serial(ctx, segmentUploader, len(segmentUploader.tasks), min(runtime.GOMAXPROCS(0), len(uploader.clients)*5), 0)
 	if err != nil {
 		return err
 	}

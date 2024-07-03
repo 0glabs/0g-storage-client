@@ -1,6 +1,7 @@
 package kv
 
 import (
+	"context"
 	"errors"
 
 	"github.com/0glabs/0g-storage-client/node"
@@ -24,12 +25,12 @@ func (iter *Iterator) KeyValue() *node.KeyValue {
 	return iter.currentPair
 }
 
-func (iter *Iterator) move(kv *node.KeyValue) error {
+func (iter *Iterator) move(ctx context.Context, kv *node.KeyValue) error {
 	if kv == nil {
 		iter.currentPair = nil
 		return nil
 	}
-	value, err := iter.client.GetValue(iter.streamId, kv.Key, iter.version)
+	value, err := iter.client.GetValue(ctx, iter.streamId, kv.Key, iter.version)
 	if err != nil {
 		return err
 	}
@@ -42,56 +43,56 @@ func (iter *Iterator) move(kv *node.KeyValue) error {
 	return nil
 }
 
-func (iter *Iterator) SeekBefore(key []byte) error {
-	kv, err := iter.client.GetPrev(iter.streamId, key, 0, 0, true, iter.version)
+func (iter *Iterator) SeekBefore(ctx context.Context, key []byte) error {
+	kv, err := iter.client.GetPrev(ctx, iter.streamId, key, 0, 0, true, iter.version)
 	if err != nil {
 		return err
 	}
-	return iter.move(kv)
+	return iter.move(ctx, kv)
 }
 
-func (iter *Iterator) SeekAfter(key []byte) error {
-	kv, err := iter.client.GetNext(iter.streamId, key, 0, 0, true, iter.version)
+func (iter *Iterator) SeekAfter(ctx context.Context, key []byte) error {
+	kv, err := iter.client.GetNext(ctx, iter.streamId, key, 0, 0, true, iter.version)
 	if err != nil {
 		return err
 	}
-	return iter.move(kv)
+	return iter.move(ctx, kv)
 }
 
-func (iter *Iterator) SeekToFirst() error {
-	kv, err := iter.client.GetFirst(iter.streamId, 0, 0, iter.version)
+func (iter *Iterator) SeekToFirst(ctx context.Context) error {
+	kv, err := iter.client.GetFirst(ctx, iter.streamId, 0, 0, iter.version)
 	if err != nil {
 		return err
 	}
-	return iter.move(kv)
+	return iter.move(ctx, kv)
 }
 
-func (iter *Iterator) SeekToLast() error {
-	kv, err := iter.client.GetLast(iter.streamId, 0, 0, iter.version)
+func (iter *Iterator) SeekToLast(ctx context.Context) error {
+	kv, err := iter.client.GetLast(ctx, iter.streamId, 0, 0, iter.version)
 	if err != nil {
 		return err
 	}
-	return iter.move(kv)
+	return iter.move(ctx, kv)
 }
 
-func (iter *Iterator) Next() error {
+func (iter *Iterator) Next(ctx context.Context) error {
 	if !iter.Valid() {
 		return errIteratorInvalid
 	}
-	kv, err := iter.client.GetNext(iter.streamId, iter.currentPair.Key, 0, 0, false, iter.version)
+	kv, err := iter.client.GetNext(ctx, iter.streamId, iter.currentPair.Key, 0, 0, false, iter.version)
 	if err != nil {
 		return err
 	}
-	return iter.move(kv)
+	return iter.move(ctx, kv)
 }
 
-func (iter *Iterator) Prev() error {
+func (iter *Iterator) Prev(ctx context.Context) error {
 	if !iter.Valid() {
 		return errIteratorInvalid
 	}
-	kv, err := iter.client.GetPrev(iter.streamId, iter.currentPair.Key, 0, 0, false, iter.version)
+	kv, err := iter.client.GetPrev(ctx, iter.streamId, iter.currentPair.Key, 0, 0, false, iter.version)
 	if err != nil {
 		return err
 	}
-	return iter.move(kv)
+	return iter.move(ctx, kv)
 }

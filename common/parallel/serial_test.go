@@ -1,6 +1,7 @@
 package parallel
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,7 +12,7 @@ type foo struct {
 	result []int
 }
 
-func (f *foo) ParallelDo(routine, task int) (interface{}, error) {
+func (f *foo) ParallelDo(ctx context.Context, routine, task int) (interface{}, error) {
 	return task * task, nil
 }
 
@@ -30,7 +31,7 @@ func TestSerial(t *testing.T) {
 
 	tasks := 100
 
-	err := Serial(&f, tasks, 4, 16)
+	err := Serial(context.Background(), &f, tasks, 4, 16)
 	assert.Nil(t, err)
 	assert.Equal(t, tasks, len(f.result))
 

@@ -30,7 +30,7 @@ func NewClient(url string, option ...providers.Option) (*Client, error) {
 	}, nil
 }
 
-func (c *Client) GetNodes() (nodes []ShardedNode, err error) {
-	err = c.Provider.CallContext(context.Background(), &nodes, "indexer_getNodes")
+func (c *Client) GetNodes(ctx context.Context) (nodes []ShardedNode, err error) {
+	err = c.Provider.CallContext(ctx, &nodes, "indexer_getNodes")
 	return
 }

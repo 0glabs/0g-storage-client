@@ -1,6 +1,8 @@
 package core
 
 import (
+	"context"
+
 	"github.com/0glabs/0g-storage-client/common/parallel"
 	"github.com/0glabs/0g-storage-client/core/merkle"
 	"github.com/ethereum/go-ethereum/common"
@@ -22,7 +24,7 @@ func (t *TreeBuilderInitializer) ParallelCollect(result *parallel.Result) error 
 }
 
 // ParallelDo implements parallel.Interface.
-func (t *TreeBuilderInitializer) ParallelDo(routine int, task int) (interface{}, error) {
+func (t *TreeBuilderInitializer) ParallelDo(ctx context.Context, routine int, task int) (interface{}, error) {
 	offset := t.offset + int64(task)*t.batch
 	buf, err := ReadAt(t.data, int(t.batch), offset, t.data.PaddedSize())
 	if err != nil {

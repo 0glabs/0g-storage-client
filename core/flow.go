@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"math"
 	"math/big"
 	"runtime"
@@ -114,7 +115,7 @@ func (flow *Flow) createSegmentNode(offset, batch, size int64) (*contract.Submis
 		builder: &builder,
 	}
 
-	err := parallel.Serial(initializer, int((size-1)/batch+1), runtime.GOMAXPROCS(0), 0)
+	err := parallel.Serial(context.Background(), initializer, int((size-1)/batch+1), runtime.GOMAXPROCS(0), 0)
 	if err != nil {
 		return nil, err
 	}
