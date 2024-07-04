@@ -126,8 +126,8 @@ func (c *Client) IsWriterOfStream(ctx context.Context, account common.Address, s
 }
 
 // Batcher returns a Batcher instance for kv operations in batch.
-func (c *Client) Batcher() *Batcher {
-	return newBatcher(math.MaxUint64, c)
+func (c *Client) Batcher(opts ...zg_common.LogOption) *Batcher {
+	return newBatcher(math.MaxUint64, c, opts...)
 }
 
 type Batcher struct {
