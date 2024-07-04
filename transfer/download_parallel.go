@@ -95,14 +95,24 @@ func (downloader *SegmentDownloader) ParallelDo(ctx context.Context, routine, ta
 				"chunks":     fmt.Sprintf("[%v, %v)", startIndex, endIndex),
 			}).Error("Failed to download segment")
 			continue
-		} else if segment == nil {
+		}
+		if segment == nil {
 			downloader.logger.WithFields(logrus.Fields{
 				"node index": nodeIndex,
 				"segment":    fmt.Sprintf("%v/%v", segmentIndex, downloader.numSegments),
 				"chunks":     fmt.Sprintf("[%v, %v)", startIndex, endIndex),
 			}).Warn("segment not found")
 			continue
-		} else if downloader.logger.IsLevelEnabled(logrus.TraceLevel) {
+		}
+		if len(segment)%core.DefaultChunkSize != 0 {
+			downloader.logger.WithFields(logrus.Fields{
+				"node index": nodeIndex,
+				"segment":    fmt.Sprintf("%v/%v", segmentIndex, downloader.numSegments),
+				"chunks":     fmt.Sprintf("[%v, %v)", startIndex, endIndex),
+			}).Warn("invalid segment length")
+			continue
+		}
+		if downloader.logger.IsLevelEnabled(logrus.TraceLevel) {
 			downloader.logger.WithFields(logrus.Fields{
 				"node index": nodeIndex,
 				"segment":    fmt.Sprintf("%v/%v", segmentIndex, downloader.numSegments),
