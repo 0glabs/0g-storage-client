@@ -107,7 +107,7 @@ func (downloader *Downloader) downloadFile(ctx context.Context, filename string,
 	}
 	defer file.Close()
 
-	downloader.logger.WithField("clients", len(downloader.clients)).Info("Begin to download file from storage node")
+	downloader.logger.WithField("num nodes", len(downloader.clients)).Info("Begin to download file from storage nodes")
 
 	shardConfigs, err := getShardConfigs(ctx, downloader.clients)
 	if err != nil {

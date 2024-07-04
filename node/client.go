@@ -106,6 +106,9 @@ func (c *ZeroGStorageClient) UploadSegments(ctx context.Context, segments []Segm
 
 func (c *ZeroGStorageClient) DownloadSegment(ctx context.Context, root common.Hash, startIndex, endIndex uint64) (data []byte, err error) {
 	err = c.provider.CallContext(ctx, &data, "zgs_downloadSegment", root, startIndex, endIndex)
+	if len(data) == 0 {
+		return nil, err
+	}
 	return
 }
 
