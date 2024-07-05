@@ -1,6 +1,7 @@
 package indexer
 
 import (
+	"context"
 	"sort"
 
 	"github.com/0glabs/0g-storage-client/node"
@@ -12,7 +13,7 @@ type ShardedNode struct {
 }
 
 type Interface interface {
-	GetNodes() ([]ShardedNode, error)
+	GetNodes(ctx context.Context) ([]ShardedNode, error)
 }
 
 type shardSegmentTreeNode struct {

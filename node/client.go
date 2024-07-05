@@ -79,43 +79,46 @@ type ZeroGStorageClient struct {
 	provider *providers.MiddlewarableProvider
 }
 
-func (c *ZeroGStorageClient) GetStatus() (status Status, err error) {
-	err = c.provider.CallContext(context.Background(), &status, "zgs_getStatus")
+func (c *ZeroGStorageClient) GetStatus(ctx context.Context) (status Status, err error) {
+	err = c.provider.CallContext(ctx, &status, "zgs_getStatus")
 	return
 }
 
-func (c *ZeroGStorageClient) GetFileInfo(root common.Hash) (file *FileInfo, err error) {
-	err = c.provider.CallContext(context.Background(), &file, "zgs_getFileInfo", root)
+func (c *ZeroGStorageClient) GetFileInfo(ctx context.Context, root common.Hash) (file *FileInfo, err error) {
+	err = c.provider.CallContext(ctx, &file, "zgs_getFileInfo", root)
 	return
 }
 
-func (c *ZeroGStorageClient) GetFileInfoByTxSeq(txSeq uint64) (file *FileInfo, err error) {
-	err = c.provider.CallContext(context.Background(), &file, "zgs_getFileInfoByTxSeq", txSeq)
+func (c *ZeroGStorageClient) GetFileInfoByTxSeq(ctx context.Context, txSeq uint64) (file *FileInfo, err error) {
+	err = c.provider.CallContext(ctx, &file, "zgs_getFileInfoByTxSeq", txSeq)
 	return
 }
 
-func (c *ZeroGStorageClient) UploadSegment(segment SegmentWithProof) (ret int, err error) {
-	err = c.provider.CallContext(context.Background(), &ret, "zgs_uploadSegment", segment)
+func (c *ZeroGStorageClient) UploadSegment(ctx context.Context, segment SegmentWithProof) (ret int, err error) {
+	err = c.provider.CallContext(ctx, &ret, "zgs_uploadSegment", segment)
 	return
 }
 
-func (c *ZeroGStorageClient) UploadSegments(segments []SegmentWithProof) (ret int, err error) {
-	err = c.provider.CallContext(context.Background(), &ret, "zgs_uploadSegments", segments)
+func (c *ZeroGStorageClient) UploadSegments(ctx context.Context, segments []SegmentWithProof) (ret int, err error) {
+	err = c.provider.CallContext(ctx, &ret, "zgs_uploadSegments", segments)
 	return
 }
 
-func (c *ZeroGStorageClient) DownloadSegment(root common.Hash, startIndex, endIndex uint64) (data []byte, err error) {
-	err = c.provider.CallContext(context.Background(), &data, "zgs_downloadSegment", root, startIndex, endIndex)
+func (c *ZeroGStorageClient) DownloadSegment(ctx context.Context, root common.Hash, startIndex, endIndex uint64) (data []byte, err error) {
+	err = c.provider.CallContext(ctx, &data, "zgs_downloadSegment", root, startIndex, endIndex)
+	if len(data) == 0 {
+		return nil, err
+	}
 	return
 }
 
-func (c *ZeroGStorageClient) DownloadSegmentWithProof(root common.Hash, index uint64) (segment *SegmentWithProof, err error) {
-	err = c.provider.CallContext(context.Background(), &segment, "zgs_downloadSegmentWithProof", root, index)
+func (c *ZeroGStorageClient) DownloadSegmentWithProof(ctx context.Context, root common.Hash, index uint64) (segment *SegmentWithProof, err error) {
+	err = c.provider.CallContext(ctx, &segment, "zgs_downloadSegmentWithProof", root, index)
 	return
 }
 
-func (c *ZeroGStorageClient) GetShardConfig() (shardConfig ShardConfig, err error) {
-	err = c.provider.CallContext(context.Background(), &shardConfig, "zgs_getShardConfig")
+func (c *ZeroGStorageClient) GetShardConfig(ctx context.Context) (shardConfig ShardConfig, err error) {
+	err = c.provider.CallContext(ctx, &shardConfig, "zgs_getShardConfig")
 	return
 }
 
@@ -124,17 +127,17 @@ type AdminClient struct {
 	provider *providers.MiddlewarableProvider
 }
 
-func (c *AdminClient) Shutdown() (ret int, err error) {
-	err = c.provider.CallContext(context.Background(), &ret, "admin_shutdown")
+func (c *AdminClient) Shutdown(ctx context.Context) (ret int, err error) {
+	err = c.provider.CallContext(ctx, &ret, "admin_shutdown")
 	return
 }
 
-func (c *AdminClient) StartSyncFile(txSeq uint64) (ret int, err error) {
-	err = c.provider.CallContext(context.Background(), &ret, "admin_startSyncFile", txSeq)
+func (c *AdminClient) StartSyncFile(ctx context.Context, txSeq uint64) (ret int, err error) {
+	err = c.provider.CallContext(ctx, &ret, "admin_startSyncFile", txSeq)
 	return
 }
 
-func (c *AdminClient) GetSyncStatus(txSeq uint64) (status string, err error) {
-	err = c.provider.CallContext(context.Background(), &status, "admin_getSyncStatus", txSeq)
+func (c *AdminClient) GetSyncStatus(ctx context.Context, txSeq uint64) (status string, err error) {
+	err = c.provider.CallContext(ctx, &status, "admin_getSyncStatus", txSeq)
 	return
 }

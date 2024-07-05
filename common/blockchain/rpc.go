@@ -20,6 +20,7 @@ var Web3LogEnabled bool
 type RetryOption struct {
 	Rounds   uint
 	Interval time.Duration
+	logger   *logrus.Logger
 }
 
 func MustNewWeb3(url, key string) *web3go.Client {
@@ -63,13 +64,13 @@ func WaitForReceipt(client *web3go.Client, txHash common.Hash, successRequired b
 	if len(opts) > 0 {
 		opt = opts[0]
 	} else {
-		// default infinite wait
-		opt.Rounds = 0
+		// default 10 rounds
+		opt.Rounds = 10
 		opt.Interval = time.Second * 3
 	}
 
 	var tries uint
-	reminder := util.NewReminder(logrus.TraceLevel, time.Minute)
+	reminder := util.NewReminder(opt.logger, time.Minute)
 	for receipt == nil {
 		if tries > opt.Rounds+1 && opt.Rounds != 0 {
 			return nil, errors.New("no receipt after max retries")

@@ -1,15 +1,14 @@
 package core
 
 import (
+	"context"
 	"errors"
 	"runtime"
-	"time"
 
 	"github.com/0glabs/0g-storage-client/common/parallel"
 	"github.com/0glabs/0g-storage-client/core/merkle"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -38,7 +37,6 @@ type IterableData interface {
 }
 
 func MerkleTree(data IterableData) (*merkle.Tree, error) {
-	stageTimer := time.Now()
 	var builder merkle.TreeBuilder
 	initializer := &TreeBuilderInitializer{
 		data:    data,
@@ -47,12 +45,10 @@ func MerkleTree(data IterableData) (*merkle.Tree, error) {
 		builder: &builder,
 	}
 
-	err := parallel.Serial(initializer, NumSegmentsPadded(data), runtime.GOMAXPROCS(0), 0)
+	err := parallel.Serial(context.Background(), initializer, NumSegmentsPadded(data), runtime.GOMAXPROCS(0), 0)
 	if err != nil {
 		return nil, err
 	}
-
-	logrus.WithField("duration", time.Since(stageTimer)).Info("create segment root took")
 
 	return builder.Build(), nil
 }

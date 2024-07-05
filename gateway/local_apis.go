@@ -1,13 +1,16 @@
 package gateway
 
 import (
+	"context"
 	"path/filepath"
 
+	zg_common "github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/core"
 	"github.com/0glabs/0g-storage-client/node"
 	"github.com/0glabs/0g-storage-client/transfer"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
 
 var LocalFileRepo string = "."
@@ -78,7 +81,7 @@ func getFileStatus(c *gin.Context) (interface{}, error) {
 	var notFinalized bool
 
 	for _, client := range allClients {
-		info, err := client.ZeroGStorage().GetFileInfo(root)
+		info, err := client.ZeroGStorage().GetFileInfo(context.Background(), root)
 		if err != nil {
 			return nil, err
 		}
@@ -114,7 +117,7 @@ func uploadLocalFile(c *gin.Context) (interface{}, error) {
 		return nil, ErrValidation.WithData("node index out of bound")
 	}
 
-	uploader, err := transfer.NewUploaderLight([]*node.Client{allClients[input.Node]})
+	uploader, err := transfer.NewUploader(nil, []*node.Client{allClients[input.Node]}, zg_common.LogOption{Logger: logrus.StandardLogger()})
 	if err != nil {
 		return nil, ErrValidation.WithData(err)
 	}
@@ -128,7 +131,7 @@ func uploadLocalFile(c *gin.Context) (interface{}, error) {
 	}
 	defer file.Close()
 
-	if err := uploader.Upload(file); err != nil {
+	if err := uploader.Upload(context.Background(), file); err != nil {
 		return nil, err
 	}
 
@@ -150,14 +153,14 @@ func downloadFileLocal(c *gin.Context) (interface{}, error) {
 		return nil, ErrValidation.WithData("node index out of bound")
 	}
 
-	downloader, err := transfer.NewDownloader([]*node.Client{allClients[input.Node]})
+	downloader, err := transfer.NewDownloader([]*node.Client{allClients[input.Node]}, zg_common.LogOption{Logger: logrus.StandardLogger()})
 	if err != nil {
 		return nil, err
 	}
 
 	filename := getFilePath(input.Path, true)
 
-	if err := downloader.Download(input.Root, filename, false); err != nil {
+	if err := downloader.Download(context.Background(), input.Root, filename, false); err != nil {
 		return nil, err
 	}
 

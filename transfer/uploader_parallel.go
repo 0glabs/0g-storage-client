@@ -1,6 +1,8 @@
 package transfer
 
 import (
+	"context"
+
 	"github.com/0glabs/0g-storage-client/common/parallel"
 	"github.com/0glabs/0g-storage-client/core"
 	"github.com/0glabs/0g-storage-client/core/merkle"
@@ -21,6 +23,7 @@ type SegmentUploader struct {
 	clients  []*node.Client
 	tasks    []*UploadTask
 	taskSize uint
+	logger   *logrus.Logger
 }
 
 var _ parallel.Interface = (*SegmentUploader)(nil)
@@ -31,7 +34,7 @@ func (uploader *SegmentUploader) ParallelCollect(result *parallel.Result) error 
 }
 
 // ParallelDo implements parallel.Interface.
-func (uploader *SegmentUploader) ParallelDo(routine int, task int) (interface{}, error) {
+func (uploader *SegmentUploader) ParallelDo(ctx context.Context, routine int, task int) (interface{}, error) {
 	numChunks := uploader.data.NumChunks()
 	numSegments := uploader.data.NumSegments()
 	uploadTask := uploader.tasks[task]
@@ -72,12 +75,12 @@ func (uploader *SegmentUploader) ParallelDo(routine int, task int) (interface{},
 		}
 		segIndex += uploadTask.numShard
 	}
-	if _, err := uploader.clients[uploadTask.clientIndex].ZeroGStorage().UploadSegments(segments); err != nil && !isDuplicateError(err.Error()) {
+	if _, err := uploader.clients[uploadTask.clientIndex].ZeroGStorage().UploadSegments(ctx, segments); err != nil && !isDuplicateError(err.Error()) {
 		return nil, errors.WithMessage(err, "Failed to upload segment")
 	}
 
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		logrus.WithFields(logrus.Fields{
+	if uploader.logger.IsLevelEnabled(logrus.DebugLevel) {
+		uploader.logger.WithFields(logrus.Fields{
 			"total":          numSegments,
 			"from_seg_index": startSegIndex,
 			"to_seg_index":   segIndex,

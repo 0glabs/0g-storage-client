@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/0glabs/0g-storage-client/kv"
@@ -11,6 +12,7 @@ import (
 const KvClientAddr = "http://127.0.0.1:6789"
 
 func main() {
+	ctx := context.Background()
 	client, err := node.NewClient(KvClientAddr)
 	if err != nil {
 		fmt.Println(err)
@@ -24,28 +26,28 @@ func main() {
 	iter := kvClient.NewIterator(streamId)
 
 	fmt.Println("begin to end:")
-	iter.SeekToFirst()
+	iter.SeekToFirst(ctx)
 	for iter.Valid() {
 		pair := iter.KeyValue()
 		fmt.Printf("%v: %v\n", string(pair.Key), string(pair.Data))
-		iter.Next()
+		iter.Next(ctx)
 	}
 
 	fmt.Println("end to begin:")
-	iter.SeekToLast()
+	iter.SeekToLast(ctx)
 	for iter.Valid() {
 		pair := iter.KeyValue()
 		fmt.Printf("%v: %v\n", string(pair.Key), string(pair.Data))
-		iter.Prev()
+		iter.Prev(ctx)
 	}
 
 	fmt.Printf("seek before %v\n", string(key1))
-	iter.SeekBefore(key1)
+	iter.SeekBefore(ctx, key1)
 	pair := iter.KeyValue()
 	fmt.Printf("%v: %v\n", string(pair.Key), string(pair.Data))
 
 	fmt.Printf("seek after %v\n", string(key0))
-	iter.SeekAfter(key0)
+	iter.SeekAfter(ctx, key0)
 	pair = iter.KeyValue()
 	fmt.Printf("%v: %v\n", string(pair.Key), string(pair.Data))
 }

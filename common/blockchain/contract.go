@@ -12,7 +12,6 @@ import (
 	"github.com/openweb3/web3go"
 	"github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 var CustomGasPrice uint64
@@ -49,8 +48,6 @@ func Deploy(clientWithSigner *web3go.Client, dataOrFile string) (common.Address,
 	if err != nil {
 		return common.Address{}, errors.WithMessage(err, "Failed to send transaction")
 	}
-
-	logrus.WithField("hash", txHash).Info("Transaction sent to blockchain")
 
 	receipt, err := WaitForReceipt(clientWithSigner, txHash, true)
 	if err != nil {

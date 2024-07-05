@@ -1,11 +1,13 @@
 package transfer
 
 import (
+	"context"
 	"math/big"
 	"runtime"
 	"sort"
 	"time"
 
+	zg_common "github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/common/parallel"
 	"github.com/0glabs/0g-storage-client/common/util"
 	"github.com/0glabs/0g-storage-client/contract"
@@ -38,12 +40,13 @@ type UploadOption struct {
 type Uploader struct {
 	flow    *contract.FlowContract
 	clients []*node.Client
+	logger  *logrus.Logger
 }
 
-func getShardConfigs(clients []*node.Client) ([]*node.ShardConfig, error) {
+func getShardConfigs(ctx context.Context, clients []*node.Client) ([]*node.ShardConfig, error) {
 	shardConfigs := make([]*node.ShardConfig, 0)
 	for _, client := range clients {
-		shardConfig, err := client.ZeroGStorage().GetShardConfig()
+		shardConfig, err := client.ZeroGStorage().GetShardConfig(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -55,26 +58,20 @@ func getShardConfigs(clients []*node.Client) ([]*node.ShardConfig, error) {
 	return shardConfigs, nil
 }
 
-func NewUploader(flow *contract.FlowContract, clients []*node.Client) (*Uploader, error) {
-	uploader, err := NewUploaderLight(clients)
-	if err != nil {
-		return nil, err
+func NewUploader(flow *contract.FlowContract, clients []*node.Client, opts ...zg_common.LogOption) (*Uploader, error) {
+	if len(clients) == 0 {
+		return nil, errors.New("storage node not specified")
 	}
-	uploader.flow = flow
+	uploader := &Uploader{
+		clients: clients,
+		logger:  zg_common.NewLogger(opts...),
+		flow:    flow,
+	}
 	return uploader, nil
 }
 
-func NewUploaderLight(clients []*node.Client) (*Uploader, error) {
-	if len(clients) == 0 {
-		panic("storage node not specified")
-	}
-	return &Uploader{
-		clients: clients,
-	}, nil
-}
-
 // upload data(batchly in 1 blockchain transaction if there are more than one files)
-func (uploader *Uploader) BatchUpload(datas []core.IterableData, waitForLogEntry bool, option ...[]UploadOption) (common.Hash, []common.Hash, error) {
+func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.IterableData, waitForLogEntry bool, option ...[]UploadOption) (common.Hash, []common.Hash, error) {
 	stageTimer := time.Now()
 
 	n := len(datas)
@@ -90,7 +87,7 @@ func (uploader *Uploader) BatchUpload(datas []core.IterableData, waitForLogEntry
 	if len(opts) != n {
 		return common.Hash{}, nil, errors.New("datas and tags length mismatch")
 	}
-	logrus.WithFields(logrus.Fields{
+	uploader.logger.WithFields(logrus.Fields{
 		"dataNum": n,
 	}).Info("Prepare to upload batchly")
 
@@ -103,7 +100,7 @@ func (uploader *Uploader) BatchUpload(datas []core.IterableData, waitForLogEntry
 		data := datas[i]
 		opt := opts[i]
 
-		logrus.WithFields(logrus.Fields{
+		uploader.logger.WithFields(logrus.Fields{
 			"size":     data.Size(),
 			"chunks":   data.NumChunks(),
 			"segments": data.NumSegments(),
@@ -114,7 +111,7 @@ func (uploader *Uploader) BatchUpload(datas []core.IterableData, waitForLogEntry
 		if err != nil {
 			return common.Hash{}, nil, errors.WithMessage(err, "Failed to create data merkle tree")
 		}
-		logrus.WithField("root", tree.Root()).Info("Data merkle root calculated")
+		uploader.logger.WithField("root", tree.Root()).Info("Data merkle root calculated")
 		trees[i] = tree
 		dataRoots[i] = trees[i].Root()
 
@@ -133,7 +130,7 @@ func (uploader *Uploader) BatchUpload(datas []core.IterableData, waitForLogEntry
 		}
 		if waitForLogEntry {
 			// Wait for storage node to retrieve log entry from blockchain
-			if err := uploader.waitForLogEntry(lastTreeToSubmit.Root(), false, receipt); err != nil {
+			if err := uploader.waitForLogEntry(ctx, lastTreeToSubmit.Root(), false, receipt); err != nil {
 				return common.Hash{}, nil, errors.WithMessage(err, "Failed to check if log entry available on storage node")
 			}
 		}
@@ -141,24 +138,24 @@ func (uploader *Uploader) BatchUpload(datas []core.IterableData, waitForLogEntry
 
 	for i := 0; i < n; i++ {
 		// Upload file to storage node
-		if err := uploader.UploadFile(datas[i], trees[i], 0, opts[i].TaskSize); err != nil {
+		if err := uploader.UploadFile(ctx, datas[i], trees[i], 0, opts[i].TaskSize); err != nil {
 			return common.Hash{}, nil, errors.WithMessage(err, "Failed to upload file")
 		}
 
 		if waitForLogEntry {
 			// Wait for transaction finality
-			if err := uploader.waitForLogEntry(trees[i].Root(), false, receipt); err != nil {
+			if err := uploader.waitForLogEntry(ctx, trees[i].Root(), false, receipt); err != nil {
 				return common.Hash{}, nil, errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
 			}
 		}
 	}
 
-	logrus.WithField("duration", time.Since(stageTimer)).Info("batch upload took")
+	uploader.logger.WithField("duration", time.Since(stageTimer)).Info("batch upload took")
 
 	return txHash, dataRoots, nil
 }
 
-func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption) error {
+func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, option ...UploadOption) error {
 	stageTimer := time.Now()
 
 	var opt UploadOption
@@ -166,7 +163,7 @@ func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption)
 		opt = option[0]
 	}
 
-	logrus.WithFields(logrus.Fields{
+	uploader.logger.WithFields(logrus.Fields{
 		"size":     data.Size(),
 		"chunks":   data.NumChunks(),
 		"segments": data.NumSegments(),
@@ -177,14 +174,14 @@ func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption)
 	if err != nil {
 		return errors.WithMessage(err, "Failed to create data merkle tree")
 	}
-	logrus.WithField("root", tree.Root()).Info("Data merkle root calculated")
+	uploader.logger.WithField("root", tree.Root()).Info("Data merkle root calculated")
 
-	info, err := uploader.clients[0].ZeroGStorage().GetFileInfo(tree.Root())
+	info, err := uploader.clients[0].ZeroGStorage().GetFileInfo(ctx, tree.Root())
 	if err != nil {
 		return errors.WithMessage(err, "Failed to get data info from storage node")
 	}
 
-	logrus.WithField("info", info).Debug("Log entry retrieved from storage node")
+	uploader.logger.WithField("info", info).Debug("Log entry retrieved from storage node")
 
 	// In case that user interact with blockchain via Metamask
 	if uploader.flow == nil && info == nil {
@@ -198,7 +195,7 @@ func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption)
 		}
 
 		// Allow to upload duplicated file for KV scenario
-		if err = uploader.uploadDuplicatedFile(data, opt.Tags, tree.Root()); err != nil {
+		if err = uploader.uploadDuplicatedFile(ctx, data, opt.Tags, tree.Root()); err != nil {
 			return errors.WithMessage(err, "Failed to upload duplicated data")
 		}
 
@@ -219,13 +216,13 @@ func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption)
 		// Otherwise, need to wait for log entry available on storage node,
 		// which requires transaction confirmed on blockchain.
 		if data.Size() <= smallFileSizeThreshold {
-			logrus.Info("Upload small data immediately")
+			uploader.logger.Info("Upload small data immediately")
 		} else {
 			// Wait for storage node to retrieve log entry from blockchain
-			if err = uploader.waitForLogEntry(tree.Root(), false, receipt); err != nil {
+			if err = uploader.waitForLogEntry(ctx, tree.Root(), false, receipt); err != nil {
 				return errors.WithMessage(err, "Failed to check if log entry available on storage node")
 			}
-			info, err = uploader.clients[0].ZeroGStorage().GetFileInfo(tree.Root())
+			info, err = uploader.clients[0].ZeroGStorage().GetFileInfo(ctx, tree.Root())
 			if err != nil {
 				return errors.WithMessage(err, "Failed to get file info from storage node after waitForLogEntry.")
 			}
@@ -234,16 +231,16 @@ func (uploader *Uploader) Upload(data core.IterableData, option ...UploadOption)
 	}
 
 	// Upload file to storage node
-	if err = uploader.UploadFile(data, tree, segNum, opt.TaskSize); err != nil {
+	if err = uploader.UploadFile(ctx, data, tree, segNum, opt.TaskSize); err != nil {
 		return errors.WithMessage(err, "Failed to upload file")
 	}
 
 	// Wait for transaction finality
-	if err = uploader.waitForLogEntry(tree.Root(), false, nil); err != nil {
+	if err = uploader.waitForLogEntry(ctx, tree.Root(), false, nil); err != nil {
 		return errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
 	}
 
-	logrus.WithField("duration", time.Since(stageTimer)).Info("upload took")
+	uploader.logger.WithField("duration", time.Since(stageTimer)).Info("upload took")
 
 	return nil
 }
@@ -281,7 +278,7 @@ func (uploader *Uploader) SubmitLogEntry(datas []core.IterableData, tags [][]byt
 		return common.Hash{}, nil, errors.WithMessage(err, "Failed to send transaction to append log entry")
 	}
 
-	logrus.WithField("hash", tx.Hash().Hex()).Info("Succeeded to send transaction to append log entry")
+	uploader.logger.WithField("hash", tx.Hash().Hex()).Info("Succeeded to send transaction to append log entry")
 
 	if waitForReceipt {
 		// Wait for successful execution
@@ -292,18 +289,18 @@ func (uploader *Uploader) SubmitLogEntry(datas []core.IterableData, tags [][]byt
 }
 
 // Wait for log entry ready on storage node.
-func (uploader *Uploader) waitForLogEntry(root common.Hash, finalityRequired bool, receipt *types.Receipt) error {
-	logrus.WithFields(logrus.Fields{
+func (uploader *Uploader) waitForLogEntry(ctx context.Context, root common.Hash, finalityRequired bool, receipt *types.Receipt) error {
+	uploader.logger.WithFields(logrus.Fields{
 		"root":     root,
 		"finality": finalityRequired,
 	}).Info("Wait for log entry on storage node")
 
-	reminder := util.NewReminder(logrus.TraceLevel, time.Minute)
+	reminder := util.NewReminder(uploader.logger, time.Minute)
 
 	for {
 		time.Sleep(time.Second)
 
-		info, err := uploader.clients[0].ZeroGStorage().GetFileInfo(root)
+		info, err := uploader.clients[0].ZeroGStorage().GetFileInfo(ctx, root)
 		if err != nil {
 			return errors.WithMessage(err, "Failed to get file info from storage node")
 		}
@@ -312,7 +309,7 @@ func (uploader *Uploader) waitForLogEntry(root common.Hash, finalityRequired boo
 		if info == nil {
 			fields := logrus.Fields{}
 			if receipt != nil {
-				if status, err := uploader.clients[0].ZeroGStorage().GetStatus(); err == nil {
+				if status, err := uploader.clients[0].ZeroGStorage().GetStatus(ctx); err == nil {
 					fields["txBlockNumber"] = receipt.BlockNumber
 					fields["zgsNodeSyncHeight"] = status.LogSyncHeight
 				}
@@ -337,9 +334,9 @@ func (uploader *Uploader) waitForLogEntry(root common.Hash, finalityRequired boo
 	return nil
 }
 
-func (uploader *Uploader) NewSegmentUploader(data core.IterableData, tree *merkle.Tree, startSegIndex uint64, taskSize uint) (*SegmentUploader, error) {
+func (uploader *Uploader) NewSegmentUploader(ctx context.Context, data core.IterableData, tree *merkle.Tree, startSegIndex uint64, taskSize uint) (*SegmentUploader, error) {
 	numSegments := data.NumSegments()
-	shardConfigs, err := getShardConfigs(uploader.clients)
+	shardConfigs, err := getShardConfigs(ctx, uploader.clients)
 	if err != nil {
 		return nil, err
 	}
@@ -378,33 +375,34 @@ func (uploader *Uploader) NewSegmentUploader(data core.IterableData, tree *merkl
 		clients:  uploader.clients,
 		tasks:    tasks,
 		taskSize: taskSize,
+		logger:   uploader.logger,
 	}, nil
 }
 
 // TODO error tolerance
-func (uploader *Uploader) UploadFile(data core.IterableData, tree *merkle.Tree, segIndex uint64, taskSize uint) error {
+func (uploader *Uploader) UploadFile(ctx context.Context, data core.IterableData, tree *merkle.Tree, segIndex uint64, taskSize uint) error {
 	stageTimer := time.Now()
 
 	if taskSize == 0 {
 		taskSize = defaultTaskSize
 	}
 
-	logrus.WithFields(logrus.Fields{
+	uploader.logger.WithFields(logrus.Fields{
 		"segIndex": segIndex,
 		"nodeNum":  len(uploader.clients),
 	}).Info("Begin to upload file")
 
-	segmentUploader, err := uploader.NewSegmentUploader(data, tree, segIndex, taskSize)
+	segmentUploader, err := uploader.NewSegmentUploader(ctx, data, tree, segIndex, taskSize)
 	if err != nil {
 		return err
 	}
 
-	err = parallel.Serial(segmentUploader, len(segmentUploader.tasks), min(runtime.GOMAXPROCS(0), len(uploader.clients)*5), 0)
+	err = parallel.Serial(ctx, segmentUploader, len(segmentUploader.tasks), min(runtime.GOMAXPROCS(0), len(uploader.clients)*5), 0)
 	if err != nil {
 		return err
 	}
 
-	logrus.WithFields(logrus.Fields{
+	uploader.logger.WithFields(logrus.Fields{
 		"duration": time.Since(stageTimer),
 		"segNum":   data.NumSegments() - segIndex,
 	}).Info("Completed to upload file")

@@ -1,6 +1,7 @@
 package util
 
 import (
+	"io"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -8,9 +9,9 @@ import (
 
 // Reminder is used for time consuming operations to remind user about progress.
 type Reminder struct {
-	start    time.Time     // start time since last warn
-	interval time.Duration // interval to warn once
-	level    logrus.Level  // log level to remind in general
+	start    time.Time      // start time since last warn
+	interval time.Duration  // interval to warn once
+	logger   *logrus.Logger // log level to remind in general
 }
 
 // NewReminder returns a new Reminder instance.
@@ -18,15 +19,16 @@ type Reminder struct {
 // `level`: log level to remind in general.
 //
 // `interval`: interval to remind in warning level.
-func NewReminder(level logrus.Level, interval time.Duration) *Reminder {
-	if level < logrus.InfoLevel {
-		panic("invalid log level to remind in general")
+func NewReminder(logger *logrus.Logger, interval time.Duration) *Reminder {
+	if logger == nil {
+		logger = logrus.New()
+		logger.Out = io.Discard
 	}
 
 	return &Reminder{
 		start:    time.Now(),
 		interval: interval,
-		level:    level,
+		logger:   logger,
 	}
 }
 
@@ -40,15 +42,15 @@ func (reminder *Reminder) Remind(message string, fields ...logrus.Fields) {
 	if time.Since(reminder.start) > reminder.interval {
 		reminder.remind(logrus.WarnLevel, message, fields...)
 		reminder.start = time.Now()
-	} else if logrus.IsLevelEnabled(reminder.level) {
-		reminder.remind(reminder.level, message, fields...)
+	} else {
+		reminder.remind(reminder.logger.Level, message, fields...)
 	}
 }
 
 func (reminder *Reminder) remind(level logrus.Level, message string, fields ...logrus.Fields) {
 	if len(fields) > 0 {
-		logrus.WithFields(fields[0]).Log(level, message)
+		reminder.logger.WithFields(fields[0]).Log(level, message)
 	} else {
-		logrus.StandardLogger().Log(level, message)
+		reminder.logger.Log(level, message)
 	}
 }

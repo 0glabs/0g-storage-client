@@ -1,6 +1,7 @@
 package transfer
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 
@@ -23,11 +24,13 @@ type SegmentDownloader struct {
 	segmentOffset uint64
 	numChunks     uint64
 	numSegments   uint64
+
+	logger *logrus.Logger
 }
 
 var _ parallel.Interface = (*SegmentDownloader)(nil)
 
-func NewSegmentDownloader(clients []*node.Client, shardConfigs []*node.ShardConfig, file *download.DownloadingFile, withProof bool) (*SegmentDownloader, error) {
+func newSegmentDownloader(clients []*node.Client, shardConfigs []*node.ShardConfig, file *download.DownloadingFile, withProof bool, logger *logrus.Logger) (*SegmentDownloader, error) {
 	offset := file.Metadata().Offset
 	if offset%core.DefaultSegmentSize > 0 {
 		return nil, errors.Errorf("Invalid data offset in downloading file %v", offset)
@@ -45,18 +48,20 @@ func NewSegmentDownloader(clients []*node.Client, shardConfigs []*node.ShardConf
 		segmentOffset: uint64(offset / core.DefaultSegmentSize),
 		numChunks:     core.NumSplits(fileSize, core.DefaultChunkSize),
 		numSegments:   core.NumSplits(fileSize, core.DefaultSegmentSize),
+
+		logger: logger,
 	}, nil
 }
 
 // Download downloads segments in parallel.
-func (downloader *SegmentDownloader) Download() error {
+func (downloader *SegmentDownloader) Download(ctx context.Context) error {
 	numTasks := downloader.numSegments - downloader.segmentOffset
 
-	return parallel.Serial(downloader, int(numTasks), runtime.GOMAXPROCS(0), 0)
+	return parallel.Serial(ctx, downloader, int(numTasks), runtime.GOMAXPROCS(0), 0)
 }
 
 // ParallelDo implements the parallel.Interface interface.
-func (downloader *SegmentDownloader) ParallelDo(routine, task int) (interface{}, error) {
+func (downloader *SegmentDownloader) ParallelDo(ctx context.Context, routine, task int) (interface{}, error) {
 	segmentIndex := downloader.segmentOffset + uint64(task)
 	startIndex := segmentIndex * core.DefaultSegmentMaxChunks
 	endIndex := startIndex + core.DefaultSegmentMaxChunks
@@ -66,49 +71,66 @@ func (downloader *SegmentDownloader) ParallelDo(routine, task int) (interface{},
 
 	root := downloader.file.Metadata().Root
 
-	clientIndex := routine % len(downloader.shardConfigs)
-	for segmentIndex%downloader.shardConfigs[clientIndex].NumShard != downloader.shardConfigs[clientIndex].ShardId {
-		clientIndex = (clientIndex + 1) % len(downloader.shardConfigs)
-		if clientIndex == routine%len(downloader.shardConfigs) {
-			return nil, fmt.Errorf("no storage node holds segment with index %v", segmentIndex)
-		}
-	}
-
 	var (
 		segment []byte
 		err     error
 	)
 
-	if downloader.withProof {
-		segment, err = downloader.downloadWithProof(downloader.clients[clientIndex], root, startIndex, endIndex)
-	} else {
-		segment, err = downloader.clients[clientIndex].ZeroGStorage().DownloadSegment(root, startIndex, endIndex)
-	}
-
-	if err != nil {
-		logrus.WithError(err).WithFields(logrus.Fields{
-			"client index": clientIndex,
-			"segment":      fmt.Sprintf("%v/%v", segmentIndex, downloader.numSegments),
-			"chunks":       fmt.Sprintf("[%v, %v)", startIndex, endIndex),
-		}).Error("Failed to download segment")
-	} else if logrus.IsLevelEnabled(logrus.TraceLevel) {
-		logrus.WithFields(logrus.Fields{
-			"client index": clientIndex,
-			"segment":      fmt.Sprintf("%v/%v", segmentIndex, downloader.numSegments),
-			"chunks":       fmt.Sprintf("[%v, %v)", startIndex, endIndex),
-		}).Trace("Succeeded to download segment")
-	}
-
-	// remove paddings for the last chunk
-	if err == nil && segmentIndex == downloader.numSegments-1 {
-		fileSize := downloader.file.Metadata().Size
-		if lastChunkSize := fileSize % core.DefaultChunkSize; lastChunkSize > 0 {
-			paddings := core.DefaultChunkSize - lastChunkSize
-			segment = segment[0 : len(segment)-int(paddings)]
+	for i := 0; i < len(downloader.shardConfigs); i += 1 {
+		nodeIndex := (routine + i) % len(downloader.shardConfigs)
+		if segmentIndex%downloader.shardConfigs[nodeIndex].NumShard != downloader.shardConfigs[nodeIndex].ShardId {
+			continue
 		}
-	}
+		// try download from current node
+		if downloader.withProof {
+			segment, err = downloader.downloadWithProof(ctx, downloader.clients[nodeIndex], root, startIndex, endIndex)
+		} else {
+			segment, err = downloader.clients[nodeIndex].ZeroGStorage().DownloadSegment(ctx, root, startIndex, endIndex)
+		}
 
-	return segment, err
+		if err != nil {
+			downloader.logger.WithError(err).WithFields(logrus.Fields{
+				"node index": nodeIndex,
+				"segment":    fmt.Sprintf("%v/%v", segmentIndex, downloader.numSegments),
+				"chunks":     fmt.Sprintf("[%v, %v)", startIndex, endIndex),
+			}).Error("Failed to download segment")
+			continue
+		}
+		if segment == nil {
+			downloader.logger.WithFields(logrus.Fields{
+				"node index": nodeIndex,
+				"segment":    fmt.Sprintf("%v/%v", segmentIndex, downloader.numSegments),
+				"chunks":     fmt.Sprintf("[%v, %v)", startIndex, endIndex),
+			}).Warn("segment not found")
+			continue
+		}
+		if len(segment)%core.DefaultChunkSize != 0 {
+			downloader.logger.WithFields(logrus.Fields{
+				"node index": nodeIndex,
+				"segment":    fmt.Sprintf("%v/%v", segmentIndex, downloader.numSegments),
+				"chunks":     fmt.Sprintf("[%v, %v)", startIndex, endIndex),
+			}).Warn("invalid segment length")
+			continue
+		}
+		if downloader.logger.IsLevelEnabled(logrus.TraceLevel) {
+			downloader.logger.WithFields(logrus.Fields{
+				"node index": nodeIndex,
+				"segment":    fmt.Sprintf("%v/%v", segmentIndex, downloader.numSegments),
+				"chunks":     fmt.Sprintf("[%v, %v)", startIndex, endIndex),
+			}).Trace("Succeeded to download segment")
+		}
+
+		// remove paddings for the last chunk
+		if segmentIndex == downloader.numSegments-1 {
+			fileSize := downloader.file.Metadata().Size
+			if lastChunkSize := fileSize % core.DefaultChunkSize; lastChunkSize > 0 {
+				paddings := core.DefaultChunkSize - lastChunkSize
+				segment = segment[0 : len(segment)-int(paddings)]
+			}
+		}
+		return segment, nil
+	}
+	return nil, fmt.Errorf("no storage node holds segment with index %v", segmentIndex)
 }
 
 // ParallelCollect implements the parallel.Interface interface.
@@ -116,12 +138,15 @@ func (downloader *SegmentDownloader) ParallelCollect(result *parallel.Result) er
 	return downloader.file.Write(result.Value.([]byte))
 }
 
-func (downloader *SegmentDownloader) downloadWithProof(client *node.Client, root common.Hash, startIndex, endIndex uint64) ([]byte, error) {
+func (downloader *SegmentDownloader) downloadWithProof(ctx context.Context, client *node.Client, root common.Hash, startIndex, endIndex uint64) ([]byte, error) {
 	segmentIndex := startIndex / core.DefaultSegmentMaxChunks
 
-	segment, err := client.ZeroGStorage().DownloadSegmentWithProof(root, segmentIndex)
+	segment, err := client.ZeroGStorage().DownloadSegmentWithProof(ctx, root, segmentIndex)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to download segment with proof from storage node")
+	}
+	if segment == nil {
+		return nil, nil
 	}
 
 	if expectedDataLen := (endIndex - startIndex) * core.DefaultChunkSize; int(expectedDataLen) != len(segment.Data) {

@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-func Serial(parallelizable Interface, tasks, routines, window int) error {
+func Serial(ctx context.Context, parallelizable Interface, tasks, routines, window int) error {
 	if tasks == 0 {
 		return nil
 	}
@@ -29,7 +29,7 @@ func Serial(parallelizable Interface, tasks, routines, window int) error {
 	defer close(resultCh)
 
 	var wg sync.WaitGroup
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 
 	// start routines to do tasks
 	for i := 0; i < routines; i++ {
@@ -56,7 +56,7 @@ func work(ctx context.Context, routine int, parallelizable Interface, taskCh <-c
 		case <-ctx.Done():
 			return
 		case task := <-taskCh:
-			val, err := parallelizable.ParallelDo(routine, task)
+			val, err := parallelizable.ParallelDo(ctx, routine, task)
 			resultCh <- &Result{routine, task, val, err}
 			if err != nil {
 				return
