@@ -21,7 +21,10 @@ var (
 
 func init() {
 	indexderCmd.Flags().StringSliceVar(&nodes, "nodes", nil, "Storage node URLs that separated by comma")
-	indexderCmd.MarkFlagRequired("nodes")
+	err := indexderCmd.MarkFlagRequired("nodes")
+	if err != nil {
+		logrus.WithError(err).Error("Failed to MarkFlagRequired flag: nodes")
+	}
 	indexderCmd.Flags().StringVar(&endpoint, "endpoint", ":12345", "Indexer RPC endpoint")
 
 	rootCmd.AddCommand(indexderCmd)

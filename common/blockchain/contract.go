@@ -2,8 +2,8 @@ package blockchain
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"math/big"
+	"os"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -62,7 +62,7 @@ func parseBytecode(dataOrFile string) (hexutil.Bytes, error) {
 		return hexutil.Decode(dataOrFile)
 	}
 
-	content, err := ioutil.ReadFile(dataOrFile)
+	content, err := os.ReadFile(dataOrFile)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to read file")
 	}

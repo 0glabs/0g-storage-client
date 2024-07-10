@@ -39,18 +39,33 @@ var (
 
 func init() {
 	uploadCmd.Flags().StringVar(&uploadArgs.file, "file", "", "File name to upload")
-	uploadCmd.MarkFlagRequired("file")
+	err := uploadCmd.MarkFlagRequired("file")
+	if err != nil {
+		logrus.WithError(err).Error("Failed to MarkFlagRequired flag: file")
+	}
 	uploadCmd.Flags().StringVar(&uploadArgs.tags, "tags", "0x", "Tags of the file")
 
 	uploadCmd.Flags().StringVar(&uploadArgs.url, "url", "", "Fullnode URL to interact with ZeroGStorage smart contract")
-	uploadCmd.MarkFlagRequired("url")
+	err = uploadCmd.MarkFlagRequired("url")
+	if err != nil {
+		logrus.WithError(err).Error("Failed to MarkFlagRequired flag: url")
+	}
 	uploadCmd.Flags().StringVar(&uploadArgs.contract, "contract", "", "ZeroGStorage smart contract to interact with")
-	uploadCmd.MarkFlagRequired("contract")
+	err = uploadCmd.MarkFlagRequired("contract")
+	if err != nil {
+		logrus.WithError(err).Error("Failed to MarkFlagRequired flag: contract")
+	}
 	uploadCmd.Flags().StringVar(&uploadArgs.key, "key", "", "Private key to interact with smart contract")
-	uploadCmd.MarkFlagRequired("key")
+	err = uploadCmd.MarkFlagRequired("key")
+	if err != nil {
+		logrus.WithError(err).Error("Failed to MarkFlagRequired flag: key")
+	}
 
 	uploadCmd.Flags().StringSliceVar(&uploadArgs.node, "node", []string{}, "ZeroGStorage storage node URL")
-	uploadCmd.MarkFlagRequired("node")
+	err = uploadCmd.MarkFlagRequired("node")
+	if err != nil {
+		logrus.WithError(err).Error("Failed to MarkFlagRequired flag: node")
+	}
 
 	uploadCmd.Flags().BoolVar(&uploadArgs.force, "force", false, "Force to upload file even already exists")
 	uploadCmd.Flags().UintVar(&uploadArgs.taskSize, "task-size", 10, "Number of segments to upload in single rpc request")

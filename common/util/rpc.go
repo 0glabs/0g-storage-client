@@ -29,5 +29,8 @@ func MustServeRPC(endpoint string, apis map[string]interface{}) {
 		logrus.WithError(err).WithField("endpoint", endpoint).Fatal("Failed to listen to endpoint")
 	}
 
-	httpServer.Serve(listener)
+	err = httpServer.Serve(listener)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to serve http listener")
+	}
 }

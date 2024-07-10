@@ -22,11 +22,20 @@ var (
 
 func init() {
 	deployCmd.Flags().StringVar(&deployArgs.url, "url", "", "Fullnode URL to interact with blockchain")
-	deployCmd.MarkFlagRequired("url")
+	err := deployCmd.MarkFlagRequired("url")
+	if err != nil {
+		logrus.WithError(err).Error("Failed to MarkFlagRequired flag: url")
+	}
 	deployCmd.Flags().StringVar(&deployArgs.key, "key", "", "Private key to create smart contract")
-	deployCmd.MarkFlagRequired("key")
+	err = deployCmd.MarkFlagRequired("key")
+	if err != nil {
+		logrus.WithError(err).Error("Failed to MarkFlagRequired flag: key")
+	}
 	deployCmd.Flags().StringVar(&deployArgs.bytecodeOrFile, "bytecode", "", "ZeroGStorage smart contract bytecode")
-	deployCmd.MarkFlagRequired("bytecode")
+	err = deployCmd.MarkFlagRequired("bytecode")
+	if err != nil {
+		logrus.WithError(err).Error("Failed to MarkFlagRequired flag: bytecode")
+	}
 
 	rootCmd.AddCommand(deployCmd)
 }

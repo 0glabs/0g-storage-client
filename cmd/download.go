@@ -27,11 +27,20 @@ var (
 
 func init() {
 	downloadCmd.Flags().StringVar(&downloadArgs.file, "file", "", "File name to download")
-	downloadCmd.MarkFlagRequired("file")
+	err := downloadCmd.MarkFlagRequired("file")
+	if err != nil {
+		logrus.WithError(err).Error("Failed to MarkFlagRequired flag: file")
+	}
 	downloadCmd.Flags().StringSliceVar(&downloadArgs.nodes, "node", []string{}, "ZeroGStorage storage node URL. Multiple nodes could be specified and separated by comma, e.g. url1,url2,url3")
-	downloadCmd.MarkFlagRequired("node")
+	err = downloadCmd.MarkFlagRequired("node")
+	if err != nil {
+		logrus.WithError(err).Error("Failed to MarkFlagRequired flag: node")
+	}
 	downloadCmd.Flags().StringVar(&downloadArgs.root, "root", "", "Merkle root to download file")
-	downloadCmd.MarkFlagRequired("root")
+	err = downloadCmd.MarkFlagRequired("root")
+	if err != nil {
+		logrus.WithError(err).Error("Failed to MarkFlagRequired flag: root")
+	}
 	downloadCmd.Flags().BoolVar(&downloadArgs.proof, "proof", false, "Whether to download with merkle proof for validation")
 
 	rootCmd.AddCommand(downloadCmd)

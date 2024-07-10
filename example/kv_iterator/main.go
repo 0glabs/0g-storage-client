@@ -26,28 +26,46 @@ func main() {
 	iter := kvClient.NewIterator(streamId)
 
 	fmt.Println("begin to end:")
-	iter.SeekToFirst(ctx)
+	err = iter.SeekToFirst(ctx)
+	if err != nil {
+		fmt.Printf("SeekToFirst error: %s", err)
+	}
 	for iter.Valid() {
 		pair := iter.KeyValue()
 		fmt.Printf("%v: %v\n", string(pair.Key), string(pair.Data))
-		iter.Next(ctx)
+		err = iter.Next(ctx)
+		if err != nil {
+			fmt.Printf("Next error: %s", err)
+		}
 	}
 
 	fmt.Println("end to begin:")
-	iter.SeekToLast(ctx)
+	err = iter.SeekToLast(ctx)
+	if err != nil {
+		fmt.Printf("SeekToLast error: %s", err)
+	}
 	for iter.Valid() {
 		pair := iter.KeyValue()
 		fmt.Printf("%v: %v\n", string(pair.Key), string(pair.Data))
-		iter.Prev(ctx)
+		err = iter.Prev(ctx)
+		if err != nil {
+			fmt.Printf("Prev error: %s", err)
+		}
 	}
 
 	fmt.Printf("seek before %v\n", string(key1))
-	iter.SeekBefore(ctx, key1)
+	err = iter.SeekBefore(ctx, key1)
+	if err != nil {
+		fmt.Printf("SeekBefore error: %s", err)
+	}
 	pair := iter.KeyValue()
 	fmt.Printf("%v: %v\n", string(pair.Key), string(pair.Data))
 
 	fmt.Printf("seek after %v\n", string(key0))
-	iter.SeekAfter(ctx, key0)
+	err = iter.SeekAfter(ctx, key0)
+	if err != nil {
+		fmt.Printf("SeekAfter error: %s", err)
+	}
 	pair = iter.KeyValue()
 	fmt.Printf("%v: %v\n", string(pair.Key), string(pair.Data))
 }
