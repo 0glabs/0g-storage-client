@@ -334,9 +334,11 @@ func (uploader *Uploader) NewSegmentUploader(ctx context.Context, data core.Iter
 		return len(clientTasks[i]) > len(clientTasks[j])
 	})
 	tasks := make([]*UploadTask, 0)
-	for taskIndex := 0; taskIndex < len(clientTasks[0]); taskIndex += 1 {
-		for i := 0; i < len(clientTasks) && taskIndex < len(clientTasks[i]); i += 1 {
-			tasks = append(tasks, clientTasks[i][taskIndex])
+	if len(clientTasks) > 0 {
+		for taskIndex := 0; taskIndex < len(clientTasks[0]); taskIndex += 1 {
+			for i := 0; i < len(clientTasks) && taskIndex < len(clientTasks[i]); i += 1 {
+				tasks = append(tasks, clientTasks[i][taskIndex])
+			}
 		}
 	}
 
