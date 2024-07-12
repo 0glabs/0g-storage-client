@@ -17,12 +17,6 @@ Run `go build` under the root folder to compile the executable binary.
       --log-level string   Log level (default "info")
 ```
 
-**Deploy contract**
-
-```
-./0g-storage-client deploy --url <blockchain_rpc_endpoint> --key <private_key> --bytecode <bytecode_hex_or_json_file>
-```
-
 **Generate test file**
 
 To generate a file for test purpose, especially with a fixed file size or random file size (without `--size` option):
