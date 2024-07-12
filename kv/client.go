@@ -4,14 +4,9 @@ import (
 	"context"
 	"math"
 
-	zg_common "github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/contract"
-	"github.com/0glabs/0g-storage-client/core"
 	"github.com/0glabs/0g-storage-client/node"
-	"github.com/0glabs/0g-storage-client/transfer"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 // Client is used for users to communicate with server for kv operations.
@@ -20,10 +15,7 @@ type Client struct {
 	flow *contract.FlowContract
 }
 
-// NewClient creates a new client for kv operations.
-//
-// Generally, you could refer to the `upload` function in `cmd/upload.go` file
-// for how to create storage node client and flow contract client.
+// NewClient creates a new client for kv queries.
 func NewClient(node *node.Client, flow *contract.FlowContract) *Client {
 	return &Client{
 		node: node,
@@ -123,58 +115,4 @@ func (c *Client) IsWriterOfKey(ctx context.Context, account common.Address, stre
 
 func (c *Client) IsWriterOfStream(ctx context.Context, account common.Address, streamId common.Hash, version ...uint64) (isWriter bool, err error) {
 	return c.node.KV().IsWriterOfStream(ctx, account, streamId, version...)
-}
-
-// Batcher returns a Batcher instance for kv operations in batch.
-func (c *Client) Batcher(opts ...zg_common.LogOption) *Batcher {
-	return newBatcher(math.MaxUint64, c, opts...)
-}
-
-type Batcher struct {
-	*StreamDataBuilder
-	client *Client
-	logger *logrus.Logger
-}
-
-func newBatcher(version uint64, client *Client, opts ...zg_common.LogOption) *Batcher {
-	return &Batcher{
-		StreamDataBuilder: NewStreamDataBuilder(version),
-		client:            client,
-		logger:            zg_common.NewLogger(opts...),
-	}
-}
-
-// Exec submit the kv operations to ZeroGStorage network in batch.
-//
-// Note, this is a time consuming operation, e.g. several seconds or even longer.
-// When it comes to a time sentitive context, it should be executed in a separate go-routine.
-func (b *Batcher) Exec(ctx context.Context) error {
-	// build stream data
-	streamData, err := b.Build()
-	if err != nil {
-		return errors.WithMessage(err, "Failed to build stream data")
-	}
-
-	encoded, err := streamData.Encode()
-	if err != nil {
-		return errors.WithMessage(err, "Failed to encode data")
-	}
-	data, err := core.NewDataInMemory(encoded)
-	if err != nil {
-		return err
-	}
-
-	// upload file
-	uploader, err := transfer.NewUploader(b.client.flow, []*node.Client{b.client.node}, zg_common.LogOption{Logger: b.logger})
-	if err != nil {
-		return err
-	}
-	opt := transfer.UploadOption{
-		Tags:  b.BuildTags(),
-		Force: true,
-	}
-	if err = uploader.Upload(ctx, data, opt); err != nil {
-		return errors.WithMessagef(err, "Failed to upload data")
-	}
-	return nil
 }

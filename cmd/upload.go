@@ -26,8 +26,8 @@ var (
 
 		node []string
 
-		force    bool
-		taskSize uint
+		finalityRequired bool
+		taskSize         uint
 	}
 
 	uploadCmd = &cobra.Command{
@@ -52,7 +52,7 @@ func init() {
 	uploadCmd.Flags().StringSliceVar(&uploadArgs.node, "node", []string{}, "ZeroGStorage storage node URL")
 	uploadCmd.MarkFlagRequired("node")
 
-	uploadCmd.Flags().BoolVar(&uploadArgs.force, "force", false, "Force to upload file even already exists")
+	uploadCmd.Flags().BoolVar(&uploadArgs.finalityRequired, "finality-required", false, "Wait for file finality on nodes to upload")
 	uploadCmd.Flags().UintVar(&uploadArgs.taskSize, "task-size", 10, "Number of segments to upload in single rpc request")
 
 	rootCmd.AddCommand(uploadCmd)
@@ -76,9 +76,9 @@ func upload(*cobra.Command, []string) {
 		logrus.WithError(err).Fatal("Failed to initialize uploader")
 	}
 	opt := transfer.UploadOption{
-		Tags:     hexutil.MustDecode(uploadArgs.tags),
-		Force:    uploadArgs.force,
-		TaskSize: uploadArgs.taskSize,
+		Tags:             hexutil.MustDecode(uploadArgs.tags),
+		FinalityRequired: uploadArgs.finalityRequired,
+		TaskSize:         uploadArgs.taskSize,
 	}
 
 	file, err := core.Open(uploadArgs.file)
