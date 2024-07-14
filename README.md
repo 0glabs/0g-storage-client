@@ -1,4 +1,4 @@
-# ZeroGStorage Client
+# 0G Storage Client
 Go implementation for client to interact with storage nodes in ZeroGStorage network.
 
 # SDK
