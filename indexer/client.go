@@ -14,7 +14,6 @@ import (
 	"github.com/openweb3/go-rpc-provider/interfaces"
 	providers "github.com/openweb3/go-rpc-provider/provider_wrapper"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 // Requires `Client` implements the `Interface` interface.
@@ -22,23 +21,28 @@ var _ Interface = (*Client)(nil)
 
 type Client struct {
 	interfaces.Provider
-	providerOption providers.Option
+	option IndexerClientOption
 }
 
-func NewClient(url string, option ...providers.Option) (*Client, error) {
-	var opt providers.Option
+type IndexerClientOption struct {
+	ProviderOption providers.Option
+	LogOption      common.LogOption
+}
+
+func NewClient(url string, option ...IndexerClientOption) (*Client, error) {
+	var opt IndexerClientOption
 	if len(option) > 0 {
 		opt = option[0]
 	}
 
-	provider, err := providers.NewProviderWithOption(url, opt)
+	provider, err := providers.NewProviderWithOption(url, opt.ProviderOption)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Client{
-		Provider:       provider,
-		providerOption: opt,
+		Provider: provider,
+		option:   opt,
 	}, nil
 }
 
@@ -58,7 +62,7 @@ func (c *Client) SelectNodes(ctx context.Context, expectedReplica uint) ([]*node
 	}
 	clients := make([]*node.Client, len(nodes))
 	for i, shardedNode := range nodes {
-		clients[i], err = node.NewClient(shardedNode.URL, c.providerOption)
+		clients[i], err = node.NewClient(shardedNode.URL, c.option.ProviderOption)
 		if err != nil {
 			return nil, errors.WithMessage(err, fmt.Sprintf("failed to initialize storage node client with %v", shardedNode.URL))
 		}
@@ -71,9 +75,7 @@ func (c *Client) NewUploaderFromIndexerNodes(ctx context.Context, flow *contract
 	if err != nil {
 		return nil, err
 	}
-	logger := logrus.New()
-	logger.Out = c.providerOption.Logger
-	return transfer.NewUploader(flow, clients, common.LogOption{Logger: logger})
+	return transfer.NewUploader(flow, clients, c.option.LogOption)
 }
 
 func (c *Client) Upload(ctx context.Context, flow *contract.FlowContract, data core.IterableData, option ...transfer.UploadOption) error {

@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"os"
 
 	zg_common "github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/common/blockchain"
@@ -13,7 +12,6 @@ import (
 	"github.com/0glabs/0g-storage-client/transfer"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	providers "github.com/openweb3/go-rpc-provider/provider_wrapper"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -92,7 +90,7 @@ func upload(*cobra.Command, []string) {
 	defer file.Close()
 
 	if uploadArgs.indexer != "" {
-		indexerClient, err := indexer.NewClient(uploadArgs.indexer, providers.Option{Logger: os.Stderr})
+		indexerClient, err := indexer.NewClient(uploadArgs.indexer, indexer.IndexerClientOption{LogOption: zg_common.LogOption{Logger: logrus.StandardLogger()}})
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to initialize indexer client")
 		}
