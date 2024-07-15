@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 
@@ -30,10 +31,10 @@ var (
 
 func init() {
 	kvReadCmd.Flags().StringVar(&kvReadArgs.streamId, "stream-id", "0x", "stream to read/write")
-	kvReadCmd.MarkFlagRequired("streamId")
+	kvReadCmd.MarkFlagRequired("stream-id")
 
 	kvReadCmd.Flags().StringSliceVar(&kvReadArgs.keys, "stream-keys", []string{}, "kv keys")
-	kvReadCmd.MarkFlagRequired("stream-keys")
+	kvReadCmd.MarkFlagRequired("kv-keys")
 
 	kvReadCmd.Flags().Uint64Var(&kvReadArgs.version, "version", math.MaxUint64, "key version")
 
@@ -60,5 +61,6 @@ func kvRead(*cobra.Command, []string) {
 		}
 		m[key] = string(val.Data)
 	}
-	fmt.Println(m)
+	bs, _ := json.Marshal(m)
+	fmt.Println(string(bs))
 }

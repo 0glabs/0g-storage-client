@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 
+	zg_common "github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/common/blockchain"
 	"github.com/0glabs/0g-storage-client/contract"
 	"github.com/0glabs/0g-storage-client/indexer"
@@ -34,12 +35,13 @@ var (
 
 		expectedReplica uint
 
+		skipTx           bool
 		finalityRequired bool
 		taskSize         uint
 	}
 
 	kvWriteCmd = &cobra.Command{
-		Use:   "kvWrite",
+		Use:   "kv-write",
 		Short: "write to kv streams",
 		Run:   kvWrite,
 	}
@@ -47,12 +49,12 @@ var (
 
 func init() {
 	kvWriteCmd.Flags().StringVar(&kvWriteArgs.streamId, "stream-id", "0x", "stream to read/write")
-	kvWriteCmd.MarkFlagRequired("streamId")
+	kvWriteCmd.MarkFlagRequired("stream-id")
 
 	kvWriteCmd.Flags().StringSliceVar(&kvWriteArgs.keys, "stream-keys", []string{}, "kv keys")
-	kvWriteCmd.MarkFlagRequired("stream-keys")
+	kvWriteCmd.MarkFlagRequired("kv-keys")
 	kvWriteCmd.Flags().StringSliceVar(&kvWriteArgs.values, "stream-values", []string{}, "kv values")
-	kvWriteCmd.MarkFlagRequired("stream-values")
+	kvWriteCmd.MarkFlagRequired("kv-values")
 
 	kvWriteCmd.Flags().Uint64Var(&kvWriteArgs.version, "version", math.MaxUint64, "key version")
 
@@ -68,6 +70,7 @@ func init() {
 
 	kvWriteCmd.Flags().UintVar(&kvWriteArgs.expectedReplica, "expected-replica", 1, "expected number of replications to kvWrite")
 
+	kvWriteCmd.Flags().BoolVar(&kvWriteArgs.skipTx, "skip-tx", false, "Skip sending the transaction on chain")
 	kvWriteCmd.Flags().BoolVar(&kvWriteArgs.finalityRequired, "finality-required", false, "Wait for file finality on nodes to kvWrite")
 	kvWriteCmd.Flags().UintVar(&kvWriteArgs.taskSize, "task-size", 10, "Number of segments to kvWrite in single rpc request")
 
@@ -87,6 +90,7 @@ func kvWrite(*cobra.Command, []string) {
 		FinalityRequired: kvWriteArgs.finalityRequired,
 		TaskSize:         kvWriteArgs.taskSize,
 		ExpectedReplica:  kvWriteArgs.expectedReplica,
+		SkipTx:           kvWriteArgs.skipTx,
 	}
 
 	var clients []*node.Client
@@ -103,21 +107,20 @@ func kvWrite(*cobra.Command, []string) {
 		if len(kvWriteArgs.node) == 0 {
 			logrus.Fatal("At least one of --node and --indexer should not be empty")
 		}
+		clients = node.MustNewClients(kvWriteArgs.node)
+		for _, client := range clients {
+			defer client.Close()
+		}
 	}
 
-	clients = node.MustNewClients(uploadArgs.node)
-	for _, client := range clients {
-		defer client.Close()
-	}
-
-	batcher := kv.NewBatcher(kvWriteArgs.version, clients, flow)
+	batcher := kv.NewBatcher(kvWriteArgs.version, clients, flow, zg_common.LogOption{Logger: logrus.StandardLogger()})
 	if len(kvWriteArgs.keys) != len(kvWriteArgs.values) {
 		logrus.Fatal("keys and values length mismatch")
 	}
 	if len(kvWriteArgs.keys) == 0 {
 		logrus.Fatal("no keys to write")
 	}
-	streamId := common.HexToHash(kvReadArgs.streamId)
+	streamId := common.HexToHash(kvWriteArgs.streamId)
 
 	for i := range kvWriteArgs.keys {
 		batcher.Set(streamId,

@@ -38,6 +38,7 @@ type UploadOption struct {
 	FinalityRequired bool   // wait for file finalized on uploaded nodes or not
 	TaskSize         uint   // number of segment to upload in single rpc request
 	ExpectedReplica  uint   // expected number of replications
+	SkipTx           bool   // skip sending transaction on chain
 }
 
 type Uploader struct {
@@ -71,6 +72,20 @@ func NewUploader(flow *contract.FlowContract, clients []*node.Client, opts ...zg
 		flow:    flow,
 	}
 	return uploader, nil
+}
+
+func (uploader *Uploader) checkLogExistance(ctx context.Context, root common.Hash) (bool, error) {
+	for _, client := range uploader.clients {
+		info, err := client.ZeroGStorage().GetFileInfo(ctx, root)
+		if err != nil {
+			return false, errors.WithMessage(err, fmt.Sprintf("Failed to get file info from storage node %v", client.URL()))
+		}
+		// log entry unavailable yet
+		if info == nil {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // upload data(batchly in 1 blockchain transaction if there are more than one files)
@@ -118,8 +133,19 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 		trees[i] = tree
 		dataRoots[i] = trees[i].Root()
 
-		toSubmitDatas = append(toSubmitDatas, data)
-		toSubmitTags = append(toSubmitTags, opt.Tags)
+		if !opts[i].SkipTx {
+			toSubmitDatas = append(toSubmitDatas, data)
+			toSubmitTags = append(toSubmitTags, opt.Tags)
+		} else {
+			// Check existance
+			exist, err := uploader.checkLogExistance(ctx, trees[i].Root())
+			if err != nil {
+				return common.Hash{}, nil, errors.WithMessage(err, "Failed to check if skipped log entry available on storage node")
+			}
+			if !exist {
+				return common.Hash{}, nil, fmt.Errorf("data #%v log entry is not exist on given nodes", i)
+			}
+		}
 		lastTreeToSubmit = trees[i]
 	}
 
@@ -141,7 +167,7 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 
 	for i := 0; i < n; i++ {
 		// Upload file to storage node
-		if err := uploader.UploadFile(ctx, datas[i], trees[i], opts[i].ExpectedReplica, opts[i].TaskSize); err != nil {
+		if err := uploader.uploadFile(ctx, datas[i], trees[i], opts[i].ExpectedReplica, opts[i].TaskSize); err != nil {
 			return common.Hash{}, nil, errors.WithMessage(err, "Failed to upload file")
 		}
 
@@ -180,26 +206,37 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 	uploader.logger.WithField("root", tree.Root()).Info("Data merkle root calculated")
 
 	// Append log on blockchain
-	var receipt *types.Receipt
+	if !opt.SkipTx {
+		var receipt *types.Receipt
 
-	if _, receipt, err = uploader.SubmitLogEntry([]core.IterableData{data}, [][]byte{opt.Tags}, true); err != nil {
-		return errors.WithMessage(err, "Failed to submit log entry")
-	}
+		if _, receipt, err = uploader.SubmitLogEntry([]core.IterableData{data}, [][]byte{opt.Tags}, true); err != nil {
+			return errors.WithMessage(err, "Failed to submit log entry")
+		}
 
-	// For small data, could upload file to storage node immediately.
-	// Otherwise, need to wait for log entry available on storage node,
-	// which requires transaction confirmed on blockchain.
-	if data.Size() <= smallFileSizeThreshold {
-		uploader.logger.Info("Upload small data immediately")
+		// For small data, could upload file to storage node immediately.
+		// Otherwise, need to wait for log entry available on storage node,
+		// which requires transaction confirmed on blockchain.
+		if data.Size() <= smallFileSizeThreshold {
+			uploader.logger.Info("Upload small data immediately")
+		} else {
+			// Wait for storage node to retrieve log entry from blockchain
+			if err = uploader.waitForLogEntry(ctx, tree.Root(), false, receipt); err != nil {
+				return errors.WithMessage(err, "Failed to check if log entry available on storage node")
+			}
+		}
 	} else {
-		// Wait for storage node to retrieve log entry from blockchain
-		if err = uploader.waitForLogEntry(ctx, tree.Root(), false, receipt); err != nil {
-			return errors.WithMessage(err, "Failed to check if log entry available on storage node")
+		// Check existance
+		exist, err := uploader.checkLogExistance(ctx, tree.Root())
+		if err != nil {
+			return errors.WithMessage(err, "Failed to check if skipped log entry available on storage node")
+		}
+		if !exist {
+			return fmt.Errorf("data log entry is not exist on given nodes")
 		}
 	}
 
 	// Upload file to storage node
-	if err = uploader.UploadFile(ctx, data, tree, opt.ExpectedReplica, opt.TaskSize); err != nil {
+	if err = uploader.uploadFile(ctx, data, tree, opt.ExpectedReplica, opt.TaskSize); err != nil {
 		return errors.WithMessage(err, "Failed to upload file")
 	}
 
@@ -307,7 +344,7 @@ func (uploader *Uploader) waitForLogEntry(ctx context.Context, root common.Hash,
 	return nil
 }
 
-func (uploader *Uploader) NewSegmentUploader(ctx context.Context, data core.IterableData, tree *merkle.Tree, expectedReplica uint, taskSize uint) (*SegmentUploader, error) {
+func (uploader *Uploader) newSegmentUploader(ctx context.Context, data core.IterableData, tree *merkle.Tree, expectedReplica uint, taskSize uint) (*SegmentUploader, error) {
 	numSegments := data.NumSegments()
 	shardConfigs, err := getShardConfigs(ctx, uploader.clients)
 	if err != nil {
@@ -357,8 +394,7 @@ func (uploader *Uploader) NewSegmentUploader(ctx context.Context, data core.Iter
 	}, nil
 }
 
-// TODO error tolerance
-func (uploader *Uploader) UploadFile(ctx context.Context, data core.IterableData, tree *merkle.Tree, expectedReplica uint, taskSize uint) error {
+func (uploader *Uploader) uploadFile(ctx context.Context, data core.IterableData, tree *merkle.Tree, expectedReplica uint, taskSize uint) error {
 	stageTimer := time.Now()
 
 	if taskSize == 0 {
@@ -370,7 +406,7 @@ func (uploader *Uploader) UploadFile(ctx context.Context, data core.IterableData
 		"nodeNum": len(uploader.clients),
 	}).Info("Begin to upload file")
 
-	segmentUploader, err := uploader.NewSegmentUploader(ctx, data, tree, expectedReplica, taskSize)
+	segmentUploader, err := uploader.newSegmentUploader(ctx, data, tree, expectedReplica, taskSize)
 	if err != nil {
 		return err
 	}
