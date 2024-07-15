@@ -68,7 +68,11 @@ func (c *Client) NewUploaderFromIndexerNodes(ctx context.Context, flow *contract
 	return transfer.NewUploader(flow, clients, common.LogOption{Logger: logger})
 }
 
-func (c *Client) Upload(ctx context.Context, flow *contract.FlowContract, data core.IterableData, expectedReplica uint, option ...transfer.UploadOption) error {
+func (c *Client) Upload(ctx context.Context, flow *contract.FlowContract, data core.IterableData, option ...transfer.UploadOption) error {
+	expectedReplica := uint(1)
+	if len(option) > 0 {
+		expectedReplica = max(expectedReplica, option[0].ExpectedReplica)
+	}
 	uploader, err := c.NewUploaderFromIndexerNodes(ctx, flow, expectedReplica)
 	if err != nil {
 		return err
@@ -76,7 +80,13 @@ func (c *Client) Upload(ctx context.Context, flow *contract.FlowContract, data c
 	return uploader.Upload(ctx, data, option...)
 }
 
-func (c *Client) BatchUpload(ctx context.Context, flow *contract.FlowContract, datas []core.IterableData, expectedReplica uint, waitForLogEntry bool, option ...[]transfer.UploadOption) (eth_common.Hash, []eth_common.Hash, error) {
+func (c *Client) BatchUpload(ctx context.Context, flow *contract.FlowContract, datas []core.IterableData, waitForLogEntry bool, option ...[]transfer.UploadOption) (eth_common.Hash, []eth_common.Hash, error) {
+	expectedReplica := uint(1)
+	if len(option) > 0 {
+		for _, opt := range option[0] {
+			expectedReplica = max(expectedReplica, opt.ExpectedReplica)
+		}
+	}
 	uploader, err := c.NewUploaderFromIndexerNodes(ctx, flow, expectedReplica)
 	if err != nil {
 		return eth_common.Hash{}, nil, err
