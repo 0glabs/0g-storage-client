@@ -1,15 +1,14 @@
-package indexer
+package shard
 
 import (
 	"fmt"
 	"testing"
 
-	"github.com/0glabs/0g-storage-client/node"
 	"gotest.tools/assert"
 )
 
 func makeShardNode(numShard uint, shardId uint) ShardedNode {
-	return ShardedNode{Config: node.ShardConfig{
+	return ShardedNode{Config: ShardConfig{
 		NumShard: uint64(numShard),
 		ShardId:  uint64(shardId),
 	}}

@@ -3,6 +3,7 @@ package indexer
 import (
 	"context"
 
+	"github.com/0glabs/0g-storage-client/common/shard"
 	"github.com/openweb3/go-rpc-provider/interfaces"
 	providers "github.com/openweb3/go-rpc-provider/provider_wrapper"
 )
@@ -30,7 +31,7 @@ func NewClient(url string, option ...providers.Option) (*Client, error) {
 	}, nil
 }
 
-func (c *Client) GetNodes(ctx context.Context) (nodes []ShardedNode, err error) {
+func (c *Client) GetNodes(ctx context.Context) (nodes []shard.ShardedNode, err error) {
 	err = c.Provider.CallContext(ctx, &nodes, "indexer_getNodes")
 	return
 }

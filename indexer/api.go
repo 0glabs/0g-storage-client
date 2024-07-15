@@ -3,6 +3,7 @@ package indexer
 import (
 	"context"
 
+	"github.com/0glabs/0g-storage-client/common/shard"
 	"github.com/0glabs/0g-storage-client/node"
 	"github.com/pkg/errors"
 )
@@ -19,8 +20,8 @@ func NewIndexerApi(nodes []*node.Client) *IndexerApi {
 	return &IndexerApi{"indexer", nodes}
 }
 
-func (api *IndexerApi) GetNodes(ctx context.Context) ([]ShardedNode, error) {
-	var result []ShardedNode
+func (api *IndexerApi) GetNodes(ctx context.Context) ([]shard.ShardedNode, error) {
+	var result []shard.ShardedNode
 
 	for _, v := range api.nodes {
 		config, err := v.ZeroGStorage().GetShardConfig(ctx)
@@ -28,7 +29,7 @@ func (api *IndexerApi) GetNodes(ctx context.Context) ([]ShardedNode, error) {
 			return nil, errors.WithMessage(err, "Failed to query shard config from storage node")
 		}
 		if config.IsValid() {
-			result = append(result, ShardedNode{
+			result = append(result, shard.ShardedNode{
 				URL:    v.URL(),
 				Config: config,
 			})

@@ -10,6 +10,7 @@ import (
 
 	zg_common "github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/common/parallel"
+	"github.com/0glabs/0g-storage-client/common/shard"
 	"github.com/0glabs/0g-storage-client/common/util"
 	"github.com/0glabs/0g-storage-client/contract"
 	"github.com/0glabs/0g-storage-client/core"
@@ -44,8 +45,8 @@ type Uploader struct {
 	logger  *logrus.Logger
 }
 
-func getShardConfigs(ctx context.Context, clients []*node.Client) ([]*node.ShardConfig, error) {
-	shardConfigs := make([]*node.ShardConfig, 0)
+func getShardConfigs(ctx context.Context, clients []*node.Client) ([]*shard.ShardConfig, error) {
+	shardConfigs := make([]*shard.ShardConfig, 0)
 	for _, client := range clients {
 		shardConfig, err := client.ZeroGStorage().GetShardConfig(ctx)
 		if err != nil {
@@ -310,6 +311,9 @@ func (uploader *Uploader) NewSegmentUploader(ctx context.Context, data core.Iter
 	shardConfigs, err := getShardConfigs(ctx, uploader.clients)
 	if err != nil {
 		return nil, err
+	}
+	if !shard.CheckReplica(shardConfigs, 1) {
+		return nil, fmt.Errorf("selected nodes cannot cover all shards")
 	}
 	clientTasks := make([][]*UploadTask, 0)
 	for clientIndex, shardConfig := range shardConfigs {
