@@ -32,7 +32,7 @@ func NewBatcher(version uint64, clients []*node.Client, flow *contract.FlowContr
 //
 // Note, this is a time consuming operation, e.g. several seconds or even longer.
 // When it comes to a time sentitive context, it should be executed in a separate go-routine.
-func (b *Batcher) Exec(ctx context.Context) error {
+func (b *Batcher) Exec(ctx context.Context, option ...transfer.UploadOption) error {
 	// build stream data
 	streamData, err := b.Build()
 	if err != nil {
@@ -53,9 +53,11 @@ func (b *Batcher) Exec(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	opt := transfer.UploadOption{
-		Tags: b.BuildTags(),
+	var opt transfer.UploadOption
+	if len(option) > 0 {
+		opt = option[0]
 	}
+	opt.Tags = b.BuildTags()
 	if err = uploader.Upload(ctx, data, opt); err != nil {
 		return errors.WithMessagef(err, "Failed to upload data")
 	}

@@ -47,7 +47,7 @@ func (c *Client) GetNodes(ctx context.Context) (nodes []shard.ShardedNode, err e
 	return
 }
 
-func (c *Client) NewUploaderFromIndexerNodes(ctx context.Context, flow *contract.FlowContract, expectedReplica uint) (*transfer.Uploader, error) {
+func (c *Client) SelectNodes(ctx context.Context, expectedReplica uint) ([]*node.Client, error) {
 	nodes, err := c.GetNodes(ctx)
 	if err != nil {
 		return nil, err
@@ -62,6 +62,14 @@ func (c *Client) NewUploaderFromIndexerNodes(ctx context.Context, flow *contract
 		if err != nil {
 			return nil, errors.WithMessage(err, fmt.Sprintf("failed to initialize storage node client with %v", shardedNode.URL))
 		}
+	}
+	return clients, nil
+}
+
+func (c *Client) NewUploaderFromIndexerNodes(ctx context.Context, flow *contract.FlowContract, expectedReplica uint) (*transfer.Uploader, error) {
+	clients, err := c.SelectNodes(ctx, expectedReplica)
+	if err != nil {
+		return nil, err
 	}
 	logger := logrus.New()
 	logger.Out = c.providerOption.Logger

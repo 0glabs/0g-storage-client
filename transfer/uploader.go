@@ -86,9 +86,6 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 		opts = option[0]
 	} else {
 		opts = make([]UploadOption, n)
-		for i := range opts {
-			opts[i].ExpectedReplica = 1
-		}
 	}
 	if len(opts) != n {
 		return common.Hash{}, nil, errors.New("datas and tags length mismatch")
@@ -165,7 +162,6 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 	stageTimer := time.Now()
 
 	var opt UploadOption
-	opt.ExpectedReplica = 1
 	if len(option) > 0 {
 		opt = option[0]
 	}
