@@ -7,15 +7,15 @@ import (
 	"gotest.tools/assert"
 )
 
-func makeShardNode(numShard uint, shardId uint) ShardedNode {
-	return ShardedNode{Config: ShardConfig{
+func makeShardNode(numShard uint, shardId uint) *ShardedNode {
+	return &ShardedNode{Config: ShardConfig{
 		NumShard: uint64(numShard),
 		ShardId:  uint64(shardId),
 	}}
 }
 
 func TestSelect(t *testing.T) {
-	shardedNodes := []ShardedNode{
+	shardedNodes := []*ShardedNode{
 		makeShardNode(4, 0),
 		makeShardNode(4, 2),
 		makeShardNode(4, 3),

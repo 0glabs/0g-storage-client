@@ -17,8 +17,10 @@ func (config *ShardConfig) IsValid() bool {
 }
 
 type ShardedNode struct {
-	URL    string
-	Config ShardConfig
+	URL    string      `json:"url"`
+	Config ShardConfig `json:"config"`
+	/// Latency RPC latency in milli seconds.
+	Latency int64 `json:"latency"`
 }
 
 type shardSegmentTreeNode struct {
@@ -64,8 +66,8 @@ func (node *shardSegmentTreeNode) insert(numShard uint, shardId uint, expectedRe
 
 // select a set of given sharded node and make the data is replicated at least expctedReplica times
 // return the selected nodes and if selection is successful
-func Select(nodes []ShardedNode, expectedReplica uint) ([]ShardedNode, bool) {
-	selected := make([]ShardedNode, 0)
+func Select(nodes []*ShardedNode, expectedReplica uint) ([]*ShardedNode, bool) {
+	selected := make([]*ShardedNode, 0)
 	if expectedReplica == 0 {
 		return selected, true
 	}
@@ -91,13 +93,13 @@ func Select(nodes []ShardedNode, expectedReplica uint) ([]ShardedNode, bool) {
 			return selected, true
 		}
 	}
-	return make([]ShardedNode, 0), false
+	return make([]*ShardedNode, 0), false
 }
 
 func CheckReplica(shardConfigs []*ShardConfig, expectedReplica uint) bool {
-	shardedNodes := make([]ShardedNode, len(shardConfigs))
+	shardedNodes := make([]*ShardedNode, len(shardConfigs))
 	for i, shardConfig := range shardConfigs {
-		shardedNodes[i] = ShardedNode{Config: ShardConfig{
+		shardedNodes[i] = &ShardedNode{Config: ShardConfig{
 			NumShard: uint64(shardConfig.NumShard),
 			ShardId:  uint64(shardConfig.ShardId),
 		}}

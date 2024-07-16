@@ -50,7 +50,7 @@ func NewClient(url string, option ...IndexerClientOption) (*Client, error) {
 }
 
 // GetNodes get node list from indexer service
-func (c *Client) GetNodes(ctx context.Context) (nodes []shard.ShardedNode, err error) {
+func (c *Client) GetNodes(ctx context.Context) (nodes ShardedNodes, err error) {
 	err = c.Provider.CallContext(ctx, &nodes, "indexer_getNodes")
 	return
 }
@@ -61,12 +61,12 @@ func (c *Client) SelectNodes(ctx context.Context, expectedReplica uint) ([]*node
 	if err != nil {
 		return nil, err
 	}
-	nodes, ok := shard.Select(nodes, expectedReplica)
+	trusted, ok := shard.Select(nodes.Trusted, expectedReplica)
 	if !ok {
 		return nil, fmt.Errorf("cannot select a subset from the returned nodes that meets the replication requirement")
 	}
-	clients := make([]*node.ZgsClient, len(nodes))
-	for i, shardedNode := range nodes {
+	clients := make([]*node.ZgsClient, len(trusted))
+	for i, shardedNode := range trusted {
 		clients[i], err = node.NewZgsClient(shardedNode.URL, c.option.ProviderOption)
 		if err != nil {
 			return nil, errors.WithMessage(err, fmt.Sprintf("failed to initialize storage node client with %v", shardedNode.URL))
