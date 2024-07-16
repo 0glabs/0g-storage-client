@@ -22,7 +22,7 @@ func main() {
 	key0 := []byte("TESTKEY")
 	key1 := []byte("TESTKEY2")
 
-	kvClient := kv.NewClient(client, nil)
+	kvClient := kv.NewClient(client)
 	iter := kvClient.NewIterator(streamId)
 
 	fmt.Println("begin to end:")

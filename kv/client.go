@@ -4,7 +4,6 @@ import (
 	"context"
 	"math"
 
-	"github.com/0glabs/0g-storage-client/contract"
 	"github.com/0glabs/0g-storage-client/node"
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -12,14 +11,12 @@ import (
 // Client is used for users to communicate with server for kv operations.
 type Client struct {
 	node *node.Client
-	flow *contract.FlowContract
 }
 
 // NewClient creates a new client for kv queries.
-func NewClient(node *node.Client, flow *contract.FlowContract) *Client {
+func NewClient(node *node.Client) *Client {
 	return &Client{
 		node: node,
-		flow: flow,
 	}
 }
 
