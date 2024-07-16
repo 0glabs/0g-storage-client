@@ -91,7 +91,7 @@ func kvWrite(*cobra.Command, []string) {
 		SkipTx:           kvWriteArgs.skipTx,
 	}
 
-	var clients []*node.Client
+	var clients []*node.ZgsClient
 	if kvWriteArgs.indexer != "" {
 		indexerClient, err := indexer.NewClient(kvWriteArgs.indexer, indexer.IndexerClientOption{LogOption: zg_common.LogOption{Logger: logrus.StandardLogger()}})
 		if err != nil {
@@ -105,7 +105,7 @@ func kvWrite(*cobra.Command, []string) {
 		if len(kvWriteArgs.node) == 0 {
 			logrus.Fatal("At least one of --node and --indexer should not be empty")
 		}
-		clients = node.MustNewClients(kvWriteArgs.node)
+		clients = node.MustNewZgsClients(kvWriteArgs.node)
 		for _, client := range clients {
 			defer client.Close()
 		}

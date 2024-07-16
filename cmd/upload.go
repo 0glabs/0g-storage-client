@@ -104,7 +104,7 @@ func upload(*cobra.Command, []string) {
 		logrus.Fatal("At least one of --node and --indexer should not be empty")
 	}
 
-	clients := node.MustNewClients(uploadArgs.node)
+	clients := node.MustNewZgsClients(uploadArgs.node)
 	for _, client := range clients {
 		defer client.Close()
 	}

@@ -12,9 +12,9 @@ import (
 
 const httpStatusInternalError = 600
 
-var allClients []*node.Client
+var allClients []*node.ZgsClient
 
-func MustServeLocal(nodes []*node.Client) {
+func MustServeLocal(nodes []*node.ZgsClient) {
 	if len(nodes) == 0 {
 		logrus.Fatal("storage nodes not configured")
 	}

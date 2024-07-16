@@ -54,3 +54,69 @@ type KeyValue struct {
 	Data    []byte `json:"data"`    // value data
 	Size    uint64 `json:"size"`    // value total size
 }
+
+// FileSyncInfo file sync information
+type FileSyncInfo struct {
+	ElapsedSecs uint64               `json:"elapsedSecs"`
+	Peers       map[PeerState]uint64 `json:"peers"`
+	Goal        FileSyncGoal         `json:"goal"`
+	NextChunks  uint64               `json:"next_chunks"`
+	State       string               `json:"state"`
+}
+
+// PeerState network peer status
+type PeerState string
+
+const (
+	PeerStateFound         PeerState = "Found"
+	PeerStateConnecting    PeerState = "Connecting"
+	PeerStateConnected     PeerState = "Connected"
+	PeerStateDisconnecting PeerState = "Disconnecting"
+	PeerStateDisconnected  PeerState = "Disconnected"
+)
+
+// FileSyncGoal File sync goal
+type FileSyncGoal struct {
+	NumChunks  uint64 `json:"numChunks"`
+	IndexStart uint64 `json:"indexStart"`
+	IndexEnd   uint64 `json:"indexEnd"`
+}
+
+// NetworkInfo network information
+type NetworkInfo struct {
+	PeerId                 string   `json:"peerId"`
+	ListenAddresses        []string `json:"listenAddresses"`
+	TotalPeers             uint64   `json:"totalPeers"`
+	BannedPeers            uint64   `json:"bannedPeers"`
+	DisconnectedPeers      uint64   `json:"disconnectedPeers"`
+	ConnectedPeers         uint64   `json:"connectedPeers"`
+	ConnectedOutgoingPeers uint64   `json:"connectedOutgoingPeers"`
+	ConnectedIncomingPeers uint64   `json:"connectedIncomingPeers"`
+}
+
+// ClientInfo client information of remote peer
+type ClientInfo struct {
+	Version  string `json:"version"`
+	OS       string `json:"os"`
+	Protocol string `json:"protocol"`
+	Agent    string `json:"agent"`
+}
+
+// PeerConnectionStatus network connection status of remote peer
+type PeerConnectionStatus struct {
+	Status         string `json:"status"` // connected, disconnecting, disconnected, banned, dialing, unknown
+	ConnectionsIn  uint8  `json:"connectionsIn"`
+	ConnectionsOut uint8  `json:"connectionsOut"`
+	LastSeenSecs   uint64 `json:"lastSeenSecs"`
+}
+
+// PeerInfo remote peer information
+type PeerInfo struct {
+	Client              ClientInfo           `json:"client"`
+	ConnectionStatus    PeerConnectionStatus `json:"connectionStatus"`
+	ListeningAddresses  []string             `json:"listeningAddresses"`
+	SeenIps             []string             `json:"seenIps"`
+	IsTrusted           bool                 `json:"isTrusted"`
+	ConnectionDirection string               `json:"connectionDirection"` // Incoming/Outgoing/empty
+	Enr                 string               `json:"enr"`                 // maybe empty
+}

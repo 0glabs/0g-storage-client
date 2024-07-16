@@ -38,7 +38,7 @@ func init() {
 }
 
 func download(*cobra.Command, []string) {
-	nodes := node.MustNewClients(downloadArgs.nodes)
+	nodes := node.MustNewZgsClients(downloadArgs.nodes)
 
 	downloader, err := transfer.NewDownloader(nodes, common.LogOption{Logger: logrus.StandardLogger()})
 	if err != nil {

@@ -5,11 +5,32 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	providers "github.com/openweb3/go-rpc-provider/provider_wrapper"
+	"github.com/sirupsen/logrus"
 )
 
 // KvClient RPC client connected to 0g kv node.
 type KvClient struct {
-	provider *providers.MiddlewarableProvider
+	*rpcClient
+}
+
+// MustNewKvClient initalize a kv client and panic on failure.
+func MustNewKvClient(url string, option ...providers.Option) *KvClient {
+	client, err := NewKvClient(url, option...)
+	if err != nil {
+		logrus.WithError(err).WithField("url", url).Fatal("Failed to create kv client")
+	}
+
+	return client
+}
+
+// NewKvClient initalize a kv client.
+func NewKvClient(url string, option ...providers.Option) (*KvClient, error) {
+	client, err := newRpcClient(url, option...)
+	if err != nil {
+		return nil, err
+	}
+
+	return &KvClient{client}, nil
 }
 
 // GetValue Call kv_getValue RPC to query the value of a key.

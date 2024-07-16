@@ -13,11 +13,9 @@ const KvClientAddr = "http://127.0.0.1:6789"
 
 func main() {
 	ctx := context.Background()
-	client, err := node.NewClient(KvClientAddr)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	client := node.MustNewKvClient(KvClientAddr)
+	defer client.Close()
+
 	streamId := ethCommon.HexToHash("0x000000000000000000000000000000000000000000000000000000000000f2bd")
 	key0 := []byte("TESTKEY")
 	key1 := []byte("TESTKEY2")

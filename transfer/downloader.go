@@ -16,13 +16,13 @@ import (
 
 // Downloader downloader to download file to storage nodes
 type Downloader struct {
-	clients []*node.Client
+	clients []*node.ZgsClient
 
 	logger *logrus.Logger
 }
 
 // NewDownloader Initialize a new downloader.
-func NewDownloader(clients []*node.Client, opts ...zg_common.LogOption) (*Downloader, error) {
+func NewDownloader(clients []*node.ZgsClient, opts ...zg_common.LogOption) (*Downloader, error) {
 	if len(clients) == 0 {
 		return nil, errors.New("storage node not specified")
 	}
@@ -64,7 +64,7 @@ func (downloader *Downloader) Download(ctx context.Context, root, filename strin
 func (downloader *Downloader) queryFile(ctx context.Context, root common.Hash) (info *node.FileInfo, err error) {
 	// do not require file finalized
 	for _, v := range downloader.clients {
-		info, err = v.ZeroGStorage().GetFileInfo(ctx, root)
+		info, err = v.GetFileInfo(ctx, root)
 		if err != nil {
 			return nil, errors.WithMessagef(err, "Failed to get file info on node %v", v.URL())
 		}

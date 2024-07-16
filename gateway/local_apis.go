@@ -81,7 +81,7 @@ func getFileStatus(c *gin.Context) (interface{}, error) {
 	var notFinalized bool
 
 	for _, client := range allClients {
-		info, err := client.ZeroGStorage().GetFileInfo(context.Background(), root)
+		info, err := client.GetFileInfo(context.Background(), root)
 		if err != nil {
 			return nil, err
 		}
@@ -117,7 +117,7 @@ func uploadLocalFile(c *gin.Context) (interface{}, error) {
 		return nil, ErrValidation.WithData("node index out of bound")
 	}
 
-	uploader, err := transfer.NewUploader(nil, []*node.Client{allClients[input.Node]}, zg_common.LogOption{Logger: logrus.StandardLogger()})
+	uploader, err := transfer.NewUploader(nil, []*node.ZgsClient{allClients[input.Node]}, zg_common.LogOption{Logger: logrus.StandardLogger()})
 	if err != nil {
 		return nil, ErrValidation.WithData(err)
 	}
@@ -153,7 +153,7 @@ func downloadFileLocal(c *gin.Context) (interface{}, error) {
 		return nil, ErrValidation.WithData("node index out of bound")
 	}
 
-	downloader, err := transfer.NewDownloader([]*node.Client{allClients[input.Node]}, zg_common.LogOption{Logger: logrus.StandardLogger()})
+	downloader, err := transfer.NewDownloader([]*node.ZgsClient{allClients[input.Node]}, zg_common.LogOption{Logger: logrus.StandardLogger()})
 	if err != nil {
 		return nil, err
 	}

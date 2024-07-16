@@ -15,13 +15,13 @@ import (
 // Batcher struct to cache and execute KV write and access control operations.
 type Batcher struct {
 	*streamDataBuilder
-	clients []*node.Client
+	clients []*node.ZgsClient
 	flow    *contract.FlowContract
 	logger  *logrus.Logger
 }
 
 // NewBatcher Initialize a new batcher. Version denotes the expected version of keys to read or write when the cached KV operations is settled on chain.
-func NewBatcher(version uint64, clients []*node.Client, flow *contract.FlowContract, opts ...zg_common.LogOption) *Batcher {
+func NewBatcher(version uint64, clients []*node.ZgsClient, flow *contract.FlowContract, opts ...zg_common.LogOption) *Batcher {
 	return &Batcher{
 		streamDataBuilder: newStreamDataBuilder(version),
 		clients:           clients,
