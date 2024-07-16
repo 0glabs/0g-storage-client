@@ -8,7 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// Client is used for users to communicate with server for kv operations.
+// Client client to query data from 0g kv node.
 type Client struct {
 	node *node.Client
 }
@@ -20,6 +20,7 @@ func NewClient(node *node.Client) *Client {
 	}
 }
 
+// NewIterator creates an iterator.
 func (c *Client) NewIterator(streamId common.Hash, version ...uint64) *Iterator {
 	var v uint64
 	v = math.MaxUint64
@@ -34,6 +35,7 @@ func (c *Client) NewIterator(streamId common.Hash, version ...uint64) *Iterator 
 	}
 }
 
+// GetValue Get value of a given key from kv node.
 func (c *Client) GetValue(ctx context.Context, streamId common.Hash, key []byte, version ...uint64) (val *node.Value, err error) {
 	var v uint64
 	v = math.MaxUint64
@@ -65,51 +67,62 @@ func (c *Client) GetValue(ctx context.Context, streamId common.Hash, key []byte,
 	}
 }
 
-// Get returns paginated value for the specified stream key and offset.
+// Get returns paginated value for the specified stream key.
 func (c *Client) Get(ctx context.Context, streamId common.Hash, key []byte, startIndex, length uint64, version ...uint64) (val *node.Value, err error) {
 	return c.node.KV().GetValue(ctx, streamId, key, startIndex, length, version...)
 }
 
+// GetNext returns paginated key-value of the next key of the specified stream key.
 func (c *Client) GetNext(ctx context.Context, streamId common.Hash, key []byte, startIndex, length uint64, inclusive bool, version ...uint64) (val *node.KeyValue, err error) {
 	return c.node.KV().GetNext(ctx, streamId, key, startIndex, length, inclusive, version...)
 }
 
+// GetPrev returns paginated key-value of the prev key of the specified stream key.
 func (c *Client) GetPrev(ctx context.Context, streamId common.Hash, key []byte, startIndex, length uint64, inclusive bool, version ...uint64) (val *node.KeyValue, err error) {
 	return c.node.KV().GetPrev(ctx, streamId, key, startIndex, length, inclusive, version...)
 }
 
+// GetFirst returns paginated key-value of the first key of the specified stream.
 func (c *Client) GetFirst(ctx context.Context, streamId common.Hash, startIndex, length uint64, version ...uint64) (val *node.KeyValue, err error) {
 	return c.node.KV().GetFirst(ctx, streamId, startIndex, length, version...)
 }
 
+// GetLast returns paginated key-value of the first key of the specified stream.
 func (c *Client) GetLast(ctx context.Context, streamId common.Hash, startIndex, length uint64, version ...uint64) (val *node.KeyValue, err error) {
 	return c.node.KV().GetLast(ctx, streamId, startIndex, length, version...)
 }
 
+// GetTransactionResult query the kv replay status of a given data by sequence id.
 func (c *Client) GetTransactionResult(ctx context.Context, txSeq uint64) (result string, err error) {
 	return c.node.KV().GetTransactionResult(ctx, txSeq)
 }
 
+// GetHoldingStreamIds query the stream ids monitered by the kv node.
 func (c *Client) GetHoldingStreamIds(ctx context.Context) (streamIds []common.Hash, err error) {
 	return c.node.KV().GetHoldingStreamIds(ctx)
 }
 
+// HasWritePermission check if the account is able to write the stream.
 func (c *Client) HasWritePermission(ctx context.Context, account common.Address, streamId common.Hash, key []byte, version ...uint64) (hasPermission bool, err error) {
 	return c.node.KV().HasWritePermission(ctx, account, streamId, key, version...)
 }
 
+// IsAdmin check if the account is the admin of the stream.
 func (c *Client) IsAdmin(ctx context.Context, account common.Address, streamId common.Hash, version ...uint64) (isAdmin bool, err error) {
 	return c.node.KV().IsAdmin(ctx, account, streamId, version...)
 }
 
+// IsSpecialKey check if the key has unique access control.
 func (c *Client) IsSpecialKey(ctx context.Context, streamId common.Hash, key []byte, version ...uint64) (isSpecialKey bool, err error) {
 	return c.node.KV().IsSpecialKey(ctx, streamId, key, version...)
 }
 
+// IsWriterOfKey check if the account can write the special key.
 func (c *Client) IsWriterOfKey(ctx context.Context, account common.Address, streamId common.Hash, key []byte, version ...uint64) (isWriter bool, err error) {
 	return c.node.KV().IsWriterOfKey(ctx, account, streamId, key, version...)
 }
 
+// IsWriterOfStream check if the account is the writer of the stream.
 func (c *Client) IsWriterOfStream(ctx context.Context, account common.Address, streamId common.Hash, version ...uint64) (isWriter bool, err error) {
 	return c.node.KV().IsWriterOfStream(ctx, account, streamId, version...)
 }

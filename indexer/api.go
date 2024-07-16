@@ -11,15 +11,18 @@ import (
 // Requires `indexerApi` implements the `Interface` interface.
 var _ Interface = (*IndexerApi)(nil)
 
+// IndexerApi indexer service configuration
 type IndexerApi struct {
 	Namespace string
 	nodes     []*node.Client
 }
 
+// NewIndexerApi creates indexer service configuration
 func NewIndexerApi(nodes []*node.Client) *IndexerApi {
 	return &IndexerApi{"indexer", nodes}
 }
 
+// GetNodes return storage node list
 func (api *IndexerApi) GetNodes(ctx context.Context) ([]shard.ShardedNode, error) {
 	var result []shard.ShardedNode
 

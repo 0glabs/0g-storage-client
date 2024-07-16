@@ -31,7 +31,7 @@ func nextAddress() common.Address {
 }
 
 func TestKVBuilder(t *testing.T) {
-	builder := NewStreamDataBuilder(0)
+	builder := newStreamDataBuilder(0)
 	hashCount = big.NewInt(0)
 	addressCount = big.NewInt(10000000)
 	keyCount = 0
@@ -65,7 +65,7 @@ func TestKVBuilder(t *testing.T) {
 	builder.RevokeSpecialWriteRole(nextHash(), nextKey(), nextAddress())
 	builder.RenounceSpecialWriteRole(nextHash(), nextKey())
 	// tags
-	tags := builder.BuildTags(true)
+	tags := builder.buildTags(true)
 	data, err := builder.Build(true)
 	assert.NoError(t, err)
 	assert.Equal(t, 2495, data.Size())

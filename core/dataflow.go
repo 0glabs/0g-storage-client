@@ -27,6 +27,7 @@ var (
 	EmptyChunkHash = crypto.Keccak256Hash(EmptyChunk)
 )
 
+// IterableData defines the data interface to upload to 0g storage network.
 type IterableData interface {
 	NumChunks() uint64
 	NumSegments() uint64
@@ -36,6 +37,7 @@ type IterableData interface {
 	Read(buf []byte, offset int64) (int, error)
 }
 
+// MerkleTree create merkle tree of the data.
 func MerkleTree(data IterableData) (*merkle.Tree, error) {
 	var builder merkle.TreeBuilder
 	initializer := &TreeBuilderInitializer{
@@ -57,10 +59,12 @@ func NumSplits(total int64, unit int) uint64 {
 	return uint64((total-1)/int64(unit) + 1)
 }
 
+// NumSegmentsPadded return the number of segments of padded data
 func NumSegmentsPadded(data IterableData) int {
 	return int((data.PaddedSize()-1)/DefaultSegmentSize + 1)
 }
 
+// SegmentRoot return the merkle root of given chunks
 func SegmentRoot(chunks []byte, emptyChunksPadded ...uint64) common.Hash {
 	var builder merkle.TreeBuilder
 
@@ -90,6 +94,7 @@ func paddingZeros(buf []byte, startOffset int, length int) {
 	}
 }
 
+// ReadAt read data at specified offset, paddedSize is the size of data after padding.
 func ReadAt(data IterableData, readSize int, offset int64, paddedSize uint64) ([]byte, error) {
 	// Reject invalid offset
 	if offset < 0 || uint64(offset) >= paddedSize {

@@ -20,61 +20,34 @@ var errKeyTooLarge = errors.New("key too large")
 
 var errKeyIsEmpty = errors.New("key is empty")
 
-type builder struct {
-	streamIds map[common.Hash]bool // to build tags
+type streamDataBuilder struct {
+	version   uint64                            // The version of all read and written keys must be less than this value when the cached KV operations are settled on chain.
+	streamIds map[common.Hash]bool              // cached stream ids, used to build tags
+	controls  []accessControl                   // cached access control operations
+	reads     map[common.Hash]map[string]bool   // cached keys to read
+	writes    map[common.Hash]map[string][]byte // cached keys to write
 }
 
-func (builder *builder) AddStreamId(streamId common.Hash) {
-	builder.streamIds[streamId] = true
-}
-
-func (builder *builder) BuildTags(sorted ...bool) []byte {
-	var ids []common.Hash
-
-	for k := range builder.streamIds {
-		ids = append(ids, k)
-	}
-
-	if len(sorted) > 0 {
-		if sorted[0] {
-			sort.SliceStable(ids, func(i, j int) bool {
-				return ids[i].Hex() < ids[j].Hex()
-			})
-		}
-	}
-
-	return CreateTags(ids...)
-}
-
-type StreamDataBuilder struct {
-	AccessControlBuilder
-	version uint64
-	reads   map[common.Hash]map[string]bool
-	writes  map[common.Hash]map[string][]byte
-}
-
-func NewStreamDataBuilder(version uint64) *StreamDataBuilder {
-	return &StreamDataBuilder{
-		AccessControlBuilder: AccessControlBuilder{
-			builder: builder{
-				streamIds: make(map[common.Hash]bool),
-			},
-			controls: make([]AccessControl, 0),
-		},
-		version: version,
-		reads:   make(map[common.Hash]map[string]bool),
-		writes:  make(map[common.Hash]map[string][]byte),
+// newStreamDataBuilder initialize a stream data builder.
+func newStreamDataBuilder(version uint64) *streamDataBuilder {
+	return &streamDataBuilder{
+		streamIds: make(map[common.Hash]bool),
+		controls:  make([]accessControl, 0),
+		version:   version,
+		reads:     make(map[common.Hash]map[string]bool),
+		writes:    make(map[common.Hash]map[string][]byte),
 	}
 }
 
-func (builder *StreamDataBuilder) Build(sorted ...bool) (*StreamData, error) {
+// Build serialize all cached KV operations to StreamData.
+func (builder *streamDataBuilder) Build(sorted ...bool) (*StreamData, error) {
 	var err error
 	data := StreamData{
 		Version: builder.version,
 	}
 
 	// controls
-	if data.Controls, err = builder.AccessControlBuilder.Build(); err != nil {
+	if data.Controls, err = builder.buildAccessControl(); err != nil {
 		return nil, err
 	}
 
@@ -88,7 +61,7 @@ func (builder *StreamDataBuilder) Build(sorted ...bool) (*StreamData, error) {
 			if len(key) == 0 {
 				return nil, errKeyIsEmpty
 			}
-			data.Reads = append(data.Reads, StreamRead{
+			data.Reads = append(data.Reads, streamRead{
 				StreamId: streamId,
 				Key:      key,
 			})
@@ -109,7 +82,7 @@ func (builder *StreamDataBuilder) Build(sorted ...bool) (*StreamData, error) {
 			if len(key) == 0 {
 				return nil, errKeyIsEmpty
 			}
-			data.Writes = append(data.Writes, StreamWrite{
+			data.Writes = append(data.Writes, streamWrite{
 				StreamId: streamId,
 				Key:      key,
 				Data:     d,
@@ -147,12 +120,36 @@ func (builder *StreamDataBuilder) Build(sorted ...bool) (*StreamData, error) {
 	return &data, nil
 }
 
-func (builder *StreamDataBuilder) SetVersion(version uint64) *StreamDataBuilder {
+func (builder *streamDataBuilder) addStreamId(streamId common.Hash) {
+	builder.streamIds[streamId] = true
+}
+
+func (builder *streamDataBuilder) buildTags(sorted ...bool) []byte {
+	var ids []common.Hash
+
+	for k := range builder.streamIds {
+		ids = append(ids, k)
+	}
+
+	if len(sorted) > 0 {
+		if sorted[0] {
+			sort.SliceStable(ids, func(i, j int) bool {
+				return ids[i].Hex() < ids[j].Hex()
+			})
+		}
+	}
+
+	return createTags(ids...)
+}
+
+// SetVersion Set the expected version of keys.
+func (builder *streamDataBuilder) SetVersion(version uint64) *streamDataBuilder {
 	builder.version = version
 	return builder
 }
 
-func (builder *StreamDataBuilder) Watch(streamId common.Hash, key []byte) *StreamDataBuilder {
+// Watch Cache a read key operation.
+func (builder *streamDataBuilder) Watch(streamId common.Hash, key []byte) *streamDataBuilder {
 	if keys, ok := builder.reads[streamId]; ok {
 		keys[hexutil.Encode(key)] = true
 	} else {
@@ -163,8 +160,9 @@ func (builder *StreamDataBuilder) Watch(streamId common.Hash, key []byte) *Strea
 	return builder
 }
 
-func (builder *StreamDataBuilder) Set(streamId common.Hash, key []byte, data []byte) *StreamDataBuilder {
-	builder.AddStreamId(streamId)
+// Set Cache a write key operation.
+func (builder *streamDataBuilder) Set(streamId common.Hash, key []byte, data []byte) *streamDataBuilder {
+	builder.addStreamId(streamId)
 
 	if keys, ok := builder.writes[streamId]; ok {
 		keys[hexutil.Encode(key)] = data
@@ -176,12 +174,7 @@ func (builder *StreamDataBuilder) Set(streamId common.Hash, key []byte, data []b
 	return builder
 }
 
-type AccessControlBuilder struct {
-	builder
-	controls []AccessControl
-}
-
-func (builder *AccessControlBuilder) Build() ([]AccessControl, error) {
+func (builder *streamDataBuilder) buildAccessControl() ([]accessControl, error) {
 	if len(builder.controls) > maxSetSize {
 		return nil, errSizeTooLarge
 	}
@@ -189,10 +182,10 @@ func (builder *AccessControlBuilder) Build() ([]AccessControl, error) {
 	return builder.controls, nil
 }
 
-func (builder *AccessControlBuilder) withControl(t AccessControlType, streamId common.Hash, account *common.Address, key []byte) *AccessControlBuilder {
-	builder.AddStreamId(streamId)
+func (builder *streamDataBuilder) withControl(t accessControlType, streamId common.Hash, account *common.Address, key []byte) *streamDataBuilder {
+	builder.addStreamId(streamId)
 
-	builder.controls = append(builder.controls, AccessControl{
+	builder.controls = append(builder.controls, accessControl{
 		Type:     t,
 		StreamId: streamId,
 		Account:  account,
@@ -202,42 +195,52 @@ func (builder *AccessControlBuilder) withControl(t AccessControlType, streamId c
 	return builder
 }
 
-func (builder *AccessControlBuilder) GrantAdminRole(streamId common.Hash, account common.Address) *AccessControlBuilder {
-	return builder.withControl(AclTypeGrantAdminRole, streamId, &account, nil)
+// GrantAdminRole Cache a GrantAdminRole operation.
+func (builder *streamDataBuilder) GrantAdminRole(streamId common.Hash, account common.Address) *streamDataBuilder {
+	return builder.withControl(aclTypeGrantAdminRole, streamId, &account, nil)
 }
 
-func (builder *AccessControlBuilder) RenounceAdminRole(streamId common.Hash) *AccessControlBuilder {
-	return builder.withControl(AclTypeRenounceAdminRole, streamId, nil, nil)
+// RenounceAdminRole Cache a RenounceAdminRole operation.
+func (builder *streamDataBuilder) RenounceAdminRole(streamId common.Hash) *streamDataBuilder {
+	return builder.withControl(aclTypeRenounceAdminRole, streamId, nil, nil)
 }
 
-func (builder *AccessControlBuilder) SetKeyToSpecial(streamId common.Hash, key []byte) *AccessControlBuilder {
-	return builder.withControl(AclTypeSetKeyToSpecial, streamId, nil, key)
+// SetKeyToSpecial Cache a SetKeyToSpecial operation.
+func (builder *streamDataBuilder) SetKeyToSpecial(streamId common.Hash, key []byte) *streamDataBuilder {
+	return builder.withControl(aclTypeSetKeyToSpecial, streamId, nil, key)
 }
 
-func (builder *AccessControlBuilder) SetKeyToNormal(streamId common.Hash, key []byte) *AccessControlBuilder {
-	return builder.withControl(AclTypeSetKeyToNormal, streamId, nil, key)
+// SetKeyToNormal Cache a SetKeyToNormal operation.
+func (builder *streamDataBuilder) SetKeyToNormal(streamId common.Hash, key []byte) *streamDataBuilder {
+	return builder.withControl(aclTypeSetKeyToNormal, streamId, nil, key)
 }
 
-func (builder *AccessControlBuilder) GrantWriteRole(streamId common.Hash, account common.Address) *AccessControlBuilder {
-	return builder.withControl(AclTypeGrantWriteRole, streamId, &account, nil)
+// GrantWriteRole Cache a GrantWriteRole operation.
+func (builder *streamDataBuilder) GrantWriteRole(streamId common.Hash, account common.Address) *streamDataBuilder {
+	return builder.withControl(aclTypeGrantWriteRole, streamId, &account, nil)
 }
 
-func (builder *AccessControlBuilder) RevokeWriteRole(streamId common.Hash, account common.Address) *AccessControlBuilder {
-	return builder.withControl(AclTypeRevokeWriteRole, streamId, &account, nil)
+// RevokeWriteRole Cache a RevokeWriteRole operation.
+func (builder *streamDataBuilder) RevokeWriteRole(streamId common.Hash, account common.Address) *streamDataBuilder {
+	return builder.withControl(aclTypeRevokeWriteRole, streamId, &account, nil)
 }
 
-func (builder *AccessControlBuilder) RenounceWriteRole(streamId common.Hash) *AccessControlBuilder {
-	return builder.withControl(AclTypeRenounceWriteRole, streamId, nil, nil)
+// RenounceWriteRole Cache a RenounceWriteRole operation.
+func (builder *streamDataBuilder) RenounceWriteRole(streamId common.Hash) *streamDataBuilder {
+	return builder.withControl(aclTypeRenounceWriteRole, streamId, nil, nil)
 }
 
-func (builder *AccessControlBuilder) GrantSpecialWriteRole(streamId common.Hash, key []byte, account common.Address) *AccessControlBuilder {
-	return builder.withControl(AclTypeGrantSpecialWriteRole, streamId, &account, key)
+// GrantSpecialWriteRole Cache a GrantSpecialWriteRole operation.
+func (builder *streamDataBuilder) GrantSpecialWriteRole(streamId common.Hash, key []byte, account common.Address) *streamDataBuilder {
+	return builder.withControl(aclTypeGrantSpecialWriteRole, streamId, &account, key)
 }
 
-func (builder *AccessControlBuilder) RevokeSpecialWriteRole(streamId common.Hash, key []byte, account common.Address) *AccessControlBuilder {
-	return builder.withControl(AclTypeRevokeSpecialWriteRole, streamId, &account, key)
+// RevokeSpecialWriteRole Cache a RevokeSpecialWriteRole operation.
+func (builder *streamDataBuilder) RevokeSpecialWriteRole(streamId common.Hash, key []byte, account common.Address) *streamDataBuilder {
+	return builder.withControl(aclTypeRevokeSpecialWriteRole, streamId, &account, key)
 }
 
-func (builder *AccessControlBuilder) RenounceSpecialWriteRole(streamId common.Hash, key []byte) *AccessControlBuilder {
-	return builder.withControl(AclTypeRenounceSpecialWriteRole, streamId, nil, key)
+// RenounceSpecialWriteRole Cache a RenounceSpecialWriteRole operation.
+func (builder *streamDataBuilder) RenounceSpecialWriteRole(streamId common.Hash, key []byte) *streamDataBuilder {
+	return builder.withControl(aclTypeRenounceSpecialWriteRole, streamId, nil, key)
 }

@@ -2,6 +2,7 @@ package core
 
 import "errors"
 
+// DataInMemory implement of IterableData, the underlying is memory data
 type DataInMemory struct {
 	underlying []byte
 	paddedSize uint64
@@ -9,6 +10,7 @@ type DataInMemory struct {
 
 var _ IterableData = (*DataInMemory)(nil)
 
+// NewDataInMemory creates DataInMemory from given data
 func NewDataInMemory(data []byte) (*DataInMemory, error) {
 	if len(data) == 0 {
 		return nil, errors.New("data is empty")

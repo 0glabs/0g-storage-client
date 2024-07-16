@@ -3,7 +3,12 @@ Go implementation for client to interact with storage nodes in 0G Storage networ
 
 # SDK
 
-Application could use a `node/Client` instance to interact with storage node via JSON RPC. Especially, use `Client.KV()` for **KV** operations.
+Following packages can help applications to integrate with 0g storage network:
+
+**[transfer](transfer)** : defines data structures and functions for transferring data between local and 0g storage.
+**[kv]**: defines structures to interact with 0g storage kv.
+**[indexer]**: select storage nodes to upload data from indexer which maintains trusted node list.
+**[node]**: defines RPC client structures to facilitate RPC interactions with 0g storage nodes and 0g key-value (KV) nodes.
 
 # CLI
 Run `go build` under the root folder to compile the executable binary.

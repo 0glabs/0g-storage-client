@@ -24,27 +24,31 @@ import (
 
 // smallFileSizeThreshold is the maximum file size to upload without log entry available on storage node.
 const smallFileSizeThreshold = int64(256 * 1024)
+
+// defaultTaskSize is the default number of data segments to upload in a single upload RPC request
 const defaultTaskSize = uint(10)
 
-var DataAlreadyExistsError = "Invalid params: root; data: already uploaded and finalized"
-var SegmentAlreadyExistsError = "segment has already been uploaded or is being uploaded"
+var dataAlreadyExistsError = "Invalid params: root; data: already uploaded and finalized"
+var segmentAlreadyExistsError = "segment has already been uploaded or is being uploaded"
 
 func isDuplicateError(msg string) bool {
-	return msg == DataAlreadyExistsError || msg == SegmentAlreadyExistsError
+	return msg == dataAlreadyExistsError || msg == segmentAlreadyExistsError
 }
 
+// UploadOption upload option for a file
 type UploadOption struct {
 	Tags             []byte // transaction tags
 	FinalityRequired bool   // wait for file finalized on uploaded nodes or not
 	TaskSize         uint   // number of segment to upload in single rpc request
 	ExpectedReplica  uint   // expected number of replications
-	SkipTx           bool   // skip sending transaction on chain
+	SkipTx           bool   // skip sending transaction on chain, this can set to true only if the data has already settled on chain before
 }
 
+// Uploader uploader to upload file to 0g storage, send on-chain transactions and transfer data to storage nodes.
 type Uploader struct {
-	flow    *contract.FlowContract
-	clients []*node.Client
-	logger  *logrus.Logger
+	flow    *contract.FlowContract // flow contract instance
+	clients []*node.Client         // 0g storage clients
+	logger  *logrus.Logger         // logger
 }
 
 func getShardConfigs(ctx context.Context, clients []*node.Client) ([]*shard.ShardConfig, error) {
@@ -62,6 +66,7 @@ func getShardConfigs(ctx context.Context, clients []*node.Client) ([]*shard.Shar
 	return shardConfigs, nil
 }
 
+// NewUploader Initialize a new uploader.
 func NewUploader(flow *contract.FlowContract, clients []*node.Client, opts ...zg_common.LogOption) (*Uploader, error) {
 	if len(clients) == 0 {
 		return nil, errors.New("storage node not specified")
@@ -88,7 +93,7 @@ func (uploader *Uploader) checkLogExistance(ctx context.Context, root common.Has
 	return true, nil
 }
 
-// upload data(batchly in 1 blockchain transaction if there are more than one files)
+// BatchUpload submit multiple data to 0g storage contract batchly in single on-chain transaction, then transfer the data to the storage nodes.
 func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.IterableData, waitForLogEntry bool, option ...[]UploadOption) (common.Hash, []common.Hash, error) {
 	stageTimer := time.Now()
 
@@ -184,6 +189,7 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 	return txHash, dataRoots, nil
 }
 
+// Upload submit data to 0g storage contract, then transfer the data to the storage nodes.
 func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, option ...UploadOption) error {
 	stageTimer := time.Now()
 
@@ -250,6 +256,7 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 	return nil
 }
 
+// SubmitLogEntry submit the data to 0g storage contract by sending a transaction
 func (uploader *Uploader) SubmitLogEntry(datas []core.IterableData, tags [][]byte, waitForReceipt bool) (common.Hash, *types.Receipt, error) {
 	// Construct submission
 	submissions := make([]contract.Submission, len(datas))
@@ -344,7 +351,7 @@ func (uploader *Uploader) waitForLogEntry(ctx context.Context, root common.Hash,
 	return nil
 }
 
-func (uploader *Uploader) newSegmentUploader(ctx context.Context, data core.IterableData, tree *merkle.Tree, expectedReplica uint, taskSize uint) (*SegmentUploader, error) {
+func (uploader *Uploader) newSegmentUploader(ctx context.Context, data core.IterableData, tree *merkle.Tree, expectedReplica uint, taskSize uint) (*segmentUploader, error) {
 	numSegments := data.NumSegments()
 	shardConfigs, err := getShardConfigs(ctx, uploader.clients)
 	if err != nil {
@@ -353,7 +360,7 @@ func (uploader *Uploader) newSegmentUploader(ctx context.Context, data core.Iter
 	if !shard.CheckReplica(shardConfigs, expectedReplica) {
 		return nil, fmt.Errorf("selected nodes cannot cover all shards")
 	}
-	clientTasks := make([][]*UploadTask, 0)
+	clientTasks := make([][]*uploadTask, 0)
 	for clientIndex, shardConfig := range shardConfigs {
 		// skip finalized nodes
 		info, _ := uploader.clients[clientIndex].ZeroGStorage().GetFileInfo(ctx, tree.Root())
@@ -362,9 +369,9 @@ func (uploader *Uploader) newSegmentUploader(ctx context.Context, data core.Iter
 		}
 		// create upload tasks
 		segIndex := shardConfig.ShardId
-		tasks := make([]*UploadTask, 0)
+		tasks := make([]*uploadTask, 0)
 		for ; segIndex < numSegments; segIndex += shardConfig.NumShard * uint64(taskSize) {
-			tasks = append(tasks, &UploadTask{
+			tasks = append(tasks, &uploadTask{
 				clientIndex: clientIndex,
 				segIndex:    segIndex,
 				numShard:    shardConfig.NumShard,
@@ -375,7 +382,7 @@ func (uploader *Uploader) newSegmentUploader(ctx context.Context, data core.Iter
 	sort.SliceStable(clientTasks, func(i, j int) bool {
 		return len(clientTasks[i]) > len(clientTasks[j])
 	})
-	tasks := make([]*UploadTask, 0)
+	tasks := make([]*uploadTask, 0)
 	if len(clientTasks) > 0 {
 		for taskIndex := 0; taskIndex < len(clientTasks[0]); taskIndex += 1 {
 			for i := 0; i < len(clientTasks) && taskIndex < len(clientTasks[i]); i += 1 {
@@ -384,7 +391,7 @@ func (uploader *Uploader) newSegmentUploader(ctx context.Context, data core.Iter
 		}
 	}
 
-	return &SegmentUploader{
+	return &segmentUploader{
 		data:     data,
 		tree:     tree,
 		clients:  uploader.clients,

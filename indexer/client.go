@@ -19,16 +19,19 @@ import (
 // Requires `Client` implements the `Interface` interface.
 var _ Interface = (*Client)(nil)
 
+// Client indexer client
 type Client struct {
 	interfaces.Provider
 	option IndexerClientOption
 }
 
+// IndexerClientOption indexer client option
 type IndexerClientOption struct {
 	ProviderOption providers.Option
-	LogOption      common.LogOption
+	LogOption      common.LogOption // log option when uploading data
 }
 
+// NewClient create new indexer client, url is indexer service url
 func NewClient(url string, option ...IndexerClientOption) (*Client, error) {
 	var opt IndexerClientOption
 	if len(option) > 0 {
@@ -46,11 +49,13 @@ func NewClient(url string, option ...IndexerClientOption) (*Client, error) {
 	}, nil
 }
 
+// GetNodes get node list from indexer service
 func (c *Client) GetNodes(ctx context.Context) (nodes []shard.ShardedNode, err error) {
 	err = c.Provider.CallContext(ctx, &nodes, "indexer_getNodes")
 	return
 }
 
+// SelectNodes get node list from indexer service and select a subset of it, which is sufficient to store expected number of replications.
 func (c *Client) SelectNodes(ctx context.Context, expectedReplica uint) ([]*node.Client, error) {
 	nodes, err := c.GetNodes(ctx)
 	if err != nil {
@@ -70,6 +75,7 @@ func (c *Client) SelectNodes(ctx context.Context, expectedReplica uint) ([]*node
 	return clients, nil
 }
 
+// NewUploaderFromIndexerNodes return an uploader with selected storage nodes from indexer service.
 func (c *Client) NewUploaderFromIndexerNodes(ctx context.Context, flow *contract.FlowContract, expectedReplica uint) (*transfer.Uploader, error) {
 	clients, err := c.SelectNodes(ctx, expectedReplica)
 	if err != nil {
@@ -78,6 +84,7 @@ func (c *Client) NewUploaderFromIndexerNodes(ctx context.Context, flow *contract
 	return transfer.NewUploader(flow, clients, c.option.LogOption)
 }
 
+// Upload submit data to 0g storage contract, then transfer the data to the storage nodes selected from indexer service.
 func (c *Client) Upload(ctx context.Context, flow *contract.FlowContract, data core.IterableData, option ...transfer.UploadOption) error {
 	expectedReplica := uint(1)
 	if len(option) > 0 {
@@ -90,6 +97,7 @@ func (c *Client) Upload(ctx context.Context, flow *contract.FlowContract, data c
 	return uploader.Upload(ctx, data, option...)
 }
 
+// BatchUpload submit multiple data to 0g storage contract batchly in single on-chain transaction, then transfer the data to the storage nodes selected from indexer service.
 func (c *Client) BatchUpload(ctx context.Context, flow *contract.FlowContract, datas []core.IterableData, waitForLogEntry bool, option ...[]transfer.UploadOption) (eth_common.Hash, []eth_common.Hash, error) {
 	expectedReplica := uint(1)
 	if len(option) > 0 {
