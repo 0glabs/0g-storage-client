@@ -6,6 +6,7 @@ import (
 	"runtime"
 
 	"github.com/0glabs/0g-storage-client/common/parallel"
+	"github.com/0glabs/0g-storage-client/common/shard"
 	"github.com/0glabs/0g-storage-client/core"
 	"github.com/0glabs/0g-storage-client/node"
 	"github.com/0glabs/0g-storage-client/transfer/download"
@@ -16,7 +17,7 @@ import (
 
 type SegmentDownloader struct {
 	clients      []*node.Client
-	shardConfigs []*node.ShardConfig
+	shardConfigs []*shard.ShardConfig
 	file         *download.DownloadingFile
 
 	withProof bool
@@ -30,7 +31,7 @@ type SegmentDownloader struct {
 
 var _ parallel.Interface = (*SegmentDownloader)(nil)
 
-func newSegmentDownloader(clients []*node.Client, shardConfigs []*node.ShardConfig, file *download.DownloadingFile, withProof bool, logger *logrus.Logger) (*SegmentDownloader, error) {
+func newSegmentDownloader(clients []*node.Client, shardConfigs []*shard.ShardConfig, file *download.DownloadingFile, withProof bool, logger *logrus.Logger) (*SegmentDownloader, error) {
 	offset := file.Metadata().Offset
 	if offset%core.DefaultSegmentSize > 0 {
 		return nil, errors.Errorf("Invalid data offset in downloading file %v", offset)

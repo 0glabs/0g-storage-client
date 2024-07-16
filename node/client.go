@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 
+	"github.com/0glabs/0g-storage-client/common/shard"
 	"github.com/ethereum/go-ethereum/common"
 	providers "github.com/openweb3/go-rpc-provider/provider_wrapper"
 	"github.com/sirupsen/logrus"
@@ -117,7 +118,7 @@ func (c *ZeroGStorageClient) DownloadSegmentWithProof(ctx context.Context, root 
 	return
 }
 
-func (c *ZeroGStorageClient) GetShardConfig(ctx context.Context) (shardConfig ShardConfig, err error) {
+func (c *ZeroGStorageClient) GetShardConfig(ctx context.Context) (shardConfig shard.ShardConfig, err error) {
 	err = c.provider.CallContext(ctx, &shardConfig, "zgs_getShardConfig")
 	return
 }

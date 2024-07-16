@@ -48,17 +48,3 @@ type KeyValue struct {
 	Data    []byte `json:"data"`    // value data
 	Size    uint64 `json:"size"`    // value total size
 }
-
-type ShardConfig struct {
-	ShardId  uint64 `json:"shardId"`
-	NumShard uint64 `json:"numShard"`
-}
-
-func (config *ShardConfig) HasSegment(segmentIndex uint64) bool {
-	return config.NumShard < 2 || segmentIndex%config.NumShard == config.ShardId
-}
-
-func (config *ShardConfig) IsValid() bool {
-	// NumShard should be larger than zero and be power of 2
-	return config.NumShard > 0 && (config.NumShard&(config.NumShard-1) == 0) && config.ShardId < config.NumShard
-}

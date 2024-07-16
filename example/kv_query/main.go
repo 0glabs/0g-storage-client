@@ -24,7 +24,7 @@ func main() {
 	key2 := []byte("TESTKEY2")
 	account := ethCommon.HexToAddress("0x578dd2bfc41bb66e9f0ae0802c613996440c9597")
 
-	kvClient := kv.NewClient(client, nil)
+	kvClient := kv.NewClient(client)
 	val, _ := kvClient.GetValue(ctx, streamId, key)
 	fmt.Println(string(val.Data))
 	val, _ = kvClient.GetValue(ctx, streamId, key1)

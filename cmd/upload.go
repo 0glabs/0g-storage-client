@@ -7,6 +7,7 @@ import (
 	"github.com/0glabs/0g-storage-client/common/blockchain"
 	"github.com/0glabs/0g-storage-client/contract"
 	"github.com/0glabs/0g-storage-client/core"
+	"github.com/0glabs/0g-storage-client/indexer"
 	"github.com/0glabs/0g-storage-client/node"
 	"github.com/0glabs/0g-storage-client/transfer"
 	"github.com/ethereum/go-ethereum/common"
@@ -24,8 +25,12 @@ var (
 		contract string
 		key      string
 
-		node []string
+		node    []string
+		indexer string
 
+		expectedReplica uint
+
+		skipTx           bool
 		finalityRequired bool
 		taskSize         uint
 	}
@@ -50,8 +55,11 @@ func init() {
 	uploadCmd.MarkFlagRequired("key")
 
 	uploadCmd.Flags().StringSliceVar(&uploadArgs.node, "node", []string{}, "ZeroGStorage storage node URL")
-	uploadCmd.MarkFlagRequired("node")
+	uploadCmd.Flags().StringVar(&uploadArgs.indexer, "indexer", "", "ZeroGStorage indexer URL")
 
+	uploadCmd.Flags().UintVar(&uploadArgs.expectedReplica, "expected-replica", 1, "expected number of replications to upload")
+
+	uploadCmd.Flags().BoolVar(&uploadArgs.skipTx, "skip-tx", false, "Skip sending the transaction on chain")
 	uploadCmd.Flags().BoolVar(&uploadArgs.finalityRequired, "finality-required", false, "Wait for file finality on nodes to upload")
 	uploadCmd.Flags().UintVar(&uploadArgs.taskSize, "task-size", 10, "Number of segments to upload in single rpc request")
 
@@ -66,6 +74,36 @@ func upload(*cobra.Command, []string) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create flow contract")
 	}
+
+	opt := transfer.UploadOption{
+		Tags:             hexutil.MustDecode(uploadArgs.tags),
+		FinalityRequired: uploadArgs.finalityRequired,
+		TaskSize:         uploadArgs.taskSize,
+		ExpectedReplica:  uploadArgs.expectedReplica,
+		SkipTx:           uploadArgs.skipTx,
+	}
+
+	file, err := core.Open(uploadArgs.file)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to open file")
+	}
+	defer file.Close()
+
+	if uploadArgs.indexer != "" {
+		indexerClient, err := indexer.NewClient(uploadArgs.indexer, indexer.IndexerClientOption{LogOption: zg_common.LogOption{Logger: logrus.StandardLogger()}})
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to initialize indexer client")
+		}
+		if err := indexerClient.Upload(context.Background(), flow, file, opt); err != nil {
+			logrus.WithError(err).Fatal("Failed to upload file")
+		}
+		return
+	}
+
+	if len(uploadArgs.node) == 0 {
+		logrus.Fatal("At least one of --node and --indexer should not be empty")
+	}
+
 	clients := node.MustNewClients(uploadArgs.node)
 	for _, client := range clients {
 		defer client.Close()
@@ -75,17 +113,6 @@ func upload(*cobra.Command, []string) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to initialize uploader")
 	}
-	opt := transfer.UploadOption{
-		Tags:             hexutil.MustDecode(uploadArgs.tags),
-		FinalityRequired: uploadArgs.finalityRequired,
-		TaskSize:         uploadArgs.taskSize,
-	}
-
-	file, err := core.Open(uploadArgs.file)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to open file")
-	}
-	defer file.Close()
 
 	if err := uploader.Upload(context.Background(), file, opt); err != nil {
 		logrus.WithError(err).Fatal("Failed to upload file")
