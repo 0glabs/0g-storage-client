@@ -64,7 +64,7 @@ func init() {
 	kvWriteCmd.MarkFlagRequired("key")
 
 	kvWriteCmd.Flags().StringSliceVar(&kvWriteArgs.node, "node", []string{}, "ZeroGStorage storage node URL")
-	kvWriteCmd.Flags().StringVar(&kvWriteArgs.indexer, "indexer", "", "ZeroGStorage storage node URL")
+	kvWriteCmd.Flags().StringVar(&kvWriteArgs.indexer, "indexer", "", "ZeroGStorage indexer URL")
 
 	kvWriteCmd.Flags().UintVar(&kvWriteArgs.expectedReplica, "expected-replica", 1, "expected number of replications to kvWrite")
 
