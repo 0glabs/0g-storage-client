@@ -15,7 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type SegmentDownloader struct {
+type segmentDownloader struct {
 	clients      []*node.Client
 	shardConfigs []*shard.ShardConfig
 	file         *download.DownloadingFile
@@ -29,9 +29,9 @@ type SegmentDownloader struct {
 	logger *logrus.Logger
 }
 
-var _ parallel.Interface = (*SegmentDownloader)(nil)
+var _ parallel.Interface = (*segmentDownloader)(nil)
 
-func newSegmentDownloader(clients []*node.Client, shardConfigs []*shard.ShardConfig, file *download.DownloadingFile, withProof bool, logger *logrus.Logger) (*SegmentDownloader, error) {
+func newSegmentDownloader(clients []*node.Client, shardConfigs []*shard.ShardConfig, file *download.DownloadingFile, withProof bool, logger *logrus.Logger) (*segmentDownloader, error) {
 	offset := file.Metadata().Offset
 	if offset%core.DefaultSegmentSize > 0 {
 		return nil, errors.Errorf("Invalid data offset in downloading file %v", offset)
@@ -39,7 +39,7 @@ func newSegmentDownloader(clients []*node.Client, shardConfigs []*shard.ShardCon
 
 	fileSize := file.Metadata().Size
 
-	return &SegmentDownloader{
+	return &segmentDownloader{
 		clients:      clients,
 		shardConfigs: shardConfigs,
 		file:         file,
@@ -55,14 +55,14 @@ func newSegmentDownloader(clients []*node.Client, shardConfigs []*shard.ShardCon
 }
 
 // Download downloads segments in parallel.
-func (downloader *SegmentDownloader) Download(ctx context.Context) error {
+func (downloader *segmentDownloader) Download(ctx context.Context) error {
 	numTasks := downloader.numSegments - downloader.segmentOffset
 
 	return parallel.Serial(ctx, downloader, int(numTasks), runtime.GOMAXPROCS(0), 0)
 }
 
 // ParallelDo implements the parallel.Interface interface.
-func (downloader *SegmentDownloader) ParallelDo(ctx context.Context, routine, task int) (interface{}, error) {
+func (downloader *segmentDownloader) ParallelDo(ctx context.Context, routine, task int) (interface{}, error) {
 	segmentIndex := downloader.segmentOffset + uint64(task)
 	startIndex := segmentIndex * core.DefaultSegmentMaxChunks
 	endIndex := startIndex + core.DefaultSegmentMaxChunks
@@ -135,11 +135,11 @@ func (downloader *SegmentDownloader) ParallelDo(ctx context.Context, routine, ta
 }
 
 // ParallelCollect implements the parallel.Interface interface.
-func (downloader *SegmentDownloader) ParallelCollect(result *parallel.Result) error {
+func (downloader *segmentDownloader) ParallelCollect(result *parallel.Result) error {
 	return downloader.file.Write(result.Value.([]byte))
 }
 
-func (downloader *SegmentDownloader) downloadWithProof(ctx context.Context, client *node.Client, root common.Hash, startIndex, endIndex uint64) ([]byte, error) {
+func (downloader *segmentDownloader) downloadWithProof(ctx context.Context, client *node.Client, root common.Hash, startIndex, endIndex uint64) ([]byte, error) {
 	segmentIndex := startIndex / core.DefaultSegmentMaxChunks
 
 	segment, err := client.ZeroGStorage().DownloadSegmentWithProof(ctx, root, segmentIndex)

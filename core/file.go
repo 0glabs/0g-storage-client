@@ -14,6 +14,7 @@ var (
 	ErrFileEmpty = errors.New("file is empty")
 )
 
+// File implement of IterableData, the underlying is a file on disk
 type File struct {
 	os.FileInfo
 	underlying *os.File
@@ -46,6 +47,7 @@ func Exists(name string) (bool, error) {
 	return true, nil
 }
 
+// Open create a File from a file on disk
 func Open(name string) (*File, error) {
 	file, err := os.Open(name)
 	if err != nil {

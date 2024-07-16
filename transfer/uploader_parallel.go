@@ -11,30 +11,30 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type UploadTask struct {
+type uploadTask struct {
 	clientIndex int
 	segIndex    uint64
 	numShard    uint64
 }
 
-type SegmentUploader struct {
+type segmentUploader struct {
 	data     core.IterableData
 	tree     *merkle.Tree
 	clients  []*node.Client
-	tasks    []*UploadTask
+	tasks    []*uploadTask
 	taskSize uint
 	logger   *logrus.Logger
 }
 
-var _ parallel.Interface = (*SegmentUploader)(nil)
+var _ parallel.Interface = (*segmentUploader)(nil)
 
 // ParallelCollect implements parallel.Interface.
-func (uploader *SegmentUploader) ParallelCollect(result *parallel.Result) error {
+func (uploader *segmentUploader) ParallelCollect(result *parallel.Result) error {
 	return nil
 }
 
 // ParallelDo implements parallel.Interface.
-func (uploader *SegmentUploader) ParallelDo(ctx context.Context, routine int, task int) (interface{}, error) {
+func (uploader *segmentUploader) ParallelDo(ctx context.Context, routine int, task int) (interface{}, error) {
 	numChunks := uploader.data.NumChunks()
 	numSegments := uploader.data.NumSegments()
 	uploadTask := uploader.tasks[task]

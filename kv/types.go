@@ -10,7 +10,7 @@ import (
 // df2ff3bb0af36c6384e6206552a4ed807f6f6a26e7d0aa6bff772ddc9d4307aa
 var StreamDomain = common.Hash(sha256.Sum256([]byte("STREAM")))
 
-func CreateTags(streamIds ...common.Hash) []byte {
+func createTags(streamIds ...common.Hash) []byte {
 	result := make([]byte, 0, common.HashLength*(1+len(streamIds)))
 
 	result = append(result, StreamDomain.Bytes()...)
@@ -22,41 +22,41 @@ func CreateTags(streamIds ...common.Hash) []byte {
 	return result
 }
 
-type AccessControlType uint8
+type accessControlType uint8
 
 const (
 	// Admin role
-	AclTypeGrantAdminRole    AccessControlType = 0x00
-	AclTypeRenounceAdminRole AccessControlType = 0x01
+	aclTypeGrantAdminRole    accessControlType = 0x00
+	aclTypeRenounceAdminRole accessControlType = 0x01
 
 	// set/unset special key
-	AclTypeSetKeyToSpecial AccessControlType = 0x10
-	AclTypeSetKeyToNormal  AccessControlType = 0x11
+	aclTypeSetKeyToSpecial accessControlType = 0x10
+	aclTypeSetKeyToNormal  accessControlType = 0x11
 
 	// Write role for all keys
-	AclTypeGrantWriteRole    AccessControlType = 0x20
-	AclTypeRevokeWriteRole   AccessControlType = 0x21
-	AclTypeRenounceWriteRole AccessControlType = 0x22
+	aclTypeGrantWriteRole    accessControlType = 0x20
+	aclTypeRevokeWriteRole   accessControlType = 0x21
+	aclTypeRenounceWriteRole accessControlType = 0x22
 
 	// Write role for special key
-	AclTypeGrantSpecialWriteRole    AccessControlType = 0x30
-	AclTypeRevokeSpecialWriteRole   AccessControlType = 0x31
-	AclTypeRenounceSpecialWriteRole AccessControlType = 0x32
+	aclTypeGrantSpecialWriteRole    accessControlType = 0x30
+	aclTypeRevokeSpecialWriteRole   accessControlType = 0x31
+	aclTypeRenounceSpecialWriteRole accessControlType = 0x32
 )
 
-type StreamRead struct {
+type streamRead struct {
 	StreamId common.Hash
 	Key      []byte
 }
 
-type StreamWrite struct {
+type streamWrite struct {
 	StreamId common.Hash
 	Key      []byte
 	Data     []byte
 }
 
-type AccessControl struct {
-	Type     AccessControlType
+type accessControl struct {
+	Type     accessControlType
 	StreamId common.Hash
 	Account  *common.Address
 	Key      []byte
@@ -64,9 +64,9 @@ type AccessControl struct {
 
 type StreamData struct {
 	Version  uint64
-	Reads    []StreamRead
-	Writes   []StreamWrite
-	Controls []AccessControl
+	Reads    []streamRead
+	Writes   []streamWrite
+	Controls []accessControl
 }
 
 // Size returns the serialized data size in bytes.

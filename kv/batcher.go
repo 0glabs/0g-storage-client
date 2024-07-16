@@ -12,25 +12,27 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Batcher struct to cache and execute KV write and access control operations.
 type Batcher struct {
-	*StreamDataBuilder
+	*streamDataBuilder
 	clients []*node.Client
 	flow    *contract.FlowContract
 	logger  *logrus.Logger
 }
 
+// NewBatcher Initialize a new batcher. Version denotes the expected version of keys to read or write when the cached KV operations is settled on chain.
 func NewBatcher(version uint64, clients []*node.Client, flow *contract.FlowContract, opts ...zg_common.LogOption) *Batcher {
 	return &Batcher{
-		StreamDataBuilder: NewStreamDataBuilder(version),
+		streamDataBuilder: newStreamDataBuilder(version),
 		clients:           clients,
 		flow:              flow,
 		logger:            zg_common.NewLogger(opts...),
 	}
 }
 
-// Exec submit the kv operations to ZeroGStorage network in batch.
-//
-// Note, this is a time consuming operation, e.g. several seconds or even longer.
+// Exec Serialize the cached KV operations in Batcher, then submit the serialized data to 0g storage network.
+// The submission process is the same as uploading a normal file. The batcher should be dropped after execution.
+// Note, this may be time consuming operation, e.g. several seconds or even longer.
 // When it comes to a time sentitive context, it should be executed in a separate go-routine.
 func (b *Batcher) Exec(ctx context.Context, option ...transfer.UploadOption) error {
 	// build stream data
@@ -57,7 +59,7 @@ func (b *Batcher) Exec(ctx context.Context, option ...transfer.UploadOption) err
 	if len(option) > 0 {
 		opt = option[0]
 	}
-	opt.Tags = b.BuildTags()
+	opt.Tags = b.buildTags()
 	if err = uploader.Upload(ctx, data, opt); err != nil {
 		return errors.WithMessagef(err, "Failed to upload data")
 	}

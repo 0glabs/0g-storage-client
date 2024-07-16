@@ -14,12 +14,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Downloader downloader to download file to storage nodes
 type Downloader struct {
 	clients []*node.Client
 
 	logger *logrus.Logger
 }
 
+// NewDownloader Initialize a new downloader.
 func NewDownloader(clients []*node.Client, opts ...zg_common.LogOption) (*Downloader, error) {
 	if len(clients) == 0 {
 		return nil, errors.New("storage node not specified")
@@ -31,6 +33,7 @@ func NewDownloader(clients []*node.Client, opts ...zg_common.LogOption) (*Downlo
 	return downloader, nil
 }
 
+// Download download data from storage nodes.
 func (downloader *Downloader) Download(ctx context.Context, root, filename string, withProof bool) error {
 	hash := common.HexToHash(root)
 
