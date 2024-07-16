@@ -61,6 +61,11 @@ func startIndexer(*cobra.Command, []string) {
 
 	api := indexer.NewIndexerApi(&manager)
 
+	logrus.WithFields(logrus.Fields{
+		"trusted":  len(trustedNodes),
+		"discover": len(storageNode) > 0,
+	}).Info("Starting indexer service ...")
+
 	util.MustServeRPC(endpoint, map[string]interface{}{
 		api.Namespace: api,
 	})

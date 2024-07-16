@@ -93,6 +93,11 @@ func (nm *NodeManager) Discover(adminClient *node.AdminClient, interval time.Dur
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
+	// discover once during startup
+	if err := nm.discoverOnce(adminClient); err != nil {
+		logrus.WithError(err).Warn("Failed to discover storage nodes during startup")
+	}
+
 	for range ticker.C {
 		if err := nm.discoverOnce(adminClient); err != nil {
 			logrus.WithError(err).Warn("Failed to discover storage nodes")
@@ -101,10 +106,18 @@ func (nm *NodeManager) Discover(adminClient *node.AdminClient, interval time.Dur
 }
 
 func (nm *NodeManager) discoverOnce(adminClient *node.AdminClient) error {
+	start := time.Now()
 	peers, err := adminClient.GetPeers(context.Background())
 	if err != nil {
 		return errors.WithMessage(err, "Failed to retrieve peers from storage node")
 	}
+
+	logrus.WithFields(logrus.Fields{
+		"peers":   len(peers),
+		"elapsed": time.Since(start),
+	}).Debug("Succeeded to retrieve peers from storage node")
+
+	var numNew int
 
 	for _, v := range peers {
 		// public ip address required
@@ -128,6 +141,14 @@ func (nm *NodeManager) discoverOnce(adminClient *node.AdminClient) error {
 		if err = nm.updateNode(url); err != nil {
 			logrus.WithError(err).WithField("url", url).Debug("Failed to update shard config")
 		}
+
+		logrus.WithField("url", url).Debug("New peer discovered")
+
+		numNew++
+	}
+
+	if numNew > 0 {
+		logrus.WithField("count", numNew).Info("New peers discovered")
 	}
 
 	return nil
@@ -176,10 +197,23 @@ func (nm *NodeManager) updateOnce() {
 		return true
 	})
 
+	if len(urls) == 0 {
+		return
+	}
+
+	logrus.WithField("nodes", len(urls)).Info("Begin to update shard config")
+
+	start := time.Now()
+
 	for _, v := range urls {
 		if err := nm.updateNode(v); err != nil {
 			logrus.WithError(err).WithField("url", v).Debug("Failed to update shard config")
 			nm.discovered.Delete(v)
 		}
 	}
+
+	logrus.WithFields(logrus.Fields{
+		"nodes":   len(urls),
+		"elapsed": time.Since(start),
+	}).Info("Completed to update shard config")
 }

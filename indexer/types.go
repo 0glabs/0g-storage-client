@@ -7,8 +7,8 @@ import (
 )
 
 type ShardedNodes struct {
-	Trusted    []*shard.ShardedNode
-	Discovered []*shard.ShardedNode
+	Trusted    []*shard.ShardedNode `json:"trusted"`
+	Discovered []*shard.ShardedNode `json:"discovered"`
 }
 
 type Interface interface {
