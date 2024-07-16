@@ -46,10 +46,8 @@ func init() {
 
 func kvRead(*cobra.Command, []string) {
 	ctx := context.Background()
-	client, err := node.NewClient(kvReadArgs.node)
-	if err != nil {
-		logrus.WithError(err).Fatal("failed to initialize kv client")
-	}
+	client := node.MustNewKvClient(kvReadArgs.node)
+	defer client.Close()
 	kvClient := kv.NewClient(client)
 	streamId := common.HexToHash(kvReadArgs.streamId)
 

@@ -28,10 +28,10 @@ func init() {
 }
 
 func startIndexer(*cobra.Command, []string) {
-	var clients []*node.Client
+	var clients []*node.ZgsClient
 
 	for _, v := range nodes {
-		client, err := node.NewClient(v)
+		client, err := node.NewZgsClient(v)
 		if err != nil {
 			logrus.WithError(err).WithField("node", v).Fatal("Failed to dail storage node")
 		}

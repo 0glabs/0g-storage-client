@@ -18,7 +18,7 @@ const PrivKey = ""
 const FlowContractAddr = ""
 
 func main() {
-	zgsClient, err := node.NewClient(ZgsClientAddr)
+	zgsClient, err := node.NewZgsClient(ZgsClientAddr)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -31,7 +31,7 @@ func main() {
 		fmt.Println(err)
 		return
 	}
-	batcher := kv.NewBatcher(math.MaxUint64, []*node.Client{zgsClient}, flow)
+	batcher := kv.NewBatcher(math.MaxUint64, []*node.ZgsClient{zgsClient}, flow)
 	batcher.Set(common.HexToHash("0x000000000000000000000000000000000000000000000000000000000000f2bd"),
 		[]byte("TESTKEY0"),
 		[]byte{69, 70, 71, 72, 73},

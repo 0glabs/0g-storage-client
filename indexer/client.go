@@ -56,7 +56,7 @@ func (c *Client) GetNodes(ctx context.Context) (nodes []shard.ShardedNode, err e
 }
 
 // SelectNodes get node list from indexer service and select a subset of it, which is sufficient to store expected number of replications.
-func (c *Client) SelectNodes(ctx context.Context, expectedReplica uint) ([]*node.Client, error) {
+func (c *Client) SelectNodes(ctx context.Context, expectedReplica uint) ([]*node.ZgsClient, error) {
 	nodes, err := c.GetNodes(ctx)
 	if err != nil {
 		return nil, err
@@ -65,9 +65,9 @@ func (c *Client) SelectNodes(ctx context.Context, expectedReplica uint) ([]*node
 	if !ok {
 		return nil, fmt.Errorf("cannot select a subset from the returned nodes that meets the replication requirement")
 	}
-	clients := make([]*node.Client, len(nodes))
+	clients := make([]*node.ZgsClient, len(nodes))
 	for i, shardedNode := range nodes {
-		clients[i], err = node.NewClient(shardedNode.URL, c.option.ProviderOption)
+		clients[i], err = node.NewZgsClient(shardedNode.URL, c.option.ProviderOption)
 		if err != nil {
 			return nil, errors.WithMessage(err, fmt.Sprintf("failed to initialize storage node client with %v", shardedNode.URL))
 		}

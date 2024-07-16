@@ -14,11 +14,11 @@ var _ Interface = (*IndexerApi)(nil)
 // IndexerApi indexer service configuration
 type IndexerApi struct {
 	Namespace string
-	nodes     []*node.Client
+	nodes     []*node.ZgsClient
 }
 
 // NewIndexerApi creates indexer service configuration
-func NewIndexerApi(nodes []*node.Client) *IndexerApi {
+func NewIndexerApi(nodes []*node.ZgsClient) *IndexerApi {
 	return &IndexerApi{"indexer", nodes}
 }
 
@@ -27,7 +27,7 @@ func (api *IndexerApi) GetNodes(ctx context.Context) ([]shard.ShardedNode, error
 	var result []shard.ShardedNode
 
 	for _, v := range api.nodes {
-		config, err := v.ZeroGStorage().GetShardConfig(ctx)
+		config, err := v.GetShardConfig(ctx)
 		if err != nil {
 			return nil, errors.WithMessage(err, "Failed to query shard config from storage node")
 		}

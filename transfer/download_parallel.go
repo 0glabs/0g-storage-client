@@ -16,7 +16,7 @@ import (
 )
 
 type segmentDownloader struct {
-	clients      []*node.Client
+	clients      []*node.ZgsClient
 	shardConfigs []*shard.ShardConfig
 	file         *download.DownloadingFile
 
@@ -31,7 +31,7 @@ type segmentDownloader struct {
 
 var _ parallel.Interface = (*segmentDownloader)(nil)
 
-func newSegmentDownloader(clients []*node.Client, shardConfigs []*shard.ShardConfig, file *download.DownloadingFile, withProof bool, logger *logrus.Logger) (*segmentDownloader, error) {
+func newSegmentDownloader(clients []*node.ZgsClient, shardConfigs []*shard.ShardConfig, file *download.DownloadingFile, withProof bool, logger *logrus.Logger) (*segmentDownloader, error) {
 	offset := file.Metadata().Offset
 	if offset%core.DefaultSegmentSize > 0 {
 		return nil, errors.Errorf("Invalid data offset in downloading file %v", offset)
@@ -86,7 +86,7 @@ func (downloader *segmentDownloader) ParallelDo(ctx context.Context, routine, ta
 		if downloader.withProof {
 			segment, err = downloader.downloadWithProof(ctx, downloader.clients[nodeIndex], root, startIndex, endIndex)
 		} else {
-			segment, err = downloader.clients[nodeIndex].ZeroGStorage().DownloadSegment(ctx, root, startIndex, endIndex)
+			segment, err = downloader.clients[nodeIndex].DownloadSegment(ctx, root, startIndex, endIndex)
 		}
 
 		if err != nil {
@@ -139,10 +139,10 @@ func (downloader *segmentDownloader) ParallelCollect(result *parallel.Result) er
 	return downloader.file.Write(result.Value.([]byte))
 }
 
-func (downloader *segmentDownloader) downloadWithProof(ctx context.Context, client *node.Client, root common.Hash, startIndex, endIndex uint64) ([]byte, error) {
+func (downloader *segmentDownloader) downloadWithProof(ctx context.Context, client *node.ZgsClient, root common.Hash, startIndex, endIndex uint64) ([]byte, error) {
 	segmentIndex := startIndex / core.DefaultSegmentMaxChunks
 
-	segment, err := client.ZeroGStorage().DownloadSegmentWithProof(ctx, root, segmentIndex)
+	segment, err := client.DownloadSegmentWithProof(ctx, root, segmentIndex)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to download segment with proof from storage node")
 	}

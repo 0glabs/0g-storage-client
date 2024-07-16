@@ -47,14 +47,14 @@ type UploadOption struct {
 // Uploader uploader to upload file to 0g storage, send on-chain transactions and transfer data to storage nodes.
 type Uploader struct {
 	flow    *contract.FlowContract // flow contract instance
-	clients []*node.Client         // 0g storage clients
+	clients []*node.ZgsClient      // 0g storage clients
 	logger  *logrus.Logger         // logger
 }
 
-func getShardConfigs(ctx context.Context, clients []*node.Client) ([]*shard.ShardConfig, error) {
+func getShardConfigs(ctx context.Context, clients []*node.ZgsClient) ([]*shard.ShardConfig, error) {
 	shardConfigs := make([]*shard.ShardConfig, 0)
 	for _, client := range clients {
-		shardConfig, err := client.ZeroGStorage().GetShardConfig(ctx)
+		shardConfig, err := client.GetShardConfig(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -67,7 +67,7 @@ func getShardConfigs(ctx context.Context, clients []*node.Client) ([]*shard.Shar
 }
 
 // NewUploader Initialize a new uploader.
-func NewUploader(flow *contract.FlowContract, clients []*node.Client, opts ...zg_common.LogOption) (*Uploader, error) {
+func NewUploader(flow *contract.FlowContract, clients []*node.ZgsClient, opts ...zg_common.LogOption) (*Uploader, error) {
 	if len(clients) == 0 {
 		return nil, errors.New("storage node not specified")
 	}
@@ -81,7 +81,7 @@ func NewUploader(flow *contract.FlowContract, clients []*node.Client, opts ...zg
 
 func (uploader *Uploader) checkLogExistance(ctx context.Context, root common.Hash) (bool, error) {
 	for _, client := range uploader.clients {
-		info, err := client.ZeroGStorage().GetFileInfo(ctx, root)
+		info, err := client.GetFileInfo(ctx, root)
 		if err != nil {
 			return false, errors.WithMessage(err, fmt.Sprintf("Failed to get file info from storage node %v", client.URL()))
 		}
@@ -314,7 +314,7 @@ func (uploader *Uploader) waitForLogEntry(ctx context.Context, root common.Hash,
 
 		ok := true
 		for _, client := range uploader.clients {
-			info, err := client.ZeroGStorage().GetFileInfo(ctx, root)
+			info, err := client.GetFileInfo(ctx, root)
 			if err != nil {
 				return errors.WithMessage(err, fmt.Sprintf("Failed to get file info from storage node %v", client.URL()))
 			}
@@ -322,7 +322,7 @@ func (uploader *Uploader) waitForLogEntry(ctx context.Context, root common.Hash,
 			if info == nil {
 				fields := logrus.Fields{}
 				if receipt != nil {
-					if status, err := client.ZeroGStorage().GetStatus(ctx); err == nil {
+					if status, err := client.GetStatus(ctx); err == nil {
 						fields["txBlockNumber"] = receipt.BlockNumber
 						fields["zgsNodeSyncHeight"] = status.LogSyncHeight
 					}
@@ -363,7 +363,7 @@ func (uploader *Uploader) newSegmentUploader(ctx context.Context, data core.Iter
 	clientTasks := make([][]*uploadTask, 0)
 	for clientIndex, shardConfig := range shardConfigs {
 		// skip finalized nodes
-		info, _ := uploader.clients[clientIndex].ZeroGStorage().GetFileInfo(ctx, tree.Root())
+		info, _ := uploader.clients[clientIndex].GetFileInfo(ctx, tree.Root())
 		if info != nil && info.Finalized {
 			continue
 		}
