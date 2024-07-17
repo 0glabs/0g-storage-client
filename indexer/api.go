@@ -20,8 +20,8 @@ func NewIndexerApi(manager *NodeManager) *IndexerApi {
 	return &IndexerApi{"indexer", manager}
 }
 
-// GetNodes return storage node list
-func (api *IndexerApi) GetNodes(ctx context.Context) (ShardedNodes, error) {
+// GetShardedNodes return storage node list
+func (api *IndexerApi) GetShardedNodes(ctx context.Context) (ShardedNodes, error) {
 	trusted, err := api.manager.Trusted()
 	if err != nil {
 		return ShardedNodes{}, errors.WithMessage(err, "Failed to retrieve trusted nodes")
@@ -31,4 +31,40 @@ func (api *IndexerApi) GetNodes(ctx context.Context) (ShardedNodes, error) {
 		Trusted:    trusted,
 		Discovered: api.manager.Discovered(),
 	}, nil
+}
+
+// GetNodes return storage nodes with IP location information.
+func (api *IndexerApi) GetNodes(ctx context.Context) ([]*NodeInfo, error) {
+	var nodes []*NodeInfo
+
+	trusted, err := api.manager.Trusted()
+	if err != nil {
+		return nil, errors.WithMessage(err, "Failed to retrieve trusted nodes")
+	}
+
+	for _, v := range trusted {
+		node := &NodeInfo{
+			ShardedNode: v,
+		}
+
+		if loc, ok := api.manager.Location(v.URL); ok {
+			node.Location = loc
+		}
+
+		nodes = append(nodes, node)
+	}
+
+	for _, v := range api.manager.Discovered() {
+		node := &NodeInfo{
+			ShardedNode: v,
+		}
+
+		if loc, ok := api.manager.Location(v.URL); ok {
+			node.Location = loc
+		}
+
+		nodes = append(nodes, node)
+	}
+
+	return nodes, nil
 }

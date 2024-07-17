@@ -11,6 +11,13 @@ type ShardedNodes struct {
 	Discovered []*shard.ShardedNode `json:"discovered"`
 }
 
+type NodeInfo struct {
+	*shard.ShardedNode
+	Location *IPLocation `json:"location"`
+}
+
 type Interface interface {
-	GetNodes(ctx context.Context) (ShardedNodes, error)
+	GetShardedNodes(ctx context.Context) (ShardedNodes, error)
+
+	GetNodes(ctx context.Context) ([]*NodeInfo, error)
 }
