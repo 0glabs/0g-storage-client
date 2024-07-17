@@ -138,11 +138,16 @@ func (nm *NodeManager) discoverOnce(adminClient *node.AdminClient) error {
 		}
 
 		// update shard config
-		if err = nm.updateNode(url); err != nil {
+		node, err := nm.updateNode(url)
+		if err != nil {
 			logrus.WithError(err).WithField("url", url).Debug("Failed to update shard config")
+		} else {
+			logrus.WithFields(logrus.Fields{
+				"url":     url,
+				"shard":   node.Config,
+				"latency": node.Latency,
+			}).Debug("New peer discovered")
 		}
-
-		logrus.WithField("url", url).Debug("New peer discovered")
 
 		numNew++
 	}
@@ -154,30 +159,33 @@ func (nm *NodeManager) discoverOnce(adminClient *node.AdminClient) error {
 	return nil
 }
 
-func (nm *NodeManager) updateNode(url string) error {
+func (nm *NodeManager) updateNode(url string) (*shard.ShardedNode, error) {
 	zgsClient, err := node.NewZgsClient(url, ZgsClientOpt)
 	if err != nil {
-		return errors.WithMessage(err, "Failed to create zgs client")
+		return nil, errors.WithMessage(err, "Failed to create zgs client")
 	}
 
 	start := time.Now()
 
 	config, err := zgsClient.GetShardConfig(context.Background())
 	if err != nil {
-		return errors.WithMessage(err, "Failed to retrieve shard config from storage node")
+		return nil, errors.WithMessage(err, "Failed to retrieve shard config from storage node")
 	}
 
 	if !config.IsValid() {
-		return errors.Errorf("Invalid shard config retrieved %v", config)
+		return nil, errors.Errorf("Invalid shard config retrieved %v", config)
 	}
 
-	nm.discovered.Store(url, &shard.ShardedNode{
+	node := &shard.ShardedNode{
 		URL:     url,
 		Config:  config,
 		Latency: time.Since(start).Milliseconds(),
-	})
+		Since:   time.Now().Unix(),
+	}
 
-	return nil
+	nm.discovered.Store(url, node)
+
+	return node, nil
 }
 
 // Update update shard config of discovered peers.
@@ -206,7 +214,7 @@ func (nm *NodeManager) updateOnce() {
 	start := time.Now()
 
 	for _, v := range urls {
-		if err := nm.updateNode(v); err != nil {
+		if _, err := nm.updateNode(v); err != nil {
 			logrus.WithError(err).WithField("url", v).Debug("Failed to update shard config")
 			nm.discovered.Delete(v)
 		}

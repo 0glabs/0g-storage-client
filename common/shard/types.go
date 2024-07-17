@@ -1,6 +1,8 @@
 package shard
 
-import "sort"
+import (
+	"sort"
+)
 
 type ShardConfig struct {
 	ShardId  uint64 `json:"shardId"`
@@ -19,8 +21,10 @@ func (config *ShardConfig) IsValid() bool {
 type ShardedNode struct {
 	URL    string      `json:"url"`
 	Config ShardConfig `json:"config"`
-	/// Latency RPC latency in milli seconds.
+	// Latency RPC latency in milli seconds.
 	Latency int64 `json:"latency"`
+	// Since last updated timestamp.
+	Since int64 `json:"since"`
 }
 
 type shardSegmentTreeNode struct {
