@@ -19,3 +19,4 @@
 .vscode/
 
 0g-storage-client
+.ip-location-cache.json

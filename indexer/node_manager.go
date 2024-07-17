@@ -202,7 +202,7 @@ func (nm *NodeManager) updateNode(url string) (*shard.ShardedNode, error) {
 		if err != nil {
 			logrus.WithError(err).WithField("ip", ip).Warn("Failed to query IP location")
 		} else {
-			nm.locations.Store(url, &loc)
+			nm.locations.Store(url, loc)
 			logrus.WithFields(logrus.Fields{
 				"ip":       ip,
 				"timezone": loc.Timezone,
