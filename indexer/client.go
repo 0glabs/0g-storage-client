@@ -50,14 +50,20 @@ func NewClient(url string, option ...IndexerClientOption) (*Client, error) {
 }
 
 // GetNodes get node list from indexer service
-func (c *Client) GetNodes(ctx context.Context) (nodes ShardedNodes, err error) {
+func (c *Client) GetShardedNodes(ctx context.Context) (nodes ShardedNodes, err error) {
+	err = c.Provider.CallContext(ctx, &nodes, "indexer_getShardedNodes")
+	return
+}
+
+// GetNodes return storage nodes with IP location information.
+func (c *Client) GetNodes(ctx context.Context) (nodes []*NodeInfo, err error) {
 	err = c.Provider.CallContext(ctx, &nodes, "indexer_getNodes")
 	return
 }
 
 // SelectNodes get node list from indexer service and select a subset of it, which is sufficient to store expected number of replications.
 func (c *Client) SelectNodes(ctx context.Context, expectedReplica uint) ([]*node.ZgsClient, error) {
-	nodes, err := c.GetNodes(ctx)
+	nodes, err := c.GetShardedNodes(ctx)
 	if err != nil {
 		return nil, err
 	}
