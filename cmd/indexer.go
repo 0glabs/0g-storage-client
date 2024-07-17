@@ -18,6 +18,9 @@ var (
 	discoverInterval time.Duration
 	updateInterval   time.Duration
 
+	ipLocationCacheFile       string
+	ipLocationPersistInterval time.Duration
+
 	indexerCmd = &cobra.Command{
 		Use:   "indexer",
 		Short: "Start indexer service",
@@ -29,8 +32,10 @@ func init() {
 	indexerCmd.Flags().StringSliceVar(&trustedNodes, "trusted", nil, "Trusted storage node URLs that separated by comma")
 	indexerCmd.Flags().StringVar(&storageNode, "node", "", "Storage node to discover peers in P2P network")
 	indexerCmd.Flags().StringVar(&endpoint, "endpoint", ":12345", "Indexer RPC endpoint")
-	indexerCmd.Flags().DurationVar(&discoverInterval, "discover-interval", 5*time.Minute, "Interval to discover peers in network")
-	indexerCmd.Flags().DurationVar(&updateInterval, "update-interval", 5*time.Minute, "Interval to update shard config of discovered peers")
+	indexerCmd.Flags().DurationVar(&discoverInterval, "discover-interval", 10*time.Minute, "Interval to discover peers in network")
+	indexerCmd.Flags().DurationVar(&updateInterval, "update-interval", 10*time.Minute, "Interval to update shard config of discovered peers")
+	indexerCmd.Flags().StringVar(&ipLocationCacheFile, "ip-location-cache-file", ".ip-location-cache.json", "File name to cache ip locations")
+	indexerCmd.Flags().DurationVar(&ipLocationPersistInterval, "ip-location-cache-interval", 10*time.Minute, "Interval to write ip locations to cache file")
 
 	rootCmd.AddCommand(indexerCmd)
 }
@@ -39,6 +44,9 @@ func startIndexer(*cobra.Command, []string) {
 	if len(trustedNodes) == 0 && len(storageNode) == 0 {
 		logrus.Fatal("Neither 'trusted' nor 'node' specified")
 	}
+
+	// initialize ip location cache at first
+	indexer.StartIPLocationCache(ipLocationCacheFile, ipLocationPersistInterval)
 
 	var manager indexer.NodeManager
 
