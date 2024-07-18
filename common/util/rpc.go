@@ -4,6 +4,7 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/openweb3/go-rpc-provider"
 	"github.com/sirupsen/logrus"
 )
@@ -20,8 +21,8 @@ func MustServeRPC(endpoint string, apis map[string]interface{}) {
 
 	httpServer := http.Server{
 		// "github.com/ethereum/go-ethereum/node"
-		// Handler: node.NewHTTPHandlerStack(handler, []string{"*"}, []string{"*"}),
-		Handler: handler,
+		Handler: node.NewHTTPHandlerStack(handler, []string{"*"}, []string{"*"}),
+		// Handler: handler,
 	}
 
 	listener, err := net.Listen("tcp", endpoint)
