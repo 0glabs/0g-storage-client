@@ -13,6 +13,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var IPLocationToken = ""
+
 var ipLocationCache sync.Map // ip -> *IPLocation
 
 type IPLocation struct {
@@ -39,7 +41,13 @@ func QueryLocation(ip string) (*IPLocation, error) {
 		return loc.(*IPLocation), nil
 	}
 
-	url := fmt.Sprintf("http://ipinfo.io/%v/json", ip)
+	var url string
+	if len(IPLocationToken) == 0 {
+		url = fmt.Sprintf("http://ipinfo.io/%v/json", ip)
+	} else {
+		url = fmt.Sprintf("http://ipinfo.io/%v/json?token=%v", ip, IPLocationToken)
+	}
+
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, errors.WithMessagef(err, "Failed to http GET from %v", url)
