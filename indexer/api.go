@@ -33,38 +33,7 @@ func (api *IndexerApi) GetShardedNodes(ctx context.Context) (ShardedNodes, error
 	}, nil
 }
 
-// GetNodes return storage nodes with IP location information.
-func (api *IndexerApi) GetNodes(ctx context.Context) ([]*NodeInfo, error) {
-	var nodes []*NodeInfo
-
-	trusted, err := api.manager.Trusted()
-	if err != nil {
-		return nil, errors.WithMessage(err, "Failed to retrieve trusted nodes")
-	}
-
-	for _, v := range trusted {
-		node := &NodeInfo{
-			ShardedNode: v,
-		}
-
-		if loc, ok := api.manager.Location(v.URL); ok {
-			node.Location = loc
-		}
-
-		nodes = append(nodes, node)
-	}
-
-	for _, v := range api.manager.Discovered() {
-		node := &NodeInfo{
-			ShardedNode: v,
-		}
-
-		if loc, ok := api.manager.Location(v.URL); ok {
-			node.Location = loc
-		}
-
-		nodes = append(nodes, node)
-	}
-
-	return nodes, nil
+// GetNodeLocations return IP locations of all nodes.
+func (api *IndexerApi) GetNodeLocations(ctx context.Context) (map[string]*IPLocation, error) {
+	return CachedLocations(), nil
 }
