@@ -13,9 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var IPLocationToken = ""
-
-var ipLocationCache sync.Map // ip -> *IPLocation
+var defaultIPLocationManager = IPLocationManager{}
 
 type IPLocation struct {
 	City     string `json:"city"`
@@ -25,27 +23,56 @@ type IPLocation struct {
 	Timezone string `json:"timezone"`
 }
 
-func CachedLocations() map[string]*IPLocation {
-	locations := make(map[string]*IPLocation)
+type IPLocationConfig struct {
+	CacheFile          string
+	CacheWriteInterval time.Duration
+	AccessToken        string
+}
 
-	ipLocationCache.Range(func(key, value any) bool {
-		locations[key.(string)] = value.(*IPLocation)
+// IPLocationManager manages IP locations.
+type IPLocationManager struct {
+	config IPLocationConfig
+	items  sync.Map
+}
+
+// InitDefaultIPLocationManager initializes the default `IPLocationManager`.
+func InitDefaultIPLocationManager(config IPLocationConfig) {
+	defaultIPLocationManager.config = config
+
+	// try load from cached IP locations
+	n, err := defaultIPLocationManager.Read()
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to read cached IP locations")
+	} else {
+		logrus.WithField("count", n).Info("Succeeded to read cached IP locations")
+	}
+
+	go defaultIPLocationManager.Write()
+}
+
+// All returns all cached IP locations.
+func (manager *IPLocationManager) All() map[string]*IPLocation {
+	all := make(map[string]*IPLocation)
+
+	manager.items.Range(func(key, value any) bool {
+		all[key.(string)] = value.(*IPLocation)
 		return true
 	})
 
-	return locations
+	return all
 }
 
-func QueryLocation(ip string) (*IPLocation, error) {
-	if loc, ok := ipLocationCache.Load(ip); ok {
+// Query returns the cached IP location if any. Otherwise, retrieve from web API.
+func (manager *IPLocationManager) Query(ip string) (*IPLocation, error) {
+	if loc, ok := manager.items.Load(ip); ok {
 		return loc.(*IPLocation), nil
 	}
 
 	var url string
-	if len(IPLocationToken) == 0 {
+	if len(manager.config.AccessToken) == 0 {
 		url = fmt.Sprintf("http://ipinfo.io/%v/json", ip)
 	} else {
-		url = fmt.Sprintf("http://ipinfo.io/%v/json?token=%v", ip, IPLocationToken)
+		url = fmt.Sprintf("http://ipinfo.io/%v/json?token=%v", ip, manager.config.AccessToken)
 	}
 
 	resp, err := http.Get(url)
@@ -59,89 +86,74 @@ func QueryLocation(ip string) (*IPLocation, error) {
 		return nil, errors.WithMessage(err, "Failed to read http response body")
 	}
 
-	var location IPLocation
-	if err = json.Unmarshal(body, &location); err != nil {
+	var loc IPLocation
+	if err = json.Unmarshal(body, &loc); err != nil {
 		return nil, errors.WithMessage(err, "Failed to unmarshal Location data")
 	}
 
 	logger := logrus.WithFields(logrus.Fields{
 		"ip":       ip,
-		"timezone": location.Timezone,
-		"country":  location.Country,
-		"city":     location.City,
-		"loc":      location.Location,
+		"timezone": loc.Timezone,
+		"country":  loc.Country,
+		"city":     loc.City,
+		"loc":      loc.Location,
 	})
 
-	if len(location.Timezone) > 0 && len(location.Region) > 0 && len(location.Country) > 0 && len(location.City) > 0 && len(location.Location) > 0 {
-		ipLocationCache.Store(ip, &location)
+	if len(loc.Timezone) > 0 && len(loc.Region) > 0 && len(loc.Country) > 0 && len(loc.City) > 0 && len(loc.Location) > 0 {
+		manager.items.Store(ip, &loc)
 		logger.Debug("New IP location detected")
 	} else {
 		logger.Warn("New IP location detected with partial fields")
 	}
 
-	return &location, nil
+	return &loc, nil
 }
 
-func StartIPLocationCache(filename string, persistInterval time.Duration) {
-	n, err := readIPLocationCache(filename)
-	if err != nil {
-		logrus.WithError(err).Warn("Failed to read IP location cache")
-	} else {
-		logrus.WithField("ips", n).Info("Succeeded to read IP location cache")
-	}
-
-	go writeIPLocationCache(filename, persistInterval)
-}
-
-func readIPLocationCache(filename string) (int, error) {
-	data, err := os.ReadFile(filename)
+// Read reads IP locations from cache file.
+func (manager *IPLocationManager) Read() (int, error) {
+	data, err := os.ReadFile(manager.config.CacheFile)
 	if os.IsNotExist(err) {
 		return 0, nil
 	}
 
 	if err != nil {
-		return 0, errors.WithMessagef(err, "Failed to read file %v", filename)
+		return 0, errors.WithMessagef(err, "Failed to read file '%v'", manager.config.CacheFile)
 	}
 
-	var ips map[string]*IPLocation
-	if err = json.Unmarshal(data, &ips); err != nil {
+	var cached map[string]*IPLocation
+	if err = json.Unmarshal(data, &cached); err != nil {
 		return 0, errors.WithMessage(err, "Failed to unmarshal data")
 	}
 
-	for ip, loc := range ips {
-		ipLocationCache.Store(ip, loc)
+	for ip, loc := range cached {
+		manager.items.Store(ip, loc)
 	}
 
-	return len(ips), nil
+	return len(cached), nil
 }
 
-func writeIPLocationCache(filename string, persistInterval time.Duration) {
-	ticker := time.NewTicker(persistInterval)
+// Write writes cached IP locations to file periodically.
+func (manager *IPLocationManager) Write() {
+	ticker := time.NewTicker(manager.config.CacheWriteInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		ips := map[string]*IPLocation{}
-
-		ipLocationCache.Range(func(key, value any) bool {
-			ips[key.(string)] = value.(*IPLocation)
-			return true
-		})
-
-		if len(ips) == 0 {
+		all := manager.All()
+		if len(all) == 0 {
 			continue
 		}
 
-		data, err := json.MarshalIndent(ips, "", "    ")
+		data, err := json.MarshalIndent(all, "", "    ")
 		if err != nil {
-			logrus.WithError(err).Warn("Failed to marshal ip locations")
+			logrus.WithError(err).Warn("Failed to marshal IP locations")
 			continue
 		}
 
-		if err = os.WriteFile(filename, data, os.ModePerm); err != nil {
-			logrus.WithError(err).Warn("Failed to write ip locations to cache file")
+		if err = os.WriteFile(manager.config.CacheFile, data, os.ModePerm); err != nil {
+			logrus.WithError(err).Warn("Failed to write IP locations to file")
 			continue
 		}
 
-		logrus.WithField("ips", len(ips)).Info("Succeeded to cache IP locations")
+		logrus.WithField("count", len(all)).Info("Succeeded to write IP locations to file")
 	}
 }

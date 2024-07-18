@@ -14,14 +14,54 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var ZgsClientOpt = providers.Option{
-	RequestTimeout: 3 * time.Second,
+var (
+	defaultZgsClientOpt = providers.Option{
+		RequestTimeout: 3 * time.Second,
+	}
+
+	defaultNodeManager = NodeManager{}
+)
+
+type NodeManagerConfig struct {
+	TrustedNodes []string
+
+	DiscoveryNode     string
+	DiscoveryInterval time.Duration
+
+	UpdateInterval time.Duration
 }
 
 // NodeManager manages trusted storage nodes and auto discover peers from network.
 type NodeManager struct {
+	config     NodeManagerConfig
 	trusted    sync.Map // url -> *node.ZgsClient
 	discovered sync.Map // url -> *shard.ShardedNode
+}
+
+func InitDefaultNodeManager(config NodeManagerConfig) (closable func(), err error) {
+	defaultNodeManager.config = config
+
+	if err = defaultNodeManager.AddTrustedNodes(config.TrustedNodes...); err != nil {
+		return nil, errors.WithMessage(err, "Failed to add trusted nodes")
+	}
+
+	if len(config.DiscoveryNode) == 0 {
+		return defaultNodeManager.Close, nil
+	}
+
+	adminClient, err := node.NewAdminClient(config.DiscoveryNode, defaultZgsClientOpt)
+	if err != nil {
+		defaultNodeManager.Close()
+		return nil, errors.WithMessage(err, "Failed to create admin client")
+	}
+
+	go defaultNodeManager.Discover(adminClient)
+	go defaultNodeManager.Update()
+
+	return func() {
+		defaultNodeManager.Close()
+		adminClient.Close()
+	}, nil
 }
 
 // Trusted returns trusted sharded nodes.
@@ -90,7 +130,7 @@ func parseIP(url string) string {
 func (nm *NodeManager) AddTrustedNodes(nodes ...string) error {
 	for _, v := range nodes {
 		ip := parseIP(v)
-		if _, err := QueryLocation(ip); err != nil {
+		if _, err := defaultIPLocationManager.Query(ip); err != nil {
 			logrus.WithError(err).WithField("ip", ip).Warn("Failed to query IP location")
 		}
 
@@ -113,8 +153,8 @@ func (nm *NodeManager) Close() {
 }
 
 // Discover discover peers from storage node periodically.
-func (nm *NodeManager) Discover(adminClient *node.AdminClient, interval time.Duration) {
-	ticker := time.NewTicker(interval)
+func (nm *NodeManager) Discover(adminClient *node.AdminClient) {
+	ticker := time.NewTicker(nm.config.DiscoveryInterval)
 	defer ticker.Stop()
 
 	// discover once during startup
@@ -186,14 +226,15 @@ func (nm *NodeManager) discoverOnce(adminClient *node.AdminClient) error {
 func (nm *NodeManager) updateNode(url string) (*shard.ShardedNode, error) {
 	// query ip location at first
 	ip := parseIP(url)
-	if _, err := QueryLocation(ip); err != nil {
+	if _, err := defaultIPLocationManager.Query(ip); err != nil {
 		logrus.WithError(err).WithField("ip", ip).Warn("Failed to query IP location")
 	}
 
-	zgsClient, err := node.NewZgsClient(url, ZgsClientOpt)
+	zgsClient, err := node.NewZgsClient(url, defaultZgsClientOpt)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to create zgs client")
 	}
+	defer zgsClient.Close()
 
 	start := time.Now()
 
@@ -219,8 +260,8 @@ func (nm *NodeManager) updateNode(url string) (*shard.ShardedNode, error) {
 }
 
 // Update update shard config of discovered peers.
-func (nm *NodeManager) Update(interval time.Duration) {
-	ticker := time.NewTicker(interval)
+func (nm *NodeManager) Update() {
+	ticker := time.NewTicker(nm.config.UpdateInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {
