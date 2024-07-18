@@ -56,8 +56,8 @@ func (c *Client) GetShardedNodes(ctx context.Context) (nodes ShardedNodes, err e
 }
 
 // GetNodes return storage nodes with IP location information.
-func (c *Client) GetNodes(ctx context.Context) (nodes []*NodeInfo, err error) {
-	err = c.Provider.CallContext(ctx, &nodes, "indexer_getNodes")
+func (c *Client) GetNodeLocations(ctx context.Context) (locations map[string]*IPLocation, err error) {
+	err = c.Provider.CallContext(ctx, &locations, "indexer_getNodeLocations")
 	return
 }
 

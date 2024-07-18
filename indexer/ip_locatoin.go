@@ -13,7 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var ipLocationCache sync.Map
+var ipLocationCache sync.Map // ip -> *IPLocation
 
 type IPLocation struct {
 	City     string `json:"city"`
@@ -21,6 +21,17 @@ type IPLocation struct {
 	Country  string `json:"country"`
 	Location string `json:"loc"`
 	Timezone string `json:"timezone"`
+}
+
+func CachedLocations() map[string]*IPLocation {
+	locations := make(map[string]*IPLocation)
+
+	ipLocationCache.Range(func(key, value any) bool {
+		locations[key.(string)] = value.(*IPLocation)
+		return true
+	})
+
+	return locations
 }
 
 func QueryLocation(ip string) (*IPLocation, error) {
@@ -46,6 +57,14 @@ func QueryLocation(ip string) (*IPLocation, error) {
 	}
 
 	ipLocationCache.Store(ip, &location)
+
+	logrus.WithFields(logrus.Fields{
+		"ip":       ip,
+		"timezone": location.Timezone,
+		"country":  location.Country,
+		"city":     location.City,
+		"loc":      location.Location,
+	}).Debug("New IP location detected")
 
 	return &location, nil
 }

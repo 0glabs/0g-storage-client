@@ -22,15 +22,6 @@ var ZgsClientOpt = providers.Option{
 type NodeManager struct {
 	trusted    sync.Map // url -> *node.ZgsClient
 	discovered sync.Map // url -> *shard.ShardedNode
-	locations  sync.Map // url -> *IPLocation
-}
-
-func (nm *NodeManager) Location(url string) (*IPLocation, bool) {
-	if loc, ok := nm.locations.Load(url); ok {
-		return loc.(*IPLocation), true
-	}
-
-	return nil, false
 }
 
 // Trusted returns trusted sharded nodes.
@@ -170,6 +161,12 @@ func (nm *NodeManager) discoverOnce(adminClient *node.AdminClient) error {
 }
 
 func (nm *NodeManager) updateNode(url string) (*shard.ShardedNode, error) {
+	// query ip location at first
+	ip := strings.TrimSuffix(strings.TrimPrefix(url, "http://"), ":5678")
+	if _, err := QueryLocation(ip); err != nil {
+		logrus.WithError(err).WithField("ip", ip).Warn("Failed to query IP location")
+	}
+
 	zgsClient, err := node.NewZgsClient(url, ZgsClientOpt)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to create zgs client")
@@ -194,24 +191,6 @@ func (nm *NodeManager) updateNode(url string) (*shard.ShardedNode, error) {
 	}
 
 	nm.discovered.Store(url, node)
-
-	// query ip location if absent
-	if _, ok := nm.locations.Load(url); !ok {
-		ip := strings.TrimSuffix(strings.TrimPrefix(url, "http://"), ":5678")
-		loc, err := QueryLocation(ip)
-		if err != nil {
-			logrus.WithError(err).WithField("ip", ip).Warn("Failed to query IP location")
-		} else {
-			nm.locations.Store(url, loc)
-			logrus.WithFields(logrus.Fields{
-				"ip":       ip,
-				"timezone": loc.Timezone,
-				"country":  loc.Country,
-				"city":     loc.City,
-				"loc":      loc.Location,
-			}).Debug("IP location found")
-		}
-	}
 
 	return node, nil
 }
