@@ -56,15 +56,20 @@ func QueryLocation(ip string) (*IPLocation, error) {
 		return nil, errors.WithMessage(err, "Failed to unmarshal Location data")
 	}
 
-	ipLocationCache.Store(ip, &location)
-
-	logrus.WithFields(logrus.Fields{
+	logger := logrus.WithFields(logrus.Fields{
 		"ip":       ip,
 		"timezone": location.Timezone,
 		"country":  location.Country,
 		"city":     location.City,
 		"loc":      location.Location,
-	}).Debug("New IP location detected")
+	})
+
+	if len(location.Timezone) > 0 && len(location.Region) > 0 && len(location.Country) > 0 && len(location.City) > 0 && len(location.Location) > 0 {
+		ipLocationCache.Store(ip, &location)
+		logger.Debug("New IP location detected")
+	} else {
+		logger.Warn("New IP location detected with partial fields")
+	}
 
 	return &location, nil
 }
