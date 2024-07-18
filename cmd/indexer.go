@@ -36,6 +36,7 @@ func init() {
 	indexerCmd.Flags().DurationVar(&updateInterval, "update-interval", 10*time.Minute, "Interval to update shard config of discovered peers")
 	indexerCmd.Flags().StringVar(&ipLocationCacheFile, "ip-location-cache-file", ".ip-location-cache.json", "File name to cache ip locations")
 	indexerCmd.Flags().DurationVar(&ipLocationPersistInterval, "ip-location-cache-interval", 10*time.Minute, "Interval to write ip locations to cache file")
+	indexerCmd.Flags().StringVar(&indexer.IPLocationToken, "ip-location-token", "", "Access token to retrieve IP location from ipinfo.io")
 
 	rootCmd.AddCommand(indexerCmd)
 }
