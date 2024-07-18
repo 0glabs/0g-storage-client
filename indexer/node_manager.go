@@ -34,8 +34,6 @@ type NodeManagerConfig struct {
 
 // NodeManager manages trusted storage nodes and auto discover peers from network.
 type NodeManager struct {
-	config NodeManagerConfig
-
 	trusted sync.Map // url -> *node.ZgsClient
 
 	discoverNode *node.AdminClient
@@ -44,8 +42,6 @@ type NodeManager struct {
 
 // InitDefaultNodeManager initializes the default `NodeManager`.
 func InitDefaultNodeManager(config NodeManagerConfig) (closable func(), err error) {
-	defaultNodeManager.config = config
-
 	if len(config.DiscoveryNode) > 0 {
 		if defaultNodeManager.discoverNode, err = node.NewAdminClient(config.DiscoveryNode, defaultZgsClientOpt); err != nil {
 			return nil, errors.WithMessage(err, "Failed to create admin client to discover peers")
