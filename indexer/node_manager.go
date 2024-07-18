@@ -68,9 +68,32 @@ func (nm *NodeManager) Discovered() []*shard.ShardedNode {
 	return nodes
 }
 
+func parseIP(url string) string {
+	url = strings.ToLower(url)
+
+	index := strings.Index(url, ":")
+	if index == -1 {
+		return url
+	}
+
+	url = url[index+3:]
+
+	index = strings.Index(url, ":")
+	if index == -1 {
+		return url
+	}
+
+	return url[:index]
+}
+
 // AddTrustedNodes add trusted storage nodes.
 func (nm *NodeManager) AddTrustedNodes(nodes ...string) error {
 	for _, v := range nodes {
+		ip := parseIP(v)
+		if _, err := QueryLocation(ip); err != nil {
+			logrus.WithError(err).WithField("ip", ip).Warn("Failed to query IP location")
+		}
+
 		client, err := node.NewZgsClient(v)
 		if err != nil {
 			return errors.WithMessagef(err, "Failed to create zgs client, url = %v", v)
@@ -162,7 +185,7 @@ func (nm *NodeManager) discoverOnce(adminClient *node.AdminClient) error {
 
 func (nm *NodeManager) updateNode(url string) (*shard.ShardedNode, error) {
 	// query ip location at first
-	ip := strings.TrimSuffix(strings.TrimPrefix(url, "http://"), ":5678")
+	ip := parseIP(url)
 	if _, err := QueryLocation(ip); err != nil {
 		logrus.WithError(err).WithField("ip", ip).Warn("Failed to query IP location")
 	}
