@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/0glabs/0g-storage-client/common/util"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -40,14 +41,14 @@ func InitDefaultIPLocationManager(config IPLocationConfig) {
 	defaultIPLocationManager.config = config
 
 	// try load from cached IP locations
-	n, err := defaultIPLocationManager.Read()
+	n, err := defaultIPLocationManager.read()
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to read cached IP locations")
 	} else {
 		logrus.WithField("count", n).Info("Succeeded to read cached IP locations")
 	}
 
-	go defaultIPLocationManager.Write()
+	go util.Schedule(defaultIPLocationManager.write, config.CacheWriteInterval, "Failed to write IP locations")
 }
 
 // All returns all cached IP locations.
@@ -109,8 +110,8 @@ func (manager *IPLocationManager) Query(ip string) (*IPLocation, error) {
 	return &loc, nil
 }
 
-// Read reads IP locations from cache file.
-func (manager *IPLocationManager) Read() (int, error) {
+// read reads IP locations from cache file.
+func (manager *IPLocationManager) read() (int, error) {
 	data, err := os.ReadFile(manager.config.CacheFile)
 	if os.IsNotExist(err) {
 		return 0, nil
@@ -132,28 +133,23 @@ func (manager *IPLocationManager) Read() (int, error) {
 	return len(cached), nil
 }
 
-// Write writes cached IP locations to file periodically.
-func (manager *IPLocationManager) Write() {
-	ticker := time.NewTicker(manager.config.CacheWriteInterval)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		all := manager.All()
-		if len(all) == 0 {
-			continue
-		}
-
-		data, err := json.MarshalIndent(all, "", "    ")
-		if err != nil {
-			logrus.WithError(err).Warn("Failed to marshal IP locations")
-			continue
-		}
-
-		if err = os.WriteFile(manager.config.CacheFile, data, os.ModePerm); err != nil {
-			logrus.WithError(err).Warn("Failed to write IP locations to file")
-			continue
-		}
-
-		logrus.WithField("count", len(all)).Info("Succeeded to write IP locations to file")
+// write writes cached IP locations to file.
+func (manager *IPLocationManager) write() error {
+	all := manager.All()
+	if len(all) == 0 {
+		return nil
 	}
+
+	data, err := json.MarshalIndent(all, "", "    ")
+	if err != nil {
+		return errors.WithMessage(err, "Failed to marshal IP locaions")
+	}
+
+	if err = os.WriteFile(manager.config.CacheFile, data, os.ModePerm); err != nil {
+		return errors.WithMessage(err, "Failed to write IP locations to file")
+	}
+
+	logrus.WithField("count", len(all)).Info("Succeeded to write IP locations to file")
+
+	return nil
 }

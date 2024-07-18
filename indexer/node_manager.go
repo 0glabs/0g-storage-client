@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/0glabs/0g-storage-client/common/shard"
+	"github.com/0glabs/0g-storage-client/common/util"
 	"github.com/0glabs/0g-storage-client/node"
 	providers "github.com/openweb3/go-rpc-provider/provider_wrapper"
 	"github.com/pkg/errors"
@@ -33,35 +34,34 @@ type NodeManagerConfig struct {
 
 // NodeManager manages trusted storage nodes and auto discover peers from network.
 type NodeManager struct {
-	config     NodeManagerConfig
-	trusted    sync.Map // url -> *node.ZgsClient
-	discovered sync.Map // url -> *shard.ShardedNode
+	config NodeManagerConfig
+
+	trusted sync.Map // url -> *node.ZgsClient
+
+	discoverNode *node.AdminClient
+	discovered   sync.Map // url -> *shard.ShardedNode
 }
 
+// InitDefaultNodeManager initializes the default `NodeManager`.
 func InitDefaultNodeManager(config NodeManagerConfig) (closable func(), err error) {
 	defaultNodeManager.config = config
+
+	if len(config.DiscoveryNode) > 0 {
+		if defaultNodeManager.discoverNode, err = node.NewAdminClient(config.DiscoveryNode, defaultZgsClientOpt); err != nil {
+			return nil, errors.WithMessage(err, "Failed to create admin client to discover peers")
+		}
+	}
 
 	if err = defaultNodeManager.AddTrustedNodes(config.TrustedNodes...); err != nil {
 		return nil, errors.WithMessage(err, "Failed to add trusted nodes")
 	}
 
-	if len(config.DiscoveryNode) == 0 {
-		return defaultNodeManager.Close, nil
+	if len(config.DiscoveryNode) > 0 {
+		go util.ScheduleNow(defaultNodeManager.discover, config.DiscoveryInterval, "Failed to discover storage nodes")
+		go util.Schedule(defaultNodeManager.update, config.UpdateInterval, "Failed to update shard configs")
 	}
 
-	adminClient, err := node.NewAdminClient(config.DiscoveryNode, defaultZgsClientOpt)
-	if err != nil {
-		defaultNodeManager.Close()
-		return nil, errors.WithMessage(err, "Failed to create admin client")
-	}
-
-	go defaultNodeManager.Discover(adminClient)
-	go defaultNodeManager.Update()
-
-	return func() {
-		defaultNodeManager.Close()
-		adminClient.Close()
-	}, nil
+	return defaultNodeManager.close, nil
 }
 
 // Trusted returns trusted sharded nodes.
@@ -145,33 +145,21 @@ func (nm *NodeManager) AddTrustedNodes(nodes ...string) error {
 	return nil
 }
 
-func (nm *NodeManager) Close() {
+func (nm *NodeManager) close() {
 	nm.trusted.Range(func(key, value any) bool {
 		value.(*node.ZgsClient).Close()
 		return true
 	})
-}
 
-// Discover discover peers from storage node periodically.
-func (nm *NodeManager) Discover(adminClient *node.AdminClient) {
-	ticker := time.NewTicker(nm.config.DiscoveryInterval)
-	defer ticker.Stop()
-
-	// discover once during startup
-	if err := nm.discoverOnce(adminClient); err != nil {
-		logrus.WithError(err).Warn("Failed to discover storage nodes during startup")
-	}
-
-	for range ticker.C {
-		if err := nm.discoverOnce(adminClient); err != nil {
-			logrus.WithError(err).Warn("Failed to discover storage nodes")
-		}
+	if nm.discoverNode != nil {
+		nm.discoverNode.Close()
 	}
 }
 
-func (nm *NodeManager) discoverOnce(adminClient *node.AdminClient) error {
+// discover discovers peers from storage node.
+func (nm *NodeManager) discover() error {
 	start := time.Now()
-	peers, err := adminClient.GetPeers(context.Background())
+	peers, err := nm.discoverNode.GetPeers(context.Background())
 	if err != nil {
 		return errors.WithMessage(err, "Failed to retrieve peers from storage node")
 	}
@@ -223,6 +211,7 @@ func (nm *NodeManager) discoverOnce(adminClient *node.AdminClient) error {
 	return nil
 }
 
+// updateNode updates the shard config of specified storage node by `url`.
 func (nm *NodeManager) updateNode(url string) (*shard.ShardedNode, error) {
 	// query ip location at first
 	ip := parseIP(url)
@@ -259,17 +248,8 @@ func (nm *NodeManager) updateNode(url string) (*shard.ShardedNode, error) {
 	return node, nil
 }
 
-// Update update shard config of discovered peers.
-func (nm *NodeManager) Update() {
-	ticker := time.NewTicker(nm.config.UpdateInterval)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		nm.updateOnce()
-	}
-}
-
-func (nm *NodeManager) updateOnce() {
+// update updates shard configs of all storage nodes.
+func (nm *NodeManager) update() error {
 	var urls []string
 	nm.discovered.Range(func(key, value any) bool {
 		urls = append(urls, key.(string))
@@ -277,7 +257,7 @@ func (nm *NodeManager) updateOnce() {
 	})
 
 	if len(urls) == 0 {
-		return
+		return nil
 	}
 
 	logrus.WithField("nodes", len(urls)).Info("Begin to update shard config")
@@ -295,4 +275,6 @@ func (nm *NodeManager) updateOnce() {
 		"nodes":   len(urls),
 		"elapsed": time.Since(start),
 	}).Info("Completed to update shard config")
+
+	return nil
 }
