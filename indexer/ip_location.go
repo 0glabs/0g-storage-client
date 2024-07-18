@@ -48,7 +48,7 @@ func InitDefaultIPLocationManager(config IPLocationConfig) {
 		logrus.WithField("count", n).Info("Succeeded to read cached IP locations")
 	}
 
-	go util.Schedule(defaultIPLocationManager.write, config.CacheWriteInterval, "Failed to write IP locations")
+	go util.Schedule(defaultIPLocationManager.write, config.CacheWriteInterval, "Failed to write IP locations once")
 }
 
 // All returns all cached IP locations.

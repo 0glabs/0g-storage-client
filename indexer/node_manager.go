@@ -53,8 +53,8 @@ func InitDefaultNodeManager(config NodeManagerConfig) (closable func(), err erro
 	}
 
 	if len(config.DiscoveryNode) > 0 {
-		go util.ScheduleNow(defaultNodeManager.discover, config.DiscoveryInterval, "Failed to discover storage nodes")
-		go util.Schedule(defaultNodeManager.update, config.UpdateInterval, "Failed to update shard configs")
+		go util.ScheduleNow(defaultNodeManager.discover, config.DiscoveryInterval, "Failed to discover storage nodes once")
+		go util.Schedule(defaultNodeManager.update, config.UpdateInterval, "Failed to update shard configs once")
 	}
 
 	return defaultNodeManager.close, nil
@@ -173,6 +173,10 @@ func (nm *NodeManager) discover() error {
 			continue
 		}
 
+		if len(v.SeenIps) > 1 {
+			logrus.WithField("seenIPs", v.SeenIps).Warn("More than one seen IPs")
+		}
+
 		url := fmt.Sprintf("http://%v:5678", v.SeenIps[0])
 
 		// ignore trusted node
@@ -185,10 +189,10 @@ func (nm *NodeManager) discover() error {
 			continue
 		}
 
-		// update shard config
+		// add new storage node
 		node, err := nm.updateNode(url)
 		if err != nil {
-			logrus.WithError(err).WithField("url", url).Debug("Failed to update shard config")
+			logrus.WithError(err).WithField("url", url).Debug("Failed to add new peer")
 		} else {
 			logrus.WithFields(logrus.Fields{
 				"url":     url,
@@ -262,7 +266,7 @@ func (nm *NodeManager) update() error {
 
 	for _, v := range urls {
 		if _, err := nm.updateNode(v); err != nil {
-			logrus.WithError(err).WithField("url", v).Debug("Failed to update shard config")
+			logrus.WithError(err).WithField("url", v).Debug("Failed to update shard config, remove from cache")
 			nm.discovered.Delete(v)
 		}
 	}
