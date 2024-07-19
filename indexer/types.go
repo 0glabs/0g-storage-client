@@ -11,8 +11,15 @@ type ShardedNodes struct {
 	Discovered []*shard.ShardedNode `json:"discovered"`
 }
 
+type FileLocation struct {
+	Url         string            `json:"url"`
+	ShardConfig shard.ShardConfig `json:"shardConfig"`
+}
+
 type Interface interface {
 	GetShardedNodes(ctx context.Context) (ShardedNodes, error)
 
 	GetNodeLocations(ctx context.Context) (map[string]*IPLocation, error)
+
+	GetFileLocations(ctx context.Context, txSeq uint64) ([]*shard.ShardedNode, error)
 }

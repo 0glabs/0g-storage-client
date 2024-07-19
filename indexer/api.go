@@ -3,6 +3,7 @@ package indexer
 import (
 	"context"
 
+	"github.com/0glabs/0g-storage-client/common/shard"
 	"github.com/pkg/errors"
 )
 
@@ -35,4 +36,9 @@ func (api *IndexerApi) GetShardedNodes(ctx context.Context) (ShardedNodes, error
 // GetNodeLocations return IP locations of all nodes.
 func (api *IndexerApi) GetNodeLocations(ctx context.Context) (map[string]*IPLocation, error) {
 	return defaultIPLocationManager.All(), nil
+}
+
+// GetFileLocations return locations info of given file.
+func (api *IndexerApi) GetFileLocations(ctx context.Context, txSeq uint64) (locations []*shard.ShardedNode, err error) {
+	return defaultFileLocationCache.GetFileLocations(ctx, txSeq)
 }

@@ -61,6 +61,12 @@ func (c *Client) GetNodeLocations(ctx context.Context) (locations map[string]*IP
 	return
 }
 
+// GetFileLocations return locations info of given file.
+func (c *Client) GetFileLocations(ctx context.Context, txSeq uint64) (locations []*shard.ShardedNode, err error) {
+	err = c.Provider.CallContext(ctx, &locations, "indexer_getFileLocations")
+	return
+}
+
 // SelectNodes get node list from indexer service and select a subset of it, which is sufficient to store expected number of replications.
 func (c *Client) SelectNodes(ctx context.Context, expectedReplica uint) ([]*node.ZgsClient, error) {
 	nodes, err := c.GetShardedNodes(ctx)

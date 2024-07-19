@@ -11,9 +11,10 @@ import (
 
 var (
 	indexerArgs struct {
-		endpoint  string
-		nodes     indexer.NodeManagerConfig
-		locations indexer.IPLocationConfig
+		endpoint      string
+		nodes         indexer.NodeManagerConfig
+		locations     indexer.IPLocationConfig
+		locationCache indexer.FileLocationCacheConfig
 	}
 
 	indexerCmd = &cobra.Command{
@@ -35,19 +36,30 @@ func init() {
 	indexerCmd.Flags().DurationVar(&indexerArgs.locations.CacheWriteInterval, "ip-location-cache-interval", 10*time.Minute, "Interval to write ip locations to cache file")
 	indexerCmd.Flags().StringVar(&indexerArgs.locations.AccessToken, "ip-location-token", "", "Access token to retrieve IP location from ipinfo.io")
 
+	indexerCmd.Flags().DurationVar(&indexerArgs.locationCache.Expiry, "file-location-cache-expiry", 24*time.Hour, "Validity period of location information")
+	indexerCmd.Flags().IntVar(&indexerArgs.locationCache.CacheSize, "file-location-cache-size", 100000, "size of file location cache")
+
 	indexerCmd.MarkFlagsOneRequired("trusted", "node")
 
 	rootCmd.AddCommand(indexerCmd)
 }
 
 func startIndexer(*cobra.Command, []string) {
+	indexerArgs.locationCache.DiscoveryNode = indexerArgs.nodes.DiscoveryNode
+
 	indexer.InitDefaultIPLocationManager(indexerArgs.locations)
 
-	closable, err := indexer.InitDefaultNodeManager(indexerArgs.nodes)
+	nodeManagerClosable, err := indexer.InitDefaultNodeManager(indexerArgs.nodes)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to initialize the default node manager")
 	}
-	defer closable()
+	defer nodeManagerClosable()
+
+	fileLocationCacheClosable, err := indexer.InitFileLocationCache(indexerArgs.locationCache)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to initialize the default file location cache")
+	}
+	defer fileLocationCacheClosable()
 
 	api := indexer.NewIndexerApi()
 
