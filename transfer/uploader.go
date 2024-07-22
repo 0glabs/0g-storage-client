@@ -138,18 +138,14 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 		trees[i] = tree
 		dataRoots[i] = trees[i].Root()
 
-		if !opts[i].SkipTx {
+		// Check existance
+		exist, err := uploader.checkLogExistance(ctx, trees[i].Root())
+		if err != nil {
+			return common.Hash{}, nil, errors.WithMessage(err, "Failed to check if skipped log entry available on storage node")
+		}
+		if !opts[i].SkipTx || !exist {
 			toSubmitDatas = append(toSubmitDatas, data)
 			toSubmitTags = append(toSubmitTags, opt.Tags)
-		} else {
-			// Check existance
-			exist, err := uploader.checkLogExistance(ctx, trees[i].Root())
-			if err != nil {
-				return common.Hash{}, nil, errors.WithMessage(err, "Failed to check if skipped log entry available on storage node")
-			}
-			if !exist {
-				return common.Hash{}, nil, fmt.Errorf("data #%v log entry is not exist on given nodes", i)
-			}
 		}
 		lastTreeToSubmit = trees[i]
 	}
@@ -211,8 +207,13 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 	}
 	uploader.logger.WithField("root", tree.Root()).Info("Data merkle root calculated")
 
+	// Check existance
+	exist, err := uploader.checkLogExistance(ctx, tree.Root())
+	if err != nil {
+		return errors.WithMessage(err, "Failed to check if skipped log entry available on storage node")
+	}
 	// Append log on blockchain
-	if !opt.SkipTx {
+	if !opt.SkipTx || !exist {
 		var receipt *types.Receipt
 
 		if _, receipt, err = uploader.SubmitLogEntry([]core.IterableData{data}, [][]byte{opt.Tags}, true); err != nil {
@@ -229,15 +230,6 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 			if err = uploader.waitForLogEntry(ctx, tree.Root(), false, receipt); err != nil {
 				return errors.WithMessage(err, "Failed to check if log entry available on storage node")
 			}
-		}
-	} else {
-		// Check existance
-		exist, err := uploader.checkLogExistance(ctx, tree.Root())
-		if err != nil {
-			return errors.WithMessage(err, "Failed to check if skipped log entry available on storage node")
-		}
-		if !exist {
-			return fmt.Errorf("data log entry is not exist on given nodes")
 		}
 	}
 
