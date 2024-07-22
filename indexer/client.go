@@ -66,8 +66,8 @@ func (c *Client) GetNodeLocations(ctx context.Context) (locations map[string]*IP
 }
 
 // GetFileLocations return locations info of given file.
-func (c *Client) GetFileLocations(ctx context.Context, txSeq uint64) (locations []*shard.ShardedNode, err error) {
-	err = c.Provider.CallContext(ctx, &locations, "indexer_getFileLocations")
+func (c *Client) GetFileLocations(ctx context.Context, root string) (locations []*shard.ShardedNode, err error) {
+	err = c.Provider.CallContext(ctx, &locations, "indexer_getFileLocations", root)
 	return
 }
 
@@ -153,24 +153,7 @@ func (c *Client) BatchUpload(ctx context.Context, flow *contract.FlowContract, d
 
 // Downloadd download file by given data root
 func (c *Client) Download(ctx context.Context, root, filename string, withProof bool) error {
-	// find corresponding tx sequence
-	hash := eth_common.HexToHash(root)
-	trustedClients := defaultNodeManager.TrustedClients()
-	var txSeq uint64
-	found := false
-	for _, client := range trustedClients {
-		info, err := client.GetFileInfo(ctx, hash)
-		if err != nil || info == nil {
-			continue
-		}
-		txSeq = info.Tx.Seq
-		found = true
-		break
-	}
-	if !found {
-		return fmt.Errorf("file not found")
-	}
-	locations, err := c.GetFileLocations(ctx, txSeq)
+	locations, err := c.GetFileLocations(ctx, root)
 	if err != nil {
 		return errors.WithMessage(err, "failed to get file locations")
 	}
@@ -182,6 +165,9 @@ func (c *Client) Download(ctx context.Context, root, filename string, withProof 
 			continue
 		}
 		clients = append(clients, client)
+	}
+	if len(clients) == 0 {
+		return fmt.Errorf("no node holding the file found, FindFile triggered, try again later")
 	}
 	downloader, err := transfer.NewDownloader(clients, c.option.LogOption)
 	if err != nil {

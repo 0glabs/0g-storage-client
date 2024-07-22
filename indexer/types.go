@@ -21,5 +21,5 @@ type Interface interface {
 
 	GetNodeLocations(ctx context.Context) (map[string]*IPLocation, error)
 
-	GetFileLocations(ctx context.Context, txSeq uint64) ([]*shard.ShardedNode, error)
+	GetFileLocations(ctx context.Context, root string) ([]*shard.ShardedNode, error)
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/0glabs/0g-storage-client/node"
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 const defaultFindFileCooldown = time.Minute * 60
@@ -80,6 +81,7 @@ func (c *FileLocationCache) GetFileLocations(ctx context.Context, txSeq uint64) 
 		})
 		selected[v.URL()] = struct{}{}
 	}
+	logrus.Debugf("find file #%v from trusted nodes, got %v nodes holding the file", txSeq, len(nodes))
 	if _, covered := shard.Select(nodes, 1); covered {
 		return nodes, nil
 	}
@@ -89,6 +91,7 @@ func (c *FileLocationCache) GetFileLocations(ctx context.Context, txSeq uint64) 
 		if err != nil {
 			return nil, err
 		}
+		logrus.Debugf("find file #%v from location cache, got %v nodes holding the file", txSeq, len(locations))
 		for _, location := range locations {
 			url := fmt.Sprintf("http://%v:5678", location.Ip)
 			if _, ok := selected[url]; ok {
@@ -148,6 +151,7 @@ func (c *FileLocationCache) GetFileLocations(ctx context.Context, txSeq uint64) 
 				return nil, nil
 			}
 		}
+		logrus.Debugf("triggering FindFile for tx seq %v", txSeq)
 		c.discoverNode.FindFile(ctx, txSeq)
 		c.latestFindFile.Store(txSeq, time.Now())
 	}
