@@ -56,6 +56,7 @@ func init() {
 
 	uploadCmd.Flags().StringSliceVar(&uploadArgs.node, "node", []string{}, "ZeroGStorage storage node URL")
 	uploadCmd.Flags().StringVar(&uploadArgs.indexer, "indexer", "", "ZeroGStorage indexer URL")
+	indexerCmd.MarkFlagsOneRequired("indexer", "node")
 
 	uploadCmd.Flags().UintVar(&uploadArgs.expectedReplica, "expected-replica", 1, "expected number of replications to upload")
 
@@ -98,10 +99,6 @@ func upload(*cobra.Command, []string) {
 			logrus.WithError(err).Fatal("Failed to upload file")
 		}
 		return
-	}
-
-	if len(uploadArgs.node) == 0 {
-		logrus.Fatal("At least one of --node and --indexer should not be empty")
 	}
 
 	clients := node.MustNewZgsClients(uploadArgs.node)

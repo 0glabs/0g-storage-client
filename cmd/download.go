@@ -35,6 +35,7 @@ func init() {
 
 	downloadCmd.Flags().StringSliceVar(&downloadArgs.nodes, "node", []string{}, "ZeroGStorage storage node URL. Multiple nodes could be specified and separated by comma, e.g. url1,url2,url3")
 	downloadCmd.Flags().StringVar(&downloadArgs.indexer, "indexer", "", "ZeroGStorage indexer URL")
+	indexerCmd.MarkFlagsOneRequired("indexer", "node")
 
 	downloadCmd.Flags().StringVar(&downloadArgs.root, "root", "", "Merkle root to download file")
 	downloadCmd.MarkFlagRequired("root")
