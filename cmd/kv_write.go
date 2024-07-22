@@ -68,7 +68,8 @@ func init() {
 
 	kvWriteCmd.Flags().UintVar(&kvWriteArgs.expectedReplica, "expected-replica", 1, "expected number of replications to kvWrite")
 
-	kvWriteCmd.Flags().BoolVar(&kvWriteArgs.skipTx, "skip-tx", false, "Skip sending the transaction on chain")
+	// note: for KV operations, skip-tx should by default to be false
+	kvWriteCmd.Flags().BoolVar(&kvWriteArgs.skipTx, "skip-tx", false, "Skip sending the transaction on chain if already exists")
 	kvWriteCmd.Flags().BoolVar(&kvWriteArgs.finalityRequired, "finality-required", false, "Wait for file finality on nodes to kvWrite")
 	kvWriteCmd.Flags().UintVar(&kvWriteArgs.taskSize, "task-size", 10, "Number of segments to kvWrite in single rpc request")
 

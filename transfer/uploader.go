@@ -85,12 +85,12 @@ func (uploader *Uploader) checkLogExistance(ctx context.Context, root common.Has
 		if err != nil {
 			return false, errors.WithMessage(err, fmt.Sprintf("Failed to get file info from storage node %v", client.URL()))
 		}
-		// log entry unavailable yet
-		if info == nil {
-			return false, nil
+		// log entry available
+		if info != nil {
+			return true, nil
 		}
 	}
-	return true, nil
+	return false, nil
 }
 
 // BatchUpload submit multiple data to 0g storage contract batchly in single on-chain transaction, then transfer the data to the storage nodes.
