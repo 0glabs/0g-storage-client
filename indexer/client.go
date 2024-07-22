@@ -151,7 +151,7 @@ func (c *Client) BatchUpload(ctx context.Context, flow *contract.FlowContract, d
 	return uploader.BatchUpload(ctx, datas, waitForLogEntry, option...)
 }
 
-// Downloadd download file by given data root
+// Download download file by given data root
 func (c *Client) Download(ctx context.Context, root, filename string, withProof bool) error {
 	locations, err := c.GetFileLocations(ctx, root)
 	if err != nil {
