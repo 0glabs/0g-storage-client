@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/0glabs/0g-storage-client/common"
-	zg_common "github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/indexer"
 	"github.com/0glabs/0g-storage-client/node"
 	"github.com/0glabs/0g-storage-client/transfer"
@@ -43,7 +42,7 @@ func init() {
 
 func download(*cobra.Command, []string) {
 	if uploadArgs.indexer != "" {
-		indexerClient, err := indexer.NewClient(uploadArgs.indexer, indexer.IndexerClientOption{LogOption: zg_common.LogOption{Logger: logrus.StandardLogger()}})
+		indexerClient, err := indexer.NewClient(uploadArgs.indexer, indexer.IndexerClientOption{LogOption: common.LogOption{Logger: logrus.StandardLogger()}})
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to initialize indexer client")
 		}
