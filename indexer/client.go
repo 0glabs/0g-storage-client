@@ -3,8 +3,10 @@ package indexer
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/0glabs/0g-storage-client/common"
+	zg_common "github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/common/shard"
 	"github.com/0glabs/0g-storage-client/contract"
 	"github.com/0glabs/0g-storage-client/core"
@@ -14,6 +16,7 @@ import (
 	"github.com/openweb3/go-rpc-provider/interfaces"
 	providers "github.com/openweb3/go-rpc-provider/provider_wrapper"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 // Requires `Client` implements the `Interface` interface.
@@ -23,6 +26,7 @@ var _ Interface = (*Client)(nil)
 type Client struct {
 	interfaces.Provider
 	option IndexerClientOption
+	logger *logrus.Logger
 }
 
 // IndexerClientOption indexer client option
@@ -46,6 +50,7 @@ func NewClient(url string, option ...IndexerClientOption) (*Client, error) {
 	return &Client{
 		Provider: provider,
 		option:   opt,
+		logger:   zg_common.NewLogger(opt.LogOption),
 	}, nil
 }
 
@@ -69,11 +74,34 @@ func (c *Client) GetFileLocations(ctx context.Context, txSeq uint64) (locations 
 
 // SelectNodes get node list from indexer service and select a subset of it, which is sufficient to store expected number of replications.
 func (c *Client) SelectNodes(ctx context.Context, expectedReplica uint) ([]*node.ZgsClient, error) {
-	nodes, err := c.GetShardedNodes(ctx)
+	allNodes, err := c.GetShardedNodes(ctx)
 	if err != nil {
 		return nil, err
 	}
-	trusted, ok := shard.Select(nodes.Trusted, expectedReplica)
+	// filter out nodes unable to connect
+	nodes := make([]*shard.ShardedNode, 0)
+	for _, shardedNode := range allNodes.Trusted {
+		client, err := node.NewZgsClient(shardedNode.URL, c.option.ProviderOption)
+		if err != nil {
+			c.logger.Debugf("failed to initialize client of node %v, dropped.", shardedNode.URL)
+			continue
+		}
+		defer client.Close()
+		start := time.Now()
+		config, err := client.GetShardConfig(ctx)
+		if err != nil || !config.IsValid() {
+			c.logger.Debugf("failed to get shard config of node %v, dropped.", shardedNode.URL)
+			continue
+		}
+
+		nodes = append(nodes, &shard.ShardedNode{
+			URL:     shardedNode.URL,
+			Config:  config,
+			Latency: time.Since(start).Milliseconds(),
+		})
+	}
+	// select proper subset
+	trusted, ok := shard.Select(nodes, expectedReplica)
 	if !ok {
 		return nil, fmt.Errorf("cannot select a subset from the returned nodes that meets the replication requirement")
 	}
