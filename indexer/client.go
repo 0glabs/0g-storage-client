@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/0glabs/0g-storage-client/common"
-	zg_common "github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/common/shard"
 	"github.com/0glabs/0g-storage-client/contract"
 	"github.com/0glabs/0g-storage-client/core"
@@ -50,7 +49,7 @@ func NewClient(url string, option ...IndexerClientOption) (*Client, error) {
 	return &Client{
 		Provider: provider,
 		option:   opt,
-		logger:   zg_common.NewLogger(opt.LogOption),
+		logger:   common.NewLogger(opt.LogOption),
 	}, nil
 }
 
@@ -150,4 +149,44 @@ func (c *Client) BatchUpload(ctx context.Context, flow *contract.FlowContract, d
 		return eth_common.Hash{}, nil, err
 	}
 	return uploader.BatchUpload(ctx, datas, waitForLogEntry, option...)
+}
+
+// Downloadd download file by given data root
+func (c *Client) Download(ctx context.Context, root, filename string, withProof bool) error {
+	// find corresponding tx sequence
+	hash := eth_common.HexToHash(root)
+	trustedClients := defaultNodeManager.TrustedClients()
+	var txSeq uint64
+	found := false
+	for _, client := range trustedClients {
+		info, err := client.GetFileInfo(ctx, hash)
+		if err != nil || info == nil {
+			continue
+		}
+		txSeq = info.Tx.Seq
+		found = true
+		break
+	}
+	if !found {
+		return fmt.Errorf("file not found")
+	}
+	locations, err := c.GetFileLocations(ctx, txSeq)
+	if err != nil {
+		return errors.WithMessage(err, "failed to get file locations")
+	}
+	clients := make([]*node.ZgsClient, 0)
+	for _, location := range locations {
+		client, err := node.NewZgsClient(location.URL, c.option.ProviderOption)
+		if err != nil {
+			c.logger.Debugf("failed to initialize client of node %v, dropped.", location.URL)
+			continue
+		}
+		clients = append(clients, client)
+	}
+	downloader, err := transfer.NewDownloader(clients, c.option.LogOption)
+	if err != nil {
+		return err
+	}
+
+	return downloader.Download(ctx, root, filename, withProof)
 }
