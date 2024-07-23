@@ -387,7 +387,7 @@ class TestFramework:
 
         assert return_code == 0, "%s download file failed, output: %s, log: %s" % (self.cli_binary, output_name, lines)
 
-        shutil.rmtree(file_to_download)
+        os.remove(file_to_download)
 
         return
 
