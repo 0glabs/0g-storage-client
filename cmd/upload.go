@@ -56,7 +56,7 @@ func init() {
 
 	uploadCmd.Flags().StringSliceVar(&uploadArgs.node, "node", []string{}, "ZeroGStorage storage node URL")
 	uploadCmd.Flags().StringVar(&uploadArgs.indexer, "indexer", "", "ZeroGStorage indexer URL")
-	indexerCmd.MarkFlagsOneRequired("indexer", "node")
+	uploadCmd.MarkFlagsOneRequired("indexer", "node")
 
 	uploadCmd.Flags().UintVar(&uploadArgs.expectedReplica, "expected-replica", 1, "expected number of replications to upload")
 
