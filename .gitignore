@@ -20,3 +20,8 @@
 
 0g-storage-client
 .ip-location-cache.json
+
+# tests
+/target
+tests/**/__pycache__
+tests/tmp/**
