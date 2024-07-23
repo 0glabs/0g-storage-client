@@ -2,7 +2,10 @@ package indexer
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/0glabs/0g-storage-client/common/shard"
+	eth_common "github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 )
 
@@ -35,4 +38,26 @@ func (api *IndexerApi) GetShardedNodes(ctx context.Context) (ShardedNodes, error
 // GetNodeLocations return IP locations of all nodes.
 func (api *IndexerApi) GetNodeLocations(ctx context.Context) (map[string]*IPLocation, error) {
 	return defaultIPLocationManager.All(), nil
+}
+
+// GetFileLocations return locations info of given file.
+func (api *IndexerApi) GetFileLocations(ctx context.Context, root string) (locations []*shard.ShardedNode, err error) {
+	// find corresponding tx sequence
+	hash := eth_common.HexToHash(root)
+	trustedClients := defaultNodeManager.TrustedClients()
+	var txSeq uint64
+	found := false
+	for _, client := range trustedClients {
+		info, err := client.GetFileInfo(ctx, hash)
+		if err != nil || info == nil {
+			continue
+		}
+		txSeq = info.Tx.Seq
+		found = true
+		break
+	}
+	if !found {
+		return nil, fmt.Errorf("file not found")
+	}
+	return defaultFileLocationCache.GetFileLocations(ctx, txSeq)
 }

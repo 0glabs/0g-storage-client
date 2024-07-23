@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/0glabs/0g-storage-client/common"
+	"github.com/0glabs/0g-storage-client/indexer"
 	"github.com/0glabs/0g-storage-client/node"
 	"github.com/0glabs/0g-storage-client/transfer"
 	"github.com/sirupsen/logrus"
@@ -12,8 +13,11 @@ import (
 
 var (
 	downloadArgs struct {
-		file  string
-		nodes []string
+		file string
+
+		indexer string
+		nodes   []string
+
 		root  string
 		proof bool
 	}
@@ -28,8 +32,11 @@ var (
 func init() {
 	downloadCmd.Flags().StringVar(&downloadArgs.file, "file", "", "File name to download")
 	downloadCmd.MarkFlagRequired("file")
+
 	downloadCmd.Flags().StringSliceVar(&downloadArgs.nodes, "node", []string{}, "ZeroGStorage storage node URL. Multiple nodes could be specified and separated by comma, e.g. url1,url2,url3")
-	downloadCmd.MarkFlagRequired("node")
+	downloadCmd.Flags().StringVar(&downloadArgs.indexer, "indexer", "", "ZeroGStorage indexer URL")
+	downloadCmd.MarkFlagsOneRequired("indexer", "node")
+
 	downloadCmd.Flags().StringVar(&downloadArgs.root, "root", "", "Merkle root to download file")
 	downloadCmd.MarkFlagRequired("root")
 	downloadCmd.Flags().BoolVar(&downloadArgs.proof, "proof", false, "Whether to download with merkle proof for validation")
@@ -38,6 +45,17 @@ func init() {
 }
 
 func download(*cobra.Command, []string) {
+	if downloadArgs.indexer != "" {
+		indexerClient, err := indexer.NewClient(downloadArgs.indexer, indexer.IndexerClientOption{LogOption: common.LogOption{Logger: logrus.StandardLogger()}})
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to initialize indexer client")
+		}
+		if err := indexerClient.Download(context.Background(), downloadArgs.root, downloadArgs.file, downloadArgs.proof); err != nil {
+			logrus.WithError(err).Fatal("Failed to download file from indexer")
+		}
+		return
+	}
+
 	nodes := node.MustNewZgsClients(downloadArgs.nodes)
 
 	downloader, err := transfer.NewDownloader(nodes, common.LogOption{Logger: logrus.StandardLogger()})

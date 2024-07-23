@@ -32,6 +32,12 @@ func NewAdminClient(url string, option ...providers.Option) (*AdminClient, error
 	return &AdminClient{client}, nil
 }
 
+// FindFile Call find_file to update file location cache
+func (c *AdminClient) FindFile(ctx context.Context, txSeq uint64) (ret int, err error) {
+	err = c.provider.CallContext(ctx, &ret, "admin_findFile", txSeq)
+	return
+}
+
 // Shutdown Call admin_shutdown to shutdown the node.
 func (c *AdminClient) Shutdown(ctx context.Context) (ret int, err error) {
 	err = c.provider.CallContext(ctx, &ret, "admin_shutdown")
@@ -82,5 +88,11 @@ func (c *AdminClient) GetNetworkInfo(ctx context.Context) (info NetworkInfo, err
 // GetPeers Call admin_getPeers to retrieve all discovered network peers.
 func (c *AdminClient) GetPeers(ctx context.Context) (peers map[string]*PeerInfo, err error) {
 	err = c.provider.CallContext(ctx, &peers, "admin_getPeers")
+	return
+}
+
+// getFileLocation Get file location
+func (c *AdminClient) GetFileLocation(ctx context.Context, txSeq uint64, allShards bool) (locations []LocationInfo, err error) {
+	err = c.provider.CallContext(ctx, &locations, "admin_getFileLocation", txSeq, allShards)
 	return
 }

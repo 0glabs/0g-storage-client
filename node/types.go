@@ -1,6 +1,7 @@
 package node
 
 import (
+	"github.com/0glabs/0g-storage-client/common/shard"
 	"github.com/0glabs/0g-storage-client/core/merkle"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -119,4 +120,10 @@ type PeerInfo struct {
 	IsTrusted           bool                 `json:"isTrusted"`
 	ConnectionDirection string               `json:"connectionDirection"` // Incoming/Outgoing/empty
 	Enr                 string               `json:"enr"`                 // maybe empty
+}
+
+// LocationInfo file location information
+type LocationInfo struct {
+	Ip          string            `json:"ip"`
+	ShardConfig shard.ShardConfig `json:"shardConfig"`
 }

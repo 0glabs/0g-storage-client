@@ -60,14 +60,19 @@ func InitDefaultNodeManager(config NodeManagerConfig) (closable func(), err erro
 	return defaultNodeManager.close, nil
 }
 
-// Trusted returns trusted sharded nodes.
-func (nm *NodeManager) Trusted() ([]*shard.ShardedNode, error) {
+// TrustedClients returns trusted clients.
+func (nm *NodeManager) TrustedClients() []*node.ZgsClient {
 	var clients []*node.ZgsClient
-
 	nm.trusted.Range(func(key, value any) bool {
 		clients = append(clients, value.(*node.ZgsClient))
 		return true
 	})
+	return clients
+}
+
+// Trusted returns trusted sharded nodes.
+func (nm *NodeManager) Trusted() ([]*shard.ShardedNode, error) {
+	clients := nm.TrustedClients()
 
 	var nodes []*shard.ShardedNode
 
