@@ -183,7 +183,7 @@ class TestFramework:
             dest="contract",
             default=os.path.join(
                 __file_path__,
-                "../../storage-contracts-abis/",
+                "../storage-contracts-abis/",
             ),
             type=str,
         )
@@ -357,7 +357,7 @@ class TestFramework:
             os.makedirs(self.options.tmpdir, exist_ok=True)
         else:
             self.options.tmpdir = os.getenv(
-                "ZGS_TESTS_LOG_DIR", default=tempfile.mkdtemp(prefix="zgs_test_")
+                "ZG_CLIENT_TESTS_LOG_DIR", default=tempfile.mkdtemp(prefix="zg_client_")
             )
 
         self.root_dir = self.options.tmpdir
