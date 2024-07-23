@@ -13,7 +13,7 @@ from utility.utils import (
 from test_framework.test_framework import TestFramework
 
 
-class CliSubmissionTest(TestFramework):
+class FileUploadDownloadTest(TestFramework):
     def setup_params(self):
         self.num_blockchain_nodes = 1
         self.num_nodes = 2
@@ -36,11 +36,11 @@ class CliSubmissionTest(TestFramework):
         ]
 
         for i, v in enumerate(data_size):
-            self.__test_upload_file_with_cli(
+            self.__test_upload_download_file(
                 v, i + 1, False if v >= 256 * 1024 * 64 else True
             )
 
-    def __test_upload_file_with_cli(self, size, submission_index, rand_data=True):
+    def __test_upload_download_file(self, size, submission_index, rand_data=True):
         node_idx = random.randint(0, self.num_nodes - 1)
         self.log.info("node index: %d, file size: %d", node_idx, size)
 
@@ -55,6 +55,7 @@ class CliSubmissionTest(TestFramework):
             self.contract.address(),
             GENESIS_ACCOUNT.key,
             self.nodes[node_idx].rpc_url,
+            None,
             file_to_upload,
         )
 
@@ -64,46 +65,8 @@ class CliSubmissionTest(TestFramework):
         client = self.nodes[node_idx]
         wait_until(lambda: client.zgs_get_file_info(root) is not None)
         wait_until(lambda: client.zgs_get_file_info(root)["finalized"])
-
-        num_of_entris = bytes_to_entries(size)
-        if num_of_entris > 1:
-            start_idx = random.randint(0, num_of_entris - 2)
-            end_idx = min(
-                random.randint(start_idx + 1, num_of_entris - 1), start_idx + ENTRY_SIZE
-            )
-
-            assert_equal(
-                client.zgs_download_segment(root, start_idx, end_idx),
-                base64.b64encode(
-                    data[start_idx * ENTRY_SIZE : end_idx * ENTRY_SIZE]
-                ).decode("utf-8"),
-            )
-
-        for i in range(0, self.num_nodes):
-            if node_idx == i:
-                continue
-
-            self.log.info("wait node %d", i)
-            wait_until(lambda: self.nodes[i].zgs_get_file_info(root) is not None)
-            self.nodes[i].admin_start_sync_file(submission_index - 1)
-            wait_until(
-                lambda: self.nodes[i].sync_status_is_completed_or_unknown(
-                    submission_index - 1
-                )
-            )
-
-            wait_until(lambda: self.nodes[i].zgs_get_file_info(root)["finalized"])
-
-            # start_idx = random.randint(0, num_of_entris - 1)
-            # end_idx = min(
-            #     random.randint(start_idx + 1, num_of_entris), start_idx + ENTRY_SIZE
-            # )
-
-            assert_equal(
-                client.zgs_download_segment(root, 0, 1),
-                self.nodes[i].zgs_download_segment(root, 0, 1),
-            )
-
+        
+        self._download_file_use_cli(self.nodes[node_idx].rpc_url, None, root)
 
 if __name__ == "__main__":
-    CliSubmissionTest().main()
+    FileUploadDownloadTest().main()

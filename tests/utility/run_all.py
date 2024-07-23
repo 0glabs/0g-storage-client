@@ -6,7 +6,7 @@ import sys
 
 from concurrent.futures import ProcessPoolExecutor
 
-from utility.build_binary import build_zg, build_zgs
+from utility.build_binary import build_zg, build_zgs, build_kv
 
 DEFAULT_PORT_MIN = 11000
 DEFAULT_PORT_MAX = 65535
@@ -62,6 +62,7 @@ def run_all(test_dir: str, test_subdirs: list[str]=[], slow_tests: set[str]={}, 
     # Build binaries if absent
     build_zg(tmp_dir)
     build_zgs(tmp_dir)
+    build_kv(tmp_dir)
 
     start_time = time.time()
 

@@ -18,8 +18,9 @@ from test_framework.contract_proxy import FlowContractProxy, MineContractProxy, 
 from test_framework.zgs_node import ZgsNode
 from test_framework.blockchain_node import BlockChainNodeType
 from test_framework.zg_node import ZGNode, zg_node_init_genesis
+from test_framework.kv_node import KVNode
 from utility.utils import PortMin, is_windows_platform, wait_until
-from utility.build_binary import build_zgs
+from utility.build_binary import build_zgs, build_kv
 
 __file_path__ = os.path.dirname(os.path.realpath(__file__))
 
@@ -42,6 +43,7 @@ class TestFramework:
         self.num_nodes = None
         self.blockchain_nodes = []
         self.nodes = []
+        self.kv_nodes = []
         self.contract = None
         self.blockchain_node_configs = {}
         self.zgs_node_configs = {}
@@ -66,6 +68,9 @@ class TestFramework:
         )
         self.__default_zgs_cli_binary__ = os.path.join(
             root_dir, "0g-storage-client"  + binary_ext
+        )
+        self.__default_zgs_kv_binary__ = os.path.join(
+            tests_dir, "tmp", "zgs_kv" + binary_ext
         )
 
     def __setup_blockchain_node(self):
@@ -179,6 +184,13 @@ class TestFramework:
         )
 
         parser.add_argument(
+            "--zgs-kv",
+            dest="zgs_kv",
+            default=self.__default_zgs_kv_binary__,
+            type=str,
+        )
+
+        parser.add_argument(
             "--contract-path",
             dest="contract",
             default=os.path.join(
@@ -262,8 +274,10 @@ class TestFramework:
         blockchain_node_rpc_url,
         contract_address,
         key,
-        ionion_node_rpc_url,
+        node_rpc_url,
+        indexer_url,
         file_to_upload,
+        skip_tx = True,
     ):
         upload_args = [
             self.cli_binary,
@@ -274,14 +288,20 @@ class TestFramework:
             contract_address,
             "--key",
             encode_hex(key),
-            "--node",
-            ionion_node_rpc_url,
+            "--skip-tx="+str(skip_tx),
             "--log-level",
             "debug",
             "--gas-limit",
             "10000000",
-            "--file",
         ]
+        if node_rpc_url is not None:
+            upload_args.append("--node")
+            upload_args.append(node_rpc_url)
+        elif indexer_url is not None:
+            upload_args.append("--indexer")
+            upload_args.append(indexer_url)
+        upload_args.append("--file")
+        self.log.info("upload file with cli: {}".format(upload_args))
 
         output = tempfile.NamedTemporaryFile(dir=self.root_dir, delete=False, prefix="zgs_client_output_")
         output_name = output.name
@@ -316,6 +336,60 @@ class TestFramework:
         assert return_code == 0, "%s upload file failed, output: %s, log: %s" % (self.cli_binary, output_name, lines)
 
         return root
+    
+    def _download_file_use_cli(
+        self,
+        node_rpc_url,
+        indexer_url,
+        root,
+        with_proof = True,
+    ):
+        file_to_download = os.path.join(self.root_dir, "download_{}_{}".format(root, time.time()))
+        download_args = [
+            self.cli_binary,
+            "download",
+            "--file",
+            file_to_download,
+            "--root",
+            root,
+            "--proof=" + str(with_proof),
+            "--log-level",
+            "debug",
+        ]
+        if node_rpc_url is not None:
+            download_args.append("--node")
+            download_args.append(node_rpc_url)
+        elif indexer_url is not None:
+            download_args.append("--indexer")
+            download_args.append(indexer_url)
+        self.log.info("download file with cli: {}".format(download_args))
+
+        output = tempfile.NamedTemporaryFile(dir=self.root_dir, delete=False, prefix="zgs_client_output_")
+        output_name = output.name
+        output_fileno = output.fileno()
+
+        try:
+            proc = subprocess.Popen(
+                download_args,
+                text=True,
+                stdout=output_fileno,
+                stderr=output_fileno,
+            )
+            
+            return_code = proc.wait(timeout=60)
+            output.seek(0)
+            lines = output.readlines()
+        except Exception as ex:
+            self.log.error("Failed to download file via CLI tool, output: %s", output_name)
+            raise ex
+        finally:
+            output.close()
+
+        assert return_code == 0, "%s download file failed, output: %s, log: %s" % (self.cli_binary, output_name, lines)
+
+        shutil.rmtree(file_to_download)
+
+        return
 
     def setup_params(self):
         self.num_blockchain_nodes = 1
@@ -325,6 +399,25 @@ class TestFramework:
         self.__setup_blockchain_node()
         self.__setup_zgs_node()
 
+    def setup_kv_node(self, index, stream_ids, updated_config={}):
+        build_kv(Path(self.kv_binary).parent.absolute())
+        assert os.path.exists(self.kv_binary), "%s should be exist" % self.kv_binary
+        node = KVNode(
+            index,
+            self.root_dir,
+            self.kv_binary,
+            updated_config,
+            self.contract.address(),
+            self.log,
+            stream_ids=stream_ids,
+        )
+        self.kv_nodes.append(node)
+        node.setup_config()
+        node.start()
+
+        time.sleep(1)
+        node.wait_for_rpc_connection()
+
     def stop_nodes(self):
         # stop storage nodes first
         for node in self.nodes:
@@ -333,11 +426,16 @@ class TestFramework:
         for node in self.blockchain_nodes:
             node.stop()
 
+    def stop_kv_node(self, index):
+        self.kv_nodes[index].stop()
+
     def stop_storage_node(self, index, clean=False):
         self.nodes[index].stop()
         if clean:
             self.nodes[index].clean_data()
 
+    def start_kv_node(self, index):
+        self.kv_nodes[index].start()
 
     def start_storage_node(self, index):
         self.nodes[index].start()
@@ -386,6 +484,7 @@ class TestFramework:
         self.zgs_binary = os.path.abspath(self.options.zerog_storage)
         self.cli_binary = os.path.abspath(self.options.cli)
         self.contract_path = os.path.abspath(self.options.contract)
+        self.kv_binary = os.path.abspath(self.options.zgs_kv)
 
         assert os.path.exists(self.contract_path), (
             "%s should be exist" % self.contract_path

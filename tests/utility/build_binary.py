@@ -14,6 +14,7 @@ GITHUB_DOWNLOAD_URL="https://api.github.com/repos/0glabs/0g-storage-node/release
 ZG_BINARY = "0gchaind.exe" if is_windows_platform() else "0gchaind"
 CLIENT_BINARY = "0g-storage-client.exe" if is_windows_platform() else "0g-storage-client"
 ZGS_BINARY = "zgs_node.exe" if is_windows_platform() else "zgs_node"
+KV_BINARY = "zgs_kv.exe" if is_windows_platform() else "zgs_kv"
 
 ZG_GIT_REV = "7bc25a060fab9c17bc9942b6747cd07a668d3042" # v0.1.0
 
@@ -49,6 +50,15 @@ def build_zgs(dir: str) -> BuildBinaryResult:
         dir=dir,
         binary_name=ZGS_BINARY,
         github_url="https://github.com/0glabs/0g-storage-node.git",
+        build_cmd="cargo build --release",
+        compiled_relative_path=["target", "release"],
+    )
+
+def build_kv(dir: str) -> BuildBinaryResult:
+    return __build_from_github(
+        dir=dir,
+        binary_name=KV_BINARY,
+        github_url="https://github.com/0glabs/0g-storage-kv.git",
         build_cmd="cargo build --release",
         compiled_relative_path=["target", "release"],
     )

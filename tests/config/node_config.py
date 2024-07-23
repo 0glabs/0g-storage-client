@@ -8,6 +8,11 @@ ZGS_CONFIG = {
     }
 }
 
+KV_CONFIG = {
+    "log_config_file": "log_config",
+    "confirmation_block_count": 1,
+}
+
 BLOCK_SIZE_LIMIT = 200 * 1024
 # 0xfbe45681Ac6C53D5a40475F7526baC1FE7590fb8
 GENESIS_PRIV_KEY = "46b9e861b63d3509c88b7817275a30d22d62c8cd8fa6486ddee35ef0d8e0495f"
