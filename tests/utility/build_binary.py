@@ -59,7 +59,7 @@ def build_kv(dir: str) -> BuildBinaryResult:
         dir=dir,
         binary_name=KV_BINARY,
         github_url="https://github.com/0glabs/0g-storage-kv.git",
-        build_cmd="cargo build --release",
+        build_cmd="git submodule update --init --recursive && cargo build --release",
         compiled_relative_path=["target", "release"],
     )
 
