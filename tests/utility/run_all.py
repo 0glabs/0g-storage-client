@@ -10,7 +10,7 @@ from utility.build_binary import build_zg, build_zgs, build_kv
 
 DEFAULT_PORT_MIN = 11000
 DEFAULT_PORT_MAX = 65535
-DEFAULT_PORT_RANGE = 500
+DEFAULT_PORT_RANGE = 1000
 
 def print_testcase_result(color, glyph, script, start_time):
     print(color[1] + glyph + " Testcase " + script + "\telapsed: " + str(int(time.time() - start_time)) + " seconds" + color[0], flush=True)
