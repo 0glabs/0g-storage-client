@@ -23,7 +23,7 @@ type Transaction struct {
 	Seq             uint64         `json:"seq"`             // sequence id in on-chain flow contract
 }
 
-// FileInfo information about a file responsed from 0g storage node
+// FileInfo information about a file responded from 0g storage node
 type FileInfo struct {
 	Tx             Transaction `json:"tx"`             // on-chain transaction
 	Finalized      bool        `json:"finalized"`      // whether the file has been finalized in the storage node
