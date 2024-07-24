@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
 
-import base64
 import random
 import tempfile
 
 from config.node_config import GENESIS_ACCOUNT
-from utility.submission import ENTRY_SIZE, bytes_to_entries
 from utility.utils import (
-    assert_equal,
     wait_until,
 )
 from test_framework.test_framework import TestFramework

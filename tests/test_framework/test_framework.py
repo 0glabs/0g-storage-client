@@ -20,7 +20,7 @@ from test_framework.zgs_node import ZgsNode
 from test_framework.blockchain_node import BlockChainNodeType
 from test_framework.zg_node import ZGNode, zg_node_init_genesis
 from test_framework.kv_node import KVNode
-from utility.utils import PortMin, is_windows_platform, wait_until
+from utility.utils import PortMin, is_windows_platform, wait_until, indexer_port
 from utility.build_binary import build_zgs, build_kv
 
 __file_path__ = os.path.dirname(os.path.realpath(__file__))
@@ -53,6 +53,9 @@ class TestFramework:
         self.enable_market = False
         self.mine_period = 100
         self.launch_wait_seconds = 1
+
+        self.indexer_process = None
+        self.indexer_rpc_url = None
 
         # Set default binary path
         binary_ext = ".exe" if is_windows_platform() else ""
@@ -530,6 +533,43 @@ class TestFramework:
 
         time.sleep(1)
         node.wait_for_rpc_connection()
+    
+    def setup_indexer(self, trusted, discover_node):
+        indexer_args = [
+            self.cli_binary,
+            "indexer",
+            "--endpoint",
+            str(indexer_port(0)),
+            "--trusted",
+            trusted,
+            "--log-level",
+            "debug",
+        ]
+        if discover_node is not None:
+            indexer_args.append("--node")
+            indexer_args.append(discover_node)
+        self.log.info("start indexer with args: {}".format(indexer_args))
+        data_dir = os.path.join(self.root_dir, "indexer0")
+        os.mkdir(data_dir)
+        stdout = tempfile.NamedTemporaryFile(
+            dir=data_dir, prefix="stdout", delete=False
+        )
+        stderr = tempfile.NamedTemporaryFile(
+            dir=data_dir, prefix="stderr", delete=False
+        )
+        self.indexer_process = subprocess.Popen(
+            indexer_args,
+            stdout=stdout,
+            stderr=stderr,
+            cwd=data_dir,
+            env=os.environ.copy(),
+        )
+        self.indexer_rpc_url = "http://127.0.0.1:{}".format(indexer_port(0))
+    
+    def stop_indexer(self):
+        if self.indexer_process is not None:
+            self.indexer_process.terminate()
+            wait_until(lambda: self.indexer_process.poll() is not None, timeout=20)
 
     def stop_nodes(self):
         # stop storage nodes first
@@ -538,6 +578,11 @@ class TestFramework:
 
         for node in self.blockchain_nodes:
             node.stop()
+
+        for node in self.kv_nodes:
+            node.stop()
+        
+        self.stop_indexer()
 
     def stop_kv_node(self, index):
         self.kv_nodes[index].stop()
@@ -568,7 +613,7 @@ class TestFramework:
             os.makedirs(self.options.tmpdir, exist_ok=True)
         else:
             self.options.tmpdir = os.getenv(
-                "ZG_CLIENT_TESTS_LOG_DIR", default=tempfile.mkdtemp(prefix="zg_client_")
+                "ZG_CLIENT_TESTS_LOG_DIR", default=tempfile.mkdtemp(prefix="zg_client_test_")
             )
 
         self.root_dir = self.options.tmpdir

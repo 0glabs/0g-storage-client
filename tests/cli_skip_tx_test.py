@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 
-import base64
 import random
 import tempfile
 from web3 import Web3, HTTPProvider
 
 from config.node_config import GENESIS_ACCOUNT
-from utility.submission import ENTRY_SIZE, bytes_to_entries
 from utility.utils import (
     assert_equal,
     wait_until,
@@ -63,5 +61,5 @@ class SkipTxTest(TestFramework):
         wait_until(lambda: self.contract.num_submissions() == 1)
         assert_equal(w3.eth.get_transaction_count(GENESIS_ACCOUNT.address), nonce)
 
-if __name__ == "__main__":#
+if __name__ == "__main__":
     SkipTxTest().main()

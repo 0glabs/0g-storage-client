@@ -41,6 +41,9 @@ def blockchain_rpc_port_core(n):
 def kv_rpc_port(n):
     return PortMin.n + 5 * MAX_NODES + n
 
+def indexer_port(n):
+    return PortMin.n + 6 * MAX_NODES + n
+
 def arrange_port(category: int, node_index: int) -> int:
     return PortMin.n + (100 + category) * MAX_NODES + node_index
 

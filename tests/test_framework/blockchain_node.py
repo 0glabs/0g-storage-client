@@ -35,6 +35,7 @@ class NodeType(Enum):
     BlockChain = 0
     Zgs = 1
     KV = 2
+    Indexer = 3
 
 
 class FailedToStartError(Exception):
