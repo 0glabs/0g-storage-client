@@ -34,6 +34,7 @@ class BlockChainNodeType(Enum):
 class NodeType(Enum):
     BlockChain = 0
     Zgs = 1
+    KV = 2
 
 
 class FailedToStartError(Exception):

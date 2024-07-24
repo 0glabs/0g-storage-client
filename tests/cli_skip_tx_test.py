@@ -17,10 +17,10 @@ from test_framework.test_framework import TestFramework
 class SkipTxTest(TestFramework):
     def setup_params(self):
         self.num_blockchain_nodes = 1
-        self.num_nodes = 2
+        self.num_nodes = 1
 
     def run_test(self):
-        node_idx = random.randint(0, self.num_nodes - 1)
+        node_idx = 0 
 
         file_to_upload = tempfile.NamedTemporaryFile(dir=self.root_dir, delete=False)
         data = random.randbytes(256 * 2048) 

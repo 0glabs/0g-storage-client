@@ -11,6 +11,7 @@ import sys
 import tempfile
 import time
 import traceback
+import json
 from pathlib import Path
 
 from eth_utils import encode_hex
@@ -390,6 +391,118 @@ class TestFramework:
         os.remove(file_to_download)
 
         return
+    
+    def _kv_write_use_cli(
+        self,
+        blockchain_node_rpc_url,
+        contract_address,
+        key,
+        node_rpc_url,
+        indexer_url,
+        stream_id,
+        kv_keys,
+        kv_values,
+        skip_tx = True,
+    ):
+        kv_write_args = [
+            self.cli_binary,
+            "kv-write",
+            "--url",
+            blockchain_node_rpc_url,
+            "--contract",
+            contract_address,
+            "--key",
+            encode_hex(key),
+            "--skip-tx="+str(skip_tx),
+            "--stream-id",
+            stream_id,
+            "--stream-keys",
+            kv_keys,
+            "--stream-values",
+            kv_values,
+            "--log-level",
+            "debug",
+            "--gas-limit",
+            "10000000",
+        ]
+        if node_rpc_url is not None:
+            kv_write_args.append("--node")
+            kv_write_args.append(node_rpc_url)
+        elif indexer_url is not None:
+            kv_write_args.append("--indexer")
+            kv_write_args.append(indexer_url)
+        self.log.info("kv write with cli: {}".format(kv_write_args))
+
+        output = tempfile.NamedTemporaryFile(dir=self.root_dir, delete=False, prefix="zgs_client_output_")
+        output_name = output.name
+        output_fileno = output.fileno()
+
+        try:
+            proc = subprocess.Popen(
+                kv_write_args,
+                text=True,
+                stdout=output_fileno,
+                stderr=output_fileno,
+            )
+            
+            return_code = proc.wait(timeout=60)
+
+            output.seek(0)
+            lines = output.readlines()
+        except Exception as ex:
+            self.log.error("Failed to write kv via CLI tool, output: %s", output_name)
+            raise ex
+        finally:
+            output.close()
+
+        assert return_code == 0, "%s write kv failed, output: %s, log: %s" % (self.cli_binary, output_name, lines)
+
+        return
+
+    def _kv_read_use_cli(
+        self,
+        node_rpc_url,
+        stream_id,
+        kv_keys
+    ):
+        kv_read_args = [
+            self.cli_binary,
+            "kv-read",
+            "--node",
+            node_rpc_url,
+            "--stream-id",
+            stream_id,
+            "--stream-keys",
+            kv_keys,
+            "--log-level",
+            "debug",
+        ]
+        self.log.info("kv read with cli: {}".format(kv_read_args))
+
+        output = tempfile.NamedTemporaryFile(dir=self.root_dir, delete=False, prefix="zgs_client_output_")
+        output_name = output.name
+        output_fileno = output.fileno()
+
+        try:
+            proc = subprocess.Popen(
+                kv_read_args,
+                text=True,
+                stdout=output_fileno,
+                stderr=output_fileno,
+            )
+            
+            return_code = proc.wait(timeout=60)
+            output.seek(0)
+            lines = output.readlines()
+        except Exception as ex:
+            self.log.error("Failed to read kv via CLI tool, output: %s", output_name)
+            raise ex
+        finally:
+            output.close()
+
+        assert return_code == 0, "%s read kv failed, output: %s, log: %s" % (self.cli_binary, output_name, lines)
+
+        return json.loads(lines[0].decode("utf-8").strip())
 
     def setup_params(self):
         self.num_blockchain_nodes = 1
