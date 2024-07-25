@@ -10,7 +10,8 @@ class IndexerTest(TestFramework):
         self.num_nodes = 2
 
     def run_test(self):
-        self.setup_indexer(self.nodes[0].rpc_url, self.nodes[0].rpc_url)
+        ports = ",".join([x.rpc_url.split(":")[-1] for x in self.nodes])
+        self.setup_indexer(self.nodes[0].rpc_url, self.nodes[0].rpc_url, ports)
         test_args = [
             "go",
             "run",

@@ -534,17 +534,20 @@ class TestFramework:
         time.sleep(1)
         node.wait_for_rpc_connection()
     
-    def setup_indexer(self, trusted, discover_node):
+    def setup_indexer(self, trusted, discover_node, discover_ports = None):
         indexer_args = [
             self.cli_binary,
             "indexer",
             "--endpoint",
-            str(indexer_port(0)),
+            ":{}".format(indexer_port(0)),
             "--trusted",
             trusted,
             "--log-level",
             "debug",
         ]
+        if discover_ports is not None:
+            indexer_args.append("--discover-ports")
+            indexer_args.append(discover_ports)
         if discover_node is not None:
             indexer_args.append("--node")
             indexer_args.append(discover_node)
