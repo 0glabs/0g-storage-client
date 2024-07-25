@@ -63,7 +63,7 @@ func runTest() error {
 	if len(locations) != 1 {
 		return fmt.Errorf("unexpected file location length: %v", len(locations))
 	}
-	if locations[0].URL != "http://127.0.0.1:11100" {
+	if locations[0].URL != zgsNodeUrls[0] {
 		return fmt.Errorf("unexpected file location: %v", locations[0].URL)
 	}
 	// upload data to second node
