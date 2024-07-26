@@ -1,10 +1,8 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/0glabs/0g-storage-client/common/blockchain"
 	"github.com/sirupsen/logrus"
@@ -14,18 +12,12 @@ import (
 var (
 	logLevel         string
 	logColorDisabled bool
-	cliTimeout       time.Duration
-	cliCtx           context.Context
 
 	rootCmd = &cobra.Command{
 		Use:   "0g-storage-client",
 		Short: "ZeroGStorage client to interact with ZeroGStorage network",
 		PersistentPreRun: func(*cobra.Command, []string) {
 			initLog()
-			cliCtx := context.Background()
-			if cliTimeout > 0 {
-				cliCtx, _ = context.WithTimeout(cliCtx, cliTimeout)
-			}
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cmd.Help()
@@ -39,7 +31,6 @@ func init() {
 	rootCmd.PersistentFlags().Uint64Var(&blockchain.CustomGasPrice, "gas-price", 0, "Custom gas price to send transaction")
 	rootCmd.PersistentFlags().Uint64Var(&blockchain.CustomGasLimit, "gas-limit", 0, "Custom gas limit to send transaction")
 	rootCmd.PersistentFlags().BoolVar(&blockchain.Web3LogEnabled, "web3-log-enabled", false, "Enable log for web3 RPC")
-	rootCmd.PersistentFlags().DurationVar(&cliTimeout, "timeout", 0, "cli task timeout, 0 for no timeout")
 }
 
 func initLog() {

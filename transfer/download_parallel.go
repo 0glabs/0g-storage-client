@@ -131,7 +131,7 @@ func (downloader *segmentDownloader) ParallelDo(ctx context.Context, routine, ta
 		}
 		return segment, nil
 	}
-	return nil, fmt.Errorf("no storage node holds segment with index %v", segmentIndex)
+	return nil, fmt.Errorf("failed to download segment %v", segmentIndex)
 }
 
 // ParallelCollect implements the parallel.Interface interface.

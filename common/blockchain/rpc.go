@@ -67,13 +67,11 @@ func WaitForReceipt(ctx context.Context, client *web3go.Client, txHash common.Ha
 		opt.Interval = time.Second * 3
 	}
 
-	var tries uint
 	reminder := util.NewReminder(opt.logger, time.Minute)
 	for receipt == nil {
 		if receipt, err = client.WithContext(ctx).Eth.TransactionReceipt(txHash); err != nil {
 			return nil, err
 		}
-		tries++
 
 		// remind
 		if receipt == nil {

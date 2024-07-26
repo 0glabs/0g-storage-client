@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"context"
+	"time"
+
 	"github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/indexer"
 	"github.com/0glabs/0g-storage-client/node"
@@ -18,6 +21,8 @@ var (
 
 		root  string
 		proof bool
+
+		timeout time.Duration
 	}
 
 	downloadCmd = &cobra.Command{
@@ -39,16 +44,25 @@ func init() {
 	downloadCmd.MarkFlagRequired("root")
 	downloadCmd.Flags().BoolVar(&downloadArgs.proof, "proof", false, "Whether to download with merkle proof for validation")
 
+	downloadCmd.Flags().DurationVar(&downloadArgs.timeout, "timeout", 0, "cli task timeout, 0 for no timeout")
+
 	rootCmd.AddCommand(downloadCmd)
 }
 
 func download(*cobra.Command, []string) {
+	ctx := context.Background()
+	var cancel context.CancelFunc
+	if downloadArgs.timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, downloadArgs.timeout)
+		defer cancel()
+	}
+
 	if downloadArgs.indexer != "" {
 		indexerClient, err := indexer.NewClient(downloadArgs.indexer, indexer.IndexerClientOption{LogOption: common.LogOption{Logger: logrus.StandardLogger()}})
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to initialize indexer client")
 		}
-		if err := indexerClient.Download(cliCtx, downloadArgs.root, downloadArgs.file, downloadArgs.proof); err != nil {
+		if err := indexerClient.Download(ctx, downloadArgs.root, downloadArgs.file, downloadArgs.proof); err != nil {
 			logrus.WithError(err).Fatal("Failed to download file from indexer")
 		}
 		return
@@ -61,7 +75,7 @@ func download(*cobra.Command, []string) {
 		logrus.WithError(err).Fatal("Failed to initialize downloader")
 	}
 
-	if err := downloader.Download(cliCtx, downloadArgs.root, downloadArgs.file, downloadArgs.proof); err != nil {
+	if err := downloader.Download(ctx, downloadArgs.root, downloadArgs.file, downloadArgs.proof); err != nil {
 		logrus.WithError(err).Fatal("Failed to download file")
 	}
 }

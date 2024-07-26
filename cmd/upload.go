@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"context"
+	"time"
+
 	zg_common "github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/common/blockchain"
 	"github.com/0glabs/0g-storage-client/contract"
@@ -31,6 +34,8 @@ var (
 		skipTx           bool
 		finalityRequired bool
 		taskSize         uint
+
+		timeout time.Duration
 	}
 
 	uploadCmd = &cobra.Command{
@@ -62,10 +67,19 @@ func init() {
 	uploadCmd.Flags().BoolVar(&uploadArgs.finalityRequired, "finality-required", false, "Wait for file finality on nodes to upload")
 	uploadCmd.Flags().UintVar(&uploadArgs.taskSize, "task-size", 10, "Number of segments to upload in single rpc request")
 
+	uploadCmd.Flags().DurationVar(&uploadArgs.timeout, "timeout", 0, "cli task timeout, 0 for no timeout")
+
 	rootCmd.AddCommand(uploadCmd)
 }
 
 func upload(*cobra.Command, []string) {
+	ctx := context.Background()
+	var cancel context.CancelFunc
+	if uploadArgs.timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, uploadArgs.timeout)
+		defer cancel()
+	}
+
 	w3client := blockchain.MustNewWeb3(uploadArgs.url, uploadArgs.key)
 	defer w3client.Close()
 	contractAddr := common.HexToAddress(uploadArgs.contract)
@@ -93,7 +107,7 @@ func upload(*cobra.Command, []string) {
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to initialize indexer client")
 		}
-		if err := indexerClient.Upload(cliCtx, flow, file, opt); err != nil {
+		if err := indexerClient.Upload(ctx, flow, file, opt); err != nil {
 			logrus.WithError(err).Fatal("Failed to upload file")
 		}
 		return
@@ -109,7 +123,7 @@ func upload(*cobra.Command, []string) {
 		logrus.WithError(err).Fatal("Failed to initialize uploader")
 	}
 
-	if err := uploader.Upload(cliCtx, file, opt); err != nil {
+	if err := uploader.Upload(ctx, file, opt); err != nil {
 		logrus.WithError(err).Fatal("Failed to upload file")
 	}
 }

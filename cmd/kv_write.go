@@ -1,8 +1,9 @@
 package cmd
 
 import (
-	"fmt"
+	"context"
 	"math"
+	"time"
 
 	zg_common "github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/common/blockchain"
@@ -35,6 +36,8 @@ var (
 		skipTx           bool
 		finalityRequired bool
 		taskSize         uint
+
+		timeout time.Duration
 	}
 
 	kvWriteCmd = &cobra.Command{
@@ -72,10 +75,19 @@ func init() {
 	kvWriteCmd.Flags().BoolVar(&kvWriteArgs.finalityRequired, "finality-required", false, "Wait for file finality on nodes to kvWrite")
 	kvWriteCmd.Flags().UintVar(&kvWriteArgs.taskSize, "task-size", 10, "Number of segments to kvWrite in single rpc request")
 
+	kvWriteCmd.Flags().DurationVar(&kvWriteArgs.timeout, "timeout", 0, "cli task timeout, 0 for no timeout")
+
 	rootCmd.AddCommand(kvWriteCmd)
 }
 
 func kvWrite(*cobra.Command, []string) {
+	ctx := context.Background()
+	var cancel context.CancelFunc
+	if kvWriteArgs.timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, kvWriteArgs.timeout)
+		defer cancel()
+	}
+
 	w3client := blockchain.MustNewWeb3(kvWriteArgs.url, kvWriteArgs.key)
 	defer w3client.Close()
 	contractAddr := common.HexToAddress(kvWriteArgs.contract)
@@ -97,7 +109,7 @@ func kvWrite(*cobra.Command, []string) {
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to initialize indexer client")
 		}
-		if clients, err = indexerClient.SelectNodes(cliCtx, max(1, opt.ExpectedReplica)); err != nil {
+		if clients, err = indexerClient.SelectNodes(ctx, max(1, opt.ExpectedReplica)); err != nil {
 			logrus.WithError(err).Fatal("failed to select nodes from indexer")
 		}
 	}
@@ -127,9 +139,8 @@ func kvWrite(*cobra.Command, []string) {
 		)
 	}
 
-	err = batcher.Exec(cliCtx, opt)
+	err = batcher.Exec(ctx, opt)
 	if err != nil {
-		fmt.Println(err)
-		return
+		logrus.WithError(err).Fatal("fail to execute kv batch")
 	}
 }
