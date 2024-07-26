@@ -34,7 +34,7 @@ func init() {
 func deploy(*cobra.Command, []string) {
 	client := blockchain.MustNewWeb3(deployArgs.url, deployArgs.key)
 
-	contract, err := blockchain.Deploy(client, deployArgs.bytecodeOrFile)
+	contract, err := blockchain.Deploy(cliCtx, client, deployArgs.bytecodeOrFile)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to deploy smart contract")
 	}

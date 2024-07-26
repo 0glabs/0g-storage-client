@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"context"
-
 	"github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/indexer"
 	"github.com/0glabs/0g-storage-client/node"
@@ -50,7 +48,7 @@ func download(*cobra.Command, []string) {
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to initialize indexer client")
 		}
-		if err := indexerClient.Download(context.Background(), downloadArgs.root, downloadArgs.file, downloadArgs.proof); err != nil {
+		if err := indexerClient.Download(cliCtx, downloadArgs.root, downloadArgs.file, downloadArgs.proof); err != nil {
 			logrus.WithError(err).Fatal("Failed to download file from indexer")
 		}
 		return
@@ -63,7 +61,7 @@ func download(*cobra.Command, []string) {
 		logrus.WithError(err).Fatal("Failed to initialize downloader")
 	}
 
-	if err := downloader.Download(context.Background(), downloadArgs.root, downloadArgs.file, downloadArgs.proof); err != nil {
+	if err := downloader.Download(cliCtx, downloadArgs.root, downloadArgs.file, downloadArgs.proof); err != nil {
 		logrus.WithError(err).Fatal("Failed to download file")
 	}
 }

@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"context"
-
 	zg_common "github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/common/blockchain"
 	"github.com/0glabs/0g-storage-client/contract"
@@ -95,7 +93,7 @@ func upload(*cobra.Command, []string) {
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to initialize indexer client")
 		}
-		if err := indexerClient.Upload(context.Background(), flow, file, opt); err != nil {
+		if err := indexerClient.Upload(cliCtx, flow, file, opt); err != nil {
 			logrus.WithError(err).Fatal("Failed to upload file")
 		}
 		return
@@ -111,7 +109,7 @@ func upload(*cobra.Command, []string) {
 		logrus.WithError(err).Fatal("Failed to initialize uploader")
 	}
 
-	if err := uploader.Upload(context.Background(), file, opt); err != nil {
+	if err := uploader.Upload(cliCtx, file, opt); err != nil {
 		logrus.WithError(err).Fatal("Failed to upload file")
 	}
 }

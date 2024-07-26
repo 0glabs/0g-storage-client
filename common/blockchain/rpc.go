@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"context"
 	"time"
 
 	"github.com/0glabs/0g-storage-client/common/util"
@@ -18,7 +19,6 @@ import (
 var Web3LogEnabled bool
 
 type RetryOption struct {
-	Rounds   uint
 	Interval time.Duration
 	logger   *logrus.Logger
 }
@@ -59,24 +59,18 @@ func NewWeb3WithOption(url, key string, option ...providers.Option) (*web3go.Cli
 	return web3go.NewClientWithOption(url, *opt.WithSignerManager(sm))
 }
 
-func WaitForReceipt(client *web3go.Client, txHash common.Hash, successRequired bool, opts ...RetryOption) (receipt *types.Receipt, err error) {
+func WaitForReceipt(ctx context.Context, client *web3go.Client, txHash common.Hash, successRequired bool, opts ...RetryOption) (receipt *types.Receipt, err error) {
 	var opt RetryOption
 	if len(opts) > 0 {
 		opt = opts[0]
 	} else {
-		// default 10 rounds
-		opt.Rounds = 10
 		opt.Interval = time.Second * 3
 	}
 
 	var tries uint
 	reminder := util.NewReminder(opt.logger, time.Minute)
 	for receipt == nil {
-		if tries > opt.Rounds+1 && opt.Rounds != 0 {
-			return nil, errors.New("no receipt after max retries")
-		}
-		time.Sleep(opt.Interval)
-		if receipt, err = client.Eth.TransactionReceipt(txHash); err != nil {
+		if receipt, err = client.WithContext(ctx).Eth.TransactionReceipt(txHash); err != nil {
 			return nil, err
 		}
 		tries++
@@ -85,6 +79,8 @@ func WaitForReceipt(client *web3go.Client, txHash common.Hash, successRequired b
 		if receipt == nil {
 			reminder.RemindWith("Transaction not executed yet", "hash", txHash)
 		}
+
+		time.Sleep(opt.Interval)
 	}
 
 	if receipt.Status == nil {

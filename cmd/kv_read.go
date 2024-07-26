@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -45,7 +44,6 @@ func init() {
 }
 
 func kvRead(*cobra.Command, []string) {
-	ctx := context.Background()
 	client := node.MustNewKvClient(kvReadArgs.node)
 	defer client.Close()
 	kvClient := kv.NewClient(client)
@@ -53,7 +51,7 @@ func kvRead(*cobra.Command, []string) {
 
 	m := make(map[string]string)
 	for _, key := range kvReadArgs.keys {
-		val, err := kvClient.GetValue(ctx, streamId, []byte(key))
+		val, err := kvClient.GetValue(cliCtx, streamId, []byte(key))
 		if err != nil {
 			logrus.WithError(err).Fatalf("failed to read key %v", key)
 		}
