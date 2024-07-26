@@ -21,7 +21,7 @@ func MustServeRPC(endpoint string, apis map[string]interface{}) {
 
 	httpServer := http.Server{
 		// "github.com/ethereum/go-ethereum/node"
-		Handler: node.NewHTTPHandlerStack(handler, []string{"*"}, []string{"*"}),
+		Handler: node.NewHTTPHandlerStack(handler, []string{"*"}, []string{"*"}, []byte{}),
 		// Handler: handler,
 	}
 
