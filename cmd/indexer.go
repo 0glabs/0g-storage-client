@@ -32,6 +32,8 @@ func init() {
 	indexerCmd.Flags().DurationVar(&indexerArgs.nodes.DiscoveryInterval, "discover-interval", 10*time.Minute, "Interval to discover peers in network")
 	indexerCmd.Flags().DurationVar(&indexerArgs.nodes.UpdateInterval, "update-interval", 10*time.Minute, "Interval to update shard config of discovered peers")
 
+	indexerCmd.Flags().IntSliceVar(&indexerArgs.nodes.DiscoveryPorts, "discover-ports", []int{5678}, "Ports to try for discovered nodes")
+
 	indexerCmd.Flags().StringVar(&indexerArgs.locations.CacheFile, "ip-location-cache-file", ".ip-location-cache.json", "File name to cache IP locations")
 	indexerCmd.Flags().DurationVar(&indexerArgs.locations.CacheWriteInterval, "ip-location-cache-interval", 10*time.Minute, "Interval to write ip locations to cache file")
 	indexerCmd.Flags().StringVar(&indexerArgs.locations.AccessToken, "ip-location-token", "", "Access token to retrieve IP location from ipinfo.io")
@@ -46,6 +48,7 @@ func init() {
 
 func startIndexer(*cobra.Command, []string) {
 	indexerArgs.locationCache.DiscoveryNode = indexerArgs.nodes.DiscoveryNode
+	indexerArgs.locationCache.DiscoveryPorts = indexerArgs.nodes.DiscoveryPorts
 
 	indexer.InitDefaultIPLocationManager(indexerArgs.locations)
 

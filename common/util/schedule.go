@@ -1,6 +1,8 @@
 package util
 
 import (
+	"context"
+	"fmt"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -25,4 +27,23 @@ func ScheduleNow(action func() error, interval time.Duration, errorMessage strin
 	}
 
 	Schedule(action, interval, errorMessage)
+}
+
+// WaitUntil runs the given function within a time duration
+func WaitUntil(fn func() error, timeout time.Duration) error {
+	ch := make(chan error, 1)
+
+	ctxTimeout, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	go func() {
+		ch <- fn()
+	}()
+
+	select {
+	case <-ctxTimeout.Done():
+		return fmt.Errorf("wait until task timeout")
+	case err := <-ch:
+		return err
+	}
 }

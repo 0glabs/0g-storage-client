@@ -18,9 +18,10 @@ const defaultDiscoveredURLRetryInterval = time.Minute * 10
 const defaultSuccessCallLifetime = time.Minute * 10
 
 type FileLocationCacheConfig struct {
-	CacheSize     int
-	Expiry        time.Duration
-	DiscoveryNode string
+	CacheSize      int
+	Expiry         time.Duration
+	DiscoveryNode  string
+	DiscoveryPorts []int
 }
 
 type successCall struct {
@@ -34,6 +35,7 @@ type FileLocationCache struct {
 	latestFailedCall  sync.Map // url -> time.Time
 	latestSuccessCall sync.Map // url -> successCall
 	discoverNode      *node.AdminClient
+	discoveryPorts    []int
 }
 
 var defaultFileLocationCache FileLocationCache
@@ -45,6 +47,7 @@ func InitFileLocationCache(config FileLocationCacheConfig) (closable func(), err
 		}
 	}
 	defaultFileLocationCache.cache = expirable.NewLRU[uint64, []*shard.ShardedNode](config.CacheSize, nil, config.Expiry)
+	defaultFileLocationCache.discoveryPorts = config.DiscoveryPorts
 	return defaultFileLocationCache.close, nil
 }
 
@@ -93,55 +96,58 @@ func (c *FileLocationCache) GetFileLocations(ctx context.Context, txSeq uint64) 
 		}
 		logrus.Debugf("find file #%v from location cache, got %v nodes holding the file", txSeq, len(locations))
 		for _, location := range locations {
-			url := fmt.Sprintf("http://%v:5678", location.Ip)
-			if _, ok := selected[url]; ok {
-				continue
-			}
-			if val, ok := c.latestSuccessCall.Load(url); ok {
-				call := val.(successCall)
-				if time.Since(call.ts) < defaultSuccessCallLifetime {
-					nodes = append(nodes, call.node)
+			for _, port := range c.discoveryPorts {
+				url := fmt.Sprintf("http://%v:%v", location.Ip, port)
+				if _, ok := selected[url]; ok {
+					break
+				}
+				if val, ok := c.latestSuccessCall.Load(url); ok {
+					call := val.(successCall)
+					if time.Since(call.ts) < defaultSuccessCallLifetime {
+						nodes = append(nodes, call.node)
+						break
+					}
+				}
+				if val, ok := c.latestFailedCall.Load(url); ok {
+					if time.Since(val.(time.Time)) < defaultDiscoveredURLRetryInterval {
+						continue
+					}
+				}
+				zgsClient, err := node.NewZgsClient(url, defaultZgsClientOpt)
+				if err != nil {
 					continue
 				}
-			}
-			if val, ok := c.latestFailedCall.Load(url); ok {
-				if time.Since(val.(time.Time)) < defaultDiscoveredURLRetryInterval {
+				defer zgsClient.Close()
+				fileInfo, err := zgsClient.GetFileInfoByTxSeq(ctx, txSeq)
+				if err != nil {
+					c.latestFailedCall.Store(url, time.Now())
 					continue
 				}
+				if !fileInfo.Finalized {
+					continue
+				}
+				start := time.Now()
+				config, err := zgsClient.GetShardConfig(context.Background())
+				if err != nil {
+					c.latestFailedCall.Store(url, time.Now())
+					continue
+				}
+				if !config.IsValid() {
+					continue
+				}
+				call := successCall{
+					node: &shard.ShardedNode{
+						URL:     url,
+						Config:  config,
+						Latency: time.Since(start).Milliseconds(),
+					},
+					ts: time.Now(),
+				}
+				nodes = append(nodes, call.node)
+				c.latestSuccessCall.Store(url, call)
+				selected[url] = struct{}{}
+				break
 			}
-			zgsClient, err := node.NewZgsClient(url, defaultZgsClientOpt)
-			if err != nil {
-				continue
-			}
-			defer zgsClient.Close()
-			fileInfo, err := zgsClient.GetFileInfoByTxSeq(ctx, txSeq)
-			if err != nil {
-				c.latestFailedCall.Store(url, time.Now())
-				continue
-			}
-			if !fileInfo.Finalized {
-				continue
-			}
-			start := time.Now()
-			config, err := zgsClient.GetShardConfig(context.Background())
-			if err != nil {
-				c.latestFailedCall.Store(url, time.Now())
-				continue
-			}
-			if !config.IsValid() {
-				continue
-			}
-			call := successCall{
-				node: &shard.ShardedNode{
-					URL:     url,
-					Config:  config,
-					Latency: time.Since(start).Milliseconds(),
-				},
-				ts: time.Now(),
-			}
-			nodes = append(nodes, call.node)
-			c.latestSuccessCall.Store(url, call)
-			selected[url] = struct{}{}
 		}
 		if _, covered := shard.Select(nodes, 1); covered {
 			return nodes, nil

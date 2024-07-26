@@ -28,6 +28,7 @@ type NodeManagerConfig struct {
 
 	DiscoveryNode     string
 	DiscoveryInterval time.Duration
+	DiscoveryPorts    []int
 
 	UpdateInterval time.Duration
 }
@@ -36,8 +37,9 @@ type NodeManagerConfig struct {
 type NodeManager struct {
 	trusted sync.Map // url -> *node.ZgsClient
 
-	discoverNode *node.AdminClient
-	discovered   sync.Map // url -> *shard.ShardedNode
+	discoverNode   *node.AdminClient
+	discoveryPorts []int
+	discovered     sync.Map // url -> *shard.ShardedNode
 }
 
 // InitDefaultNodeManager initializes the default `NodeManager`.
@@ -47,6 +49,7 @@ func InitDefaultNodeManager(config NodeManagerConfig) (closable func(), err erro
 			return nil, errors.WithMessage(err, "Failed to create admin client to discover peers")
 		}
 	}
+	defaultNodeManager.discoveryPorts = config.DiscoveryPorts
 
 	if err = defaultNodeManager.AddTrustedNodes(config.TrustedNodes...); err != nil {
 		return nil, errors.WithMessage(err, "Failed to add trusted nodes")
@@ -182,31 +185,34 @@ func (nm *NodeManager) discover() error {
 			logrus.WithField("seenIPs", v.SeenIps).Warn("More than one seen IPs")
 		}
 
-		url := fmt.Sprintf("http://%v:5678", v.SeenIps[0])
+		for _, port := range nm.discoveryPorts {
+			url := fmt.Sprintf("http://%v:%v", v.SeenIps[0], port)
 
-		// ignore trusted node
-		if _, ok := nm.trusted.Load(url); ok {
-			continue
+			// ignore trusted node
+			if _, ok := nm.trusted.Load(url); ok {
+				continue
+			}
+
+			// discovered already
+			if _, ok := nm.discovered.Load(url); ok {
+				continue
+			}
+
+			// add new storage node
+			node, err := nm.updateNode(url)
+			if err != nil {
+				logrus.WithError(err).WithField("url", url).Debug("Failed to add new peer")
+			} else {
+				logrus.WithFields(logrus.Fields{
+					"url":     url,
+					"shard":   node.Config,
+					"latency": node.Latency,
+				}).Debug("New peer discovered")
+			}
+
+			numNew++
+			break
 		}
-
-		// discovered already
-		if _, ok := nm.discovered.Load(url); ok {
-			continue
-		}
-
-		// add new storage node
-		node, err := nm.updateNode(url)
-		if err != nil {
-			logrus.WithError(err).WithField("url", url).Debug("Failed to add new peer")
-		} else {
-			logrus.WithFields(logrus.Fields{
-				"url":     url,
-				"shard":   node.Config,
-				"latency": node.Latency,
-			}).Debug("New peer discovered")
-		}
-
-		numNew++
 	}
 
 	if numNew > 0 {
