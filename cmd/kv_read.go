@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/0glabs/0g-storage-client/kv"
 	"github.com/0glabs/0g-storage-client/node"
@@ -20,6 +21,8 @@ var (
 		version  uint64
 
 		node string
+
+		timeout time.Duration
 	}
 
 	kvReadCmd = &cobra.Command{
@@ -41,11 +44,19 @@ func init() {
 	kvReadCmd.Flags().StringVar(&kvReadArgs.node, "node", "", "kv node url")
 	kvReadCmd.MarkFlagRequired("node")
 
+	kvReadCmd.Flags().DurationVar(&kvReadArgs.timeout, "timeout", 0, "cli task timeout, 0 for no timeout")
+
 	rootCmd.AddCommand(kvReadCmd)
 }
 
 func kvRead(*cobra.Command, []string) {
 	ctx := context.Background()
+	var cancel context.CancelFunc
+	if kvReadArgs.timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, kvReadArgs.timeout)
+		defer cancel()
+	}
+
 	client := node.MustNewKvClient(kvReadArgs.node)
 	defer client.Close()
 	kvClient := kv.NewClient(client)

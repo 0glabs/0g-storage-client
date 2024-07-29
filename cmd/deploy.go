@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"context"
+	"time"
+
 	"github.com/0glabs/0g-storage-client/common/blockchain"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -11,6 +14,7 @@ var (
 		url            string
 		key            string
 		bytecodeOrFile string
+		timeout        time.Duration
 	}
 
 	deployCmd = &cobra.Command{
@@ -28,13 +32,22 @@ func init() {
 	deployCmd.Flags().StringVar(&deployArgs.bytecodeOrFile, "bytecode", "", "ZeroGStorage smart contract bytecode")
 	deployCmd.MarkFlagRequired("bytecode")
 
+	deployCmd.Flags().DurationVar(&deployArgs.timeout, "timeout", 0, "cli task timeout, 0 for no timeout")
+
 	rootCmd.AddCommand(deployCmd)
 }
 
 func deploy(*cobra.Command, []string) {
+	ctx := context.Background()
+	var cancel context.CancelFunc
+	if deployArgs.timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, deployArgs.timeout)
+		defer cancel()
+	}
+
 	client := blockchain.MustNewWeb3(deployArgs.url, deployArgs.key)
 
-	contract, err := blockchain.Deploy(client, deployArgs.bytecodeOrFile)
+	contract, err := blockchain.Deploy(ctx, client, deployArgs.bytecodeOrFile)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to deploy smart contract")
 	}

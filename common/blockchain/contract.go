@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"context"
 	"encoding/json"
 	"io/ioutil"
 	"math/big"
@@ -17,7 +18,7 @@ import (
 var CustomGasPrice uint64
 var CustomGasLimit uint64
 
-func Deploy(clientWithSigner *web3go.Client, dataOrFile string) (common.Address, error) {
+func Deploy(ctx context.Context, clientWithSigner *web3go.Client, dataOrFile string) (common.Address, error) {
 	signer, err := defaultSigner(clientWithSigner)
 	if err != nil {
 		return common.Address{}, errors.WithMessage(err, "Failed to detect account")
@@ -49,7 +50,7 @@ func Deploy(clientWithSigner *web3go.Client, dataOrFile string) (common.Address,
 		return common.Address{}, errors.WithMessage(err, "Failed to send transaction")
 	}
 
-	receipt, err := WaitForReceipt(clientWithSigner, txHash, true)
+	receipt, err := WaitForReceipt(ctx, clientWithSigner, txHash, true)
 	if err != nil {
 		return common.Address{}, errors.WithMessage(err, "Failed to wait for receipt")
 	}
@@ -117,7 +118,7 @@ func NewContract(clientWithSigner *web3go.Client, signerFn bind.SignerFn) (*Cont
 	}, nil
 }
 
-func (c *Contract) CreateTransactOpts() (*bind.TransactOpts, error) {
+func (c *Contract) CreateTransactOpts(ctx context.Context) (*bind.TransactOpts, error) {
 	var gasPrice *big.Int
 	if CustomGasPrice > 0 {
 		gasPrice = new(big.Int).SetUint64(CustomGasPrice)
@@ -128,9 +129,10 @@ func (c *Contract) CreateTransactOpts() (*bind.TransactOpts, error) {
 		GasPrice: gasPrice,
 		GasLimit: CustomGasLimit,
 		Signer:   c.signer,
+		Context:  ctx,
 	}, nil
 }
 
-func (c *Contract) WaitForReceipt(txHash common.Hash, successRequired bool, opts ...RetryOption) (*types.Receipt, error) {
-	return WaitForReceipt(c.client, txHash, successRequired, opts...)
+func (c *Contract) WaitForReceipt(ctx context.Context, txHash common.Hash, successRequired bool, opts ...RetryOption) (*types.Receipt, error) {
+	return WaitForReceipt(ctx, c.client, txHash, successRequired, opts...)
 }

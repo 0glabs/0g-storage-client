@@ -155,7 +155,7 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 	var receipt *types.Receipt
 	if len(toSubmitDatas) > 0 {
 		var err error
-		if txHash, receipt, err = uploader.SubmitLogEntry(toSubmitDatas, toSubmitTags, waitForLogEntry); err != nil {
+		if txHash, receipt, err = uploader.SubmitLogEntry(ctx, toSubmitDatas, toSubmitTags, waitForLogEntry); err != nil {
 			return common.Hash{}, nil, errors.WithMessage(err, "Failed to submit log entry")
 		}
 		if waitForLogEntry {
@@ -216,7 +216,7 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 	if !opt.SkipTx || !exist {
 		var receipt *types.Receipt
 
-		if _, receipt, err = uploader.SubmitLogEntry([]core.IterableData{data}, [][]byte{opt.Tags}, true); err != nil {
+		if _, receipt, err = uploader.SubmitLogEntry(ctx, []core.IterableData{data}, [][]byte{opt.Tags}, true); err != nil {
 			return errors.WithMessage(err, "Failed to submit log entry")
 		}
 
@@ -249,7 +249,7 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 }
 
 // SubmitLogEntry submit the data to 0g storage contract by sending a transaction
-func (uploader *Uploader) SubmitLogEntry(datas []core.IterableData, tags [][]byte, waitForReceipt bool) (common.Hash, *types.Receipt, error) {
+func (uploader *Uploader) SubmitLogEntry(ctx context.Context, datas []core.IterableData, tags [][]byte, waitForReceipt bool) (common.Hash, *types.Receipt, error) {
 	// Construct submission
 	submissions := make([]contract.Submission, len(datas))
 	for i := 0; i < len(datas); i++ {
@@ -262,7 +262,7 @@ func (uploader *Uploader) SubmitLogEntry(datas []core.IterableData, tags [][]byt
 	}
 
 	// Submit log entry to smart contract.
-	opts, err := uploader.flow.CreateTransactOpts()
+	opts, err := uploader.flow.CreateTransactOpts(ctx)
 	if err != nil {
 		return common.Hash{}, nil, errors.WithMessage(err, "Failed to create opts to send transaction")
 	}
@@ -286,7 +286,7 @@ func (uploader *Uploader) SubmitLogEntry(datas []core.IterableData, tags [][]byt
 
 	if waitForReceipt {
 		// Wait for successful execution
-		receipt, err := uploader.flow.WaitForReceipt(tx.Hash(), true)
+		receipt, err := uploader.flow.WaitForReceipt(ctx, tx.Hash(), true)
 		return tx.Hash(), receipt, err
 	}
 	return tx.Hash(), nil, nil
