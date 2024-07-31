@@ -16,6 +16,7 @@ import (
 	"github.com/0glabs/0g-storage-client/core"
 	"github.com/0glabs/0g-storage-client/core/merkle"
 	"github.com/0glabs/0g-storage-client/node"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
@@ -47,6 +48,7 @@ type UploadOption struct {
 // Uploader uploader to upload file to 0g storage, send on-chain transactions and transfer data to storage nodes.
 type Uploader struct {
 	flow    *contract.FlowContract // flow contract instance
+	market  *contract.Market       // market contract instance
 	clients []*node.ZgsClient      // 0g storage clients
 	logger  *logrus.Logger         // logger
 }
@@ -67,14 +69,19 @@ func getShardConfigs(ctx context.Context, clients []*node.ZgsClient) ([]*shard.S
 }
 
 // NewUploader Initialize a new uploader.
-func NewUploader(flow *contract.FlowContract, clients []*node.ZgsClient, opts ...zg_common.LogOption) (*Uploader, error) {
+func NewUploader(ctx context.Context, flow *contract.FlowContract, clients []*node.ZgsClient, opts ...zg_common.LogOption) (*Uploader, error) {
 	if len(clients) == 0 {
 		return nil, errors.New("storage node not specified")
+	}
+	market, err := flow.GetMarketContract(ctx)
+	if err != nil {
+		return nil, err
 	}
 	uploader := &Uploader{
 		clients: clients,
 		logger:  zg_common.NewLogger(opts...),
 		flow:    flow,
+		market:  market,
 	}
 	return uploader, nil
 }
@@ -268,13 +275,17 @@ func (uploader *Uploader) SubmitLogEntry(ctx context.Context, datas []core.Itera
 	}
 
 	var tx *types.Transaction
+	pricePerSector, err := uploader.market.PricePerSector(&bind.CallOpts{Context: ctx})
+	if err != nil {
+		return common.Hash{}, nil, errors.WithMessage(err, "Failed to read price per sector")
+	}
 	if len(datas) == 1 {
-		opts.Value = submissions[0].Fee()
+		opts.Value = submissions[0].Fee(pricePerSector)
 		tx, err = uploader.flow.Submit(opts, submissions[0])
 	} else {
 		opts.Value = big.NewInt(0)
 		for _, v := range submissions {
-			opts.Value = new(big.Int).Add(opts.Value, v.Fee())
+			opts.Value = new(big.Int).Add(opts.Value, v.Fee(pricePerSector))
 		}
 		tx, err = uploader.flow.BatchSubmit(opts, submissions)
 	}

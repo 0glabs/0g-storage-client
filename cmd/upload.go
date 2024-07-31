@@ -118,7 +118,7 @@ func upload(*cobra.Command, []string) {
 		defer client.Close()
 	}
 
-	uploader, err := transfer.NewUploader(flow, clients, zg_common.LogOption{Logger: logrus.StandardLogger()})
+	uploader, err := transfer.NewUploader(ctx, flow, clients, zg_common.LogOption{Logger: logrus.StandardLogger()})
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to initialize uploader")
 	}
