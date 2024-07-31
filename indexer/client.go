@@ -120,7 +120,12 @@ func (c *Client) NewUploaderFromIndexerNodes(ctx context.Context, flow *contract
 	if err != nil {
 		return nil, err
 	}
-	return transfer.NewUploader(flow, clients, c.option.LogOption)
+	urls := make([]string, len(clients))
+	for i, client := range clients {
+		urls[i] = client.URL()
+	}
+	c.logger.Infof("get %v storage nodes from indexer: %v", len(urls), urls)
+	return transfer.NewUploader(ctx, flow, clients, c.option.LogOption)
 }
 
 // Upload submit data to 0g storage contract, then transfer the data to the storage nodes selected from indexer service.

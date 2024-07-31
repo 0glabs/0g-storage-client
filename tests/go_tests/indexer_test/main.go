@@ -76,7 +76,7 @@ func runTest() error {
 		defer client.Close()
 	}
 
-	uploader, err := transfer.NewUploader(flow, clients, common.LogOption{Logger: logrus.StandardLogger()})
+	uploader, err := transfer.NewUploader(ctx, flow, clients, common.LogOption{Logger: logrus.StandardLogger()})
 	if err != nil {
 		return errors.WithMessage(err, "failed to initialize uploader")
 	}

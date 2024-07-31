@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"math"
+	"math/big"
 	"time"
 
 	zg_common "github.com/0glabs/0g-storage-client/common"
@@ -36,6 +37,8 @@ var (
 		skipTx           bool
 		finalityRequired bool
 		taskSize         uint
+
+		fee float64
 
 		timeout time.Duration
 	}
@@ -77,6 +80,8 @@ func init() {
 
 	kvWriteCmd.Flags().DurationVar(&kvWriteArgs.timeout, "timeout", 0, "cli task timeout, 0 for no timeout")
 
+	kvWriteCmd.Flags().Float64Var(&kvWriteArgs.fee, "fee", 0, "fee paid in a0gi")
+
 	rootCmd.AddCommand(kvWriteCmd)
 }
 
@@ -96,11 +101,17 @@ func kvWrite(*cobra.Command, []string) {
 		logrus.WithError(err).Fatal("Failed to create flow contract")
 	}
 
+	var fee *big.Int
+	if kvWriteArgs.fee > 0 {
+		feeInA0GI := big.NewFloat(kvWriteArgs.fee)
+		fee, _ = feeInA0GI.Mul(feeInA0GI, big.NewFloat(1e18)).Int(nil)
+	}
 	opt := transfer.UploadOption{
 		FinalityRequired: kvWriteArgs.finalityRequired,
 		TaskSize:         kvWriteArgs.taskSize,
 		ExpectedReplica:  kvWriteArgs.expectedReplica,
 		SkipTx:           kvWriteArgs.skipTx,
+		Fee:              fee,
 	}
 
 	var clients []*node.ZgsClient

@@ -16,6 +16,7 @@ import (
 	"github.com/0glabs/0g-storage-client/core"
 	"github.com/0glabs/0g-storage-client/core/merkle"
 	"github.com/0glabs/0g-storage-client/node"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
@@ -37,16 +38,18 @@ func isDuplicateError(msg string) bool {
 
 // UploadOption upload option for a file
 type UploadOption struct {
-	Tags             []byte // transaction tags
-	FinalityRequired bool   // wait for file finalized on uploaded nodes or not
-	TaskSize         uint   // number of segment to upload in single rpc request
-	ExpectedReplica  uint   // expected number of replications
-	SkipTx           bool   // skip sending transaction on chain, this can set to true only if the data has already settled on chain before
+	Tags             []byte   // transaction tags
+	FinalityRequired bool     // wait for file finalized on uploaded nodes or not
+	TaskSize         uint     // number of segment to upload in single rpc request
+	ExpectedReplica  uint     // expected number of replications
+	SkipTx           bool     // skip sending transaction on chain, this can set to true only if the data has already settled on chain before
+	Fee              *big.Int // fee in neuron
 }
 
 // Uploader uploader to upload file to 0g storage, send on-chain transactions and transfer data to storage nodes.
 type Uploader struct {
 	flow    *contract.FlowContract // flow contract instance
+	market  *contract.Market       // market contract instance
 	clients []*node.ZgsClient      // 0g storage clients
 	logger  *logrus.Logger         // logger
 }
@@ -67,14 +70,19 @@ func getShardConfigs(ctx context.Context, clients []*node.ZgsClient) ([]*shard.S
 }
 
 // NewUploader Initialize a new uploader.
-func NewUploader(flow *contract.FlowContract, clients []*node.ZgsClient, opts ...zg_common.LogOption) (*Uploader, error) {
+func NewUploader(ctx context.Context, flow *contract.FlowContract, clients []*node.ZgsClient, opts ...zg_common.LogOption) (*Uploader, error) {
 	if len(clients) == 0 {
 		return nil, errors.New("storage node not specified")
+	}
+	market, err := flow.GetMarketContract(ctx)
+	if err != nil {
+		return nil, err
 	}
 	uploader := &Uploader{
 		clients: clients,
 		logger:  zg_common.NewLogger(opts...),
 		flow:    flow,
+		market:  market,
 	}
 	return uploader, nil
 }
@@ -155,7 +163,7 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 	var receipt *types.Receipt
 	if len(toSubmitDatas) > 0 {
 		var err error
-		if txHash, receipt, err = uploader.SubmitLogEntry(ctx, toSubmitDatas, toSubmitTags, waitForLogEntry); err != nil {
+		if txHash, receipt, err = uploader.SubmitLogEntry(ctx, toSubmitDatas, toSubmitTags, waitForLogEntry, nil); err != nil {
 			return common.Hash{}, nil, errors.WithMessage(err, "Failed to submit log entry")
 		}
 		if waitForLogEntry {
@@ -216,7 +224,7 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 	if !opt.SkipTx || !exist {
 		var receipt *types.Receipt
 
-		if _, receipt, err = uploader.SubmitLogEntry(ctx, []core.IterableData{data}, [][]byte{opt.Tags}, true); err != nil {
+		if _, receipt, err = uploader.SubmitLogEntry(ctx, []core.IterableData{data}, [][]byte{opt.Tags}, true, opt.Fee); err != nil {
 			return errors.WithMessage(err, "Failed to submit log entry")
 		}
 
@@ -249,7 +257,7 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 }
 
 // SubmitLogEntry submit the data to 0g storage contract by sending a transaction
-func (uploader *Uploader) SubmitLogEntry(ctx context.Context, datas []core.IterableData, tags [][]byte, waitForReceipt bool) (common.Hash, *types.Receipt, error) {
+func (uploader *Uploader) SubmitLogEntry(ctx context.Context, datas []core.IterableData, tags [][]byte, waitForReceipt bool, fee *big.Int) (common.Hash, *types.Receipt, error) {
 	// Construct submission
 	submissions := make([]contract.Submission, len(datas))
 	for i := 0; i < len(datas); i++ {
@@ -268,14 +276,28 @@ func (uploader *Uploader) SubmitLogEntry(ctx context.Context, datas []core.Itera
 	}
 
 	var tx *types.Transaction
+	pricePerSector, err := uploader.market.PricePerSector(&bind.CallOpts{Context: ctx})
+	if err != nil {
+		return common.Hash{}, nil, errors.WithMessage(err, "Failed to read price per sector")
+	}
 	if len(datas) == 1 {
-		opts.Value = submissions[0].Fee()
+		if fee != nil {
+			opts.Value = fee
+		} else {
+			opts.Value = submissions[0].Fee(pricePerSector)
+		}
+		uploader.logger.WithField("fee(neuron)", opts.Value).Info("submit with fee")
 		tx, err = uploader.flow.Submit(opts, submissions[0])
 	} else {
-		opts.Value = big.NewInt(0)
-		for _, v := range submissions {
-			opts.Value = new(big.Int).Add(opts.Value, v.Fee())
+		if fee != nil {
+			opts.Value = fee
+		} else {
+			opts.Value = big.NewInt(0)
+			for _, v := range submissions {
+				opts.Value = new(big.Int).Add(opts.Value, v.Fee(pricePerSector))
+			}
 		}
+		uploader.logger.WithField("fee(neuron)", opts.Value).Info("batch submit with fee")
 		tx, err = uploader.flow.BatchSubmit(opts, submissions)
 	}
 	if err != nil {

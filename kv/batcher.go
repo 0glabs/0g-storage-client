@@ -51,7 +51,7 @@ func (b *Batcher) Exec(ctx context.Context, option ...transfer.UploadOption) err
 	}
 
 	// upload file
-	uploader, err := transfer.NewUploader(b.flow, b.clients, zg_common.LogOption{Logger: b.logger})
+	uploader, err := transfer.NewUploader(ctx, b.flow, b.clients, zg_common.LogOption{Logger: b.logger})
 	if err != nil {
 		return err
 	}

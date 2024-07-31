@@ -15,7 +15,7 @@ import json
 from pathlib import Path
 
 from eth_utils import encode_hex
-from test_framework.contract_proxy import FlowContractProxy, MineContractProxy, IRewardContractProxy
+from test_framework.contract_proxy import FlowContractProxy, MineContractProxy, RewardContractProxy
 from test_framework.zgs_node import ZgsNode
 from test_framework.blockchain_node import BlockChainNodeType
 from test_framework.zg_node import ZGNode, zg_node_init_genesis
@@ -50,7 +50,7 @@ class TestFramework:
         self.zgs_node_configs = {}
         self.blockchain_node_type = blockchain_node_type
         self.block_time = blockchain_node_type.block_time()
-        self.enable_market = False
+        self.enable_market = True
         self.mine_period = 100
         self.launch_wait_seconds = 1
 
@@ -122,7 +122,7 @@ class TestFramework:
         contract, tx_hash, mine_contract, reward_contract = self.blockchain_nodes[0].setup_contract(self.enable_market, self.mine_period)
         self.contract = FlowContractProxy(contract, self.blockchain_nodes)
         self.mine_contract = MineContractProxy(mine_contract, self.blockchain_nodes)
-        self.reward_contract = IRewardContractProxy(reward_contract, self.blockchain_nodes)
+        self.reward_contract = RewardContractProxy(reward_contract, self.blockchain_nodes)
 
 
         for node in self.blockchain_nodes[1:]:

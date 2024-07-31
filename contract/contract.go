@@ -1,10 +1,12 @@
 package contract
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 
 	"github.com/0glabs/0g-storage-client/common/blockchain"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/openweb3/web3go"
@@ -13,6 +15,7 @@ import (
 type FlowContract struct {
 	*blockchain.Contract
 	*Flow
+	clientWithSigner *web3go.Client
 }
 
 func NewFlowContract(flowAddress common.Address, clientWithSigner *web3go.Client) (*FlowContract, error) {
@@ -28,7 +31,23 @@ func NewFlowContract(flowAddress common.Address, clientWithSigner *web3go.Client
 		return nil, err
 	}
 
-	return &FlowContract{contract, flow}, nil
+	return &FlowContract{contract, flow, clientWithSigner}, nil
+}
+
+func (f *FlowContract) GetMarketContract(ctx context.Context) (*Market, error) {
+	marketAddr, err := f.Market(&bind.CallOpts{Context: ctx})
+	if err != nil {
+		return nil, err
+	}
+
+	backend, _ := f.clientWithSigner.ToClientForContract()
+
+	market, err := NewMarket(marketAddr, backend)
+	if err != nil {
+		return nil, err
+	}
+
+	return market, nil
 }
 
 func (submission Submission) String() string {
@@ -58,23 +77,7 @@ func (submission Submission) Root() common.Hash {
 	return root
 }
 
-const (
-	LIFETIME_MONTHES         = 3
-	BYTES_PER_SECTOR         = 256
-	ANNUAL_ZGS_TOKENS_PER_GB = 10
-	GB                       = 1024 * 1024 * 1024
-	MONTH_PER_YEAR           = 12
-)
-
-var pricePerSector = new(big.Int).Div(
-	new(big.Int).Mul(
-		big.NewInt(LIFETIME_MONTHES*BYTES_PER_SECTOR*ANNUAL_ZGS_TOKENS_PER_GB/MONTH_PER_YEAR),
-		new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil), // ether: 10^18
-	),
-	big.NewInt(GB),
-)
-
-func (submission Submission) Fee() *big.Int {
+func (submission Submission) Fee(pricePerSector *big.Int) *big.Int {
 	var sectors int64
 	for _, node := range submission.Nodes {
 		sectors += 1 << node.Height.Int64()
