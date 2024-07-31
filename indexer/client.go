@@ -120,6 +120,11 @@ func (c *Client) NewUploaderFromIndexerNodes(ctx context.Context, flow *contract
 	if err != nil {
 		return nil, err
 	}
+	urls := make([]string, len(clients))
+	for i, client := range clients {
+		urls[i] = client.URL()
+	}
+	c.logger.Infof("get %v storage nodes from indexer: %v", len(urls), urls)
 	return transfer.NewUploader(ctx, flow, clients, c.option.LogOption)
 }
 

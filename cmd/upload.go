@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"math/big"
 	"time"
 
 	zg_common "github.com/0glabs/0g-storage-client/common"
@@ -34,6 +35,8 @@ var (
 		skipTx           bool
 		finalityRequired bool
 		taskSize         uint
+
+		fee float64
 
 		timeout time.Duration
 	}
@@ -69,6 +72,8 @@ func init() {
 
 	uploadCmd.Flags().DurationVar(&uploadArgs.timeout, "timeout", 0, "cli task timeout, 0 for no timeout")
 
+	uploadCmd.Flags().Float64Var(&uploadArgs.fee, "fee", 0, "fee paid in a0gi")
+
 	rootCmd.AddCommand(uploadCmd)
 }
 
@@ -87,13 +92,18 @@ func upload(*cobra.Command, []string) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create flow contract")
 	}
-
+	var fee *big.Int
+	if uploadArgs.fee > 0 {
+		feeInA0GI := big.NewFloat(uploadArgs.fee)
+		fee, _ = feeInA0GI.Mul(feeInA0GI, big.NewFloat(1e18)).Int(nil)
+	}
 	opt := transfer.UploadOption{
 		Tags:             hexutil.MustDecode(uploadArgs.tags),
 		FinalityRequired: uploadArgs.finalityRequired,
 		TaskSize:         uploadArgs.taskSize,
 		ExpectedReplica:  uploadArgs.expectedReplica,
 		SkipTx:           uploadArgs.skipTx,
+		Fee:              fee,
 	}
 
 	file, err := core.Open(uploadArgs.file)
