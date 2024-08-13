@@ -5,16 +5,18 @@ import (
 
 	"github.com/0glabs/0g-storage-client/common/util"
 	"github.com/0glabs/0g-storage-client/indexer"
+	"github.com/0glabs/0g-storage-client/indexer/gateway"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
 var (
 	indexerArgs struct {
-		endpoint      string
-		nodes         indexer.NodeManagerConfig
-		locations     indexer.IPLocationConfig
-		locationCache indexer.FileLocationCacheConfig
+		endpoint            string
+		nodes               indexer.NodeManagerConfig
+		locations           indexer.IPLocationConfig
+		locationCache       indexer.FileLocationCacheConfig
+		maxDownloadFileSize uint64
 	}
 
 	indexerCmd = &cobra.Command{
@@ -25,7 +27,7 @@ var (
 )
 
 func init() {
-	indexerCmd.Flags().StringVar(&indexerArgs.endpoint, "endpoint", ":12345", "Indexer RPC endpoint")
+	indexerCmd.Flags().StringVar(&indexerArgs.endpoint, "endpoint", ":12345", "Indexer service endpoint")
 
 	indexerCmd.Flags().StringSliceVar(&indexerArgs.nodes.TrustedNodes, "trusted", nil, "Trusted storage node URLs that separated by comma")
 	indexerCmd.Flags().StringVar(&indexerArgs.nodes.DiscoveryNode, "node", "", "Storage node to discover peers in P2P network")
@@ -40,6 +42,8 @@ func init() {
 
 	indexerCmd.Flags().DurationVar(&indexerArgs.locationCache.Expiry, "file-location-cache-expiry", 24*time.Hour, "Validity period of location information")
 	indexerCmd.Flags().IntVar(&indexerArgs.locationCache.CacheSize, "file-location-cache-size", 100000, "size of file location cache")
+
+	indexerCmd.Flags().Uint64Var(&indexerArgs.maxDownloadFileSize, "max-download-file-size", 100*1024*1024, "Maximum file size in bytes to download")
 
 	indexerCmd.MarkFlagsOneRequired("trusted", "node")
 
@@ -71,7 +75,12 @@ func startIndexer(*cobra.Command, []string) {
 		"discover": len(indexerArgs.nodes.DiscoveryNode) > 0,
 	}).Info("Starting indexer service ...")
 
-	util.MustServeRPC(indexerArgs.endpoint, map[string]interface{}{
-		api.Namespace: api,
+	gateway.MustServeWithRPC(gateway.Config{
+		Endpoint:            indexerArgs.endpoint,
+		Nodes:               indexerArgs.nodes.TrustedNodes,
+		MaxDownloadFileSize: indexerArgs.maxDownloadFileSize,
+		RPCHandler: util.MustNewRPCHandler(map[string]interface{}{
+			api.Namespace: api,
+		}),
 	})
 }
