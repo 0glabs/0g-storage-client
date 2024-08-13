@@ -1,7 +1,6 @@
 package util
 
 import (
-	"net"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/node"
@@ -9,8 +8,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// MustServeRPC starts RPC service until shutdown.
-func MustServeRPC(endpoint string, apis map[string]interface{}) {
+// MustNewRPCHandler creates a http.Handler for the specified RPC apis.
+func MustNewRPCHandler(apis map[string]interface{}) http.Handler {
 	handler := rpc.NewServer()
 
 	for namespace, impl := range apis {
@@ -19,16 +18,22 @@ func MustServeRPC(endpoint string, apis map[string]interface{}) {
 		}
 	}
 
-	httpServer := http.Server{
-		// "github.com/ethereum/go-ethereum/node"
-		Handler: node.NewHTTPHandlerStack(handler, []string{"*"}, []string{"*"}, []byte{}),
-		// Handler: handler,
+	// enable cors
+	return node.NewHTTPHandlerStack(handler, []string{"*"}, []string{"*"}, []byte{})
+}
+
+// MustServe starts a HTTP service util shutdown.
+func MustServe(endpoint string, handler http.Handler) {
+	server := http.Server{
+		Addr:    endpoint,
+		Handler: handler,
 	}
 
-	listener, err := net.Listen("tcp", endpoint)
-	if err != nil {
-		logrus.WithError(err).WithField("endpoint", endpoint).Fatal("Failed to listen to endpoint")
-	}
+	server.ListenAndServe()
+}
 
-	httpServer.Serve(listener)
+// MustServeRPC starts RPC service until shutdown.
+func MustServeRPC(endpoint string, apis map[string]interface{}) {
+	rpcHandler := MustNewRPCHandler(apis)
+	MustServe(endpoint, rpcHandler)
 }
