@@ -29,6 +29,17 @@ func (c *rpcClient) URL() string {
 	return c.url
 }
 
+func (c *rpcClient) wrapError(e error, method string) error {
+	if e == nil {
+		return nil
+	}
+	return &RPCError{
+		Message: e.Error(),
+		Method:  method,
+		URL:     c.URL(),
+	}
+}
+
 // Close close the underlying RPC client.
 func (c *rpcClient) Close() {
 	c.provider.Close()

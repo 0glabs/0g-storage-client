@@ -7,7 +7,6 @@ import (
 	"github.com/0glabs/0g-storage-client/core"
 	"github.com/0glabs/0g-storage-client/core/merkle"
 	"github.com/0glabs/0g-storage-client/node"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -76,7 +75,7 @@ func (uploader *segmentUploader) ParallelDo(ctx context.Context, routine int, ta
 		segIndex += uploadTask.numShard
 	}
 	if _, err := uploader.clients[uploadTask.clientIndex].UploadSegments(ctx, segments); err != nil && !isDuplicateError(err.Error()) {
-		return nil, errors.WithMessage(err, "Failed to upload segment")
+		return nil, err
 	}
 
 	if uploader.logger.IsLevelEnabled(logrus.DebugLevel) {

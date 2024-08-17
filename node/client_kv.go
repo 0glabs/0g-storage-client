@@ -39,7 +39,7 @@ func (c *KvClient) GetValue(ctx context.Context, streamId common.Hash, key []byt
 	if len(version) > 0 {
 		args = append(args, version[0])
 	}
-	err = c.provider.CallContext(ctx, &val, "kv_getValue", args...)
+	err = c.wrapError(c.provider.CallContext(ctx, &val, "kv_getValue", args...), "kv_getValue")
 	return
 }
 
@@ -49,7 +49,7 @@ func (c *KvClient) GetNext(ctx context.Context, streamId common.Hash, key []byte
 	if len(version) > 0 {
 		args = append(args, version[0])
 	}
-	err = c.provider.CallContext(ctx, &val, "kv_getNext", args...)
+	err = c.wrapError(c.provider.CallContext(ctx, &val, "kv_getNext", args...), "kv_getNext")
 	return
 }
 
@@ -59,7 +59,7 @@ func (c *KvClient) GetPrev(ctx context.Context, streamId common.Hash, key []byte
 	if len(version) > 0 {
 		args = append(args, version[0])
 	}
-	err = c.provider.CallContext(ctx, &val, "kv_getPrev", args...)
+	err = c.wrapError(c.provider.CallContext(ctx, &val, "kv_getPrev", args...), "kv_getPrev")
 	return
 }
 
@@ -69,7 +69,7 @@ func (c *KvClient) GetFirst(ctx context.Context, streamId common.Hash, startInde
 	if len(version) > 0 {
 		args = append(args, version[0])
 	}
-	err = c.provider.CallContext(ctx, &val, "kv_getFirst", args...)
+	err = c.wrapError(c.provider.CallContext(ctx, &val, "kv_getFirst", args...), "kv_getFirst")
 	return
 }
 
@@ -79,19 +79,19 @@ func (c *KvClient) GetLast(ctx context.Context, streamId common.Hash, startIndex
 	if len(version) > 0 {
 		args = append(args, version[0])
 	}
-	err = c.provider.CallContext(ctx, &val, "kv_getLast", args...)
+	err = c.wrapError(c.provider.CallContext(ctx, &val, "kv_getLast", args...), "kv_getLast")
 	return
 }
 
 // GetTransactionResult Call kv_getTransactionResult RPC to query the kv replay status of a given file.
 func (c *KvClient) GetTransactionResult(ctx context.Context, txSeq uint64) (result string, err error) {
-	err = c.provider.CallContext(ctx, &result, "kv_getTransactionResult", txSeq)
+	err = c.wrapError(c.provider.CallContext(ctx, &result, "kv_getTransactionResult", txSeq), "kv_getTransactionResult")
 	return
 }
 
 // GetHoldingStreamIds Call kv_getHoldingStreamIds RPC to query the stream ids monitered by the kv node.
 func (c *KvClient) GetHoldingStreamIds(ctx context.Context) (streamIds []common.Hash, err error) {
-	err = c.provider.CallContext(ctx, &streamIds, "kv_getHoldingStreamIds")
+	err = c.wrapError(c.provider.CallContext(ctx, &streamIds, "kv_getHoldingStreamIds"), "kv_getHoldingStreamIds")
 	return
 }
 
@@ -101,7 +101,7 @@ func (c *KvClient) HasWritePermission(ctx context.Context, account common.Addres
 	if len(version) > 0 {
 		args = append(args, version[0])
 	}
-	err = c.provider.CallContext(ctx, &hasPermission, "kv_hasWritePermission", args...)
+	err = c.wrapError(c.provider.CallContext(ctx, &hasPermission, "kv_hasWritePermission", args...), "kv_hasWritePermission")
 	return
 }
 
@@ -111,7 +111,7 @@ func (c *KvClient) IsAdmin(ctx context.Context, account common.Address, streamId
 	if len(version) > 0 {
 		args = append(args, version[0])
 	}
-	err = c.provider.CallContext(ctx, &isAdmin, "kv_isAdmin", args...)
+	err = c.wrapError(c.provider.CallContext(ctx, &isAdmin, "kv_isAdmin", args...), "kv_isAdmin")
 	return
 }
 
@@ -121,7 +121,7 @@ func (c *KvClient) IsSpecialKey(ctx context.Context, streamId common.Hash, key [
 	if len(version) > 0 {
 		args = append(args, version[0])
 	}
-	err = c.provider.CallContext(ctx, &isSpecialKey, "kv_isSpecialKey", args...)
+	err = c.wrapError(c.provider.CallContext(ctx, &isSpecialKey, "kv_isSpecialKey", args...), "kv_isSpecialKey")
 	return
 }
 
@@ -131,7 +131,7 @@ func (c *KvClient) IsWriterOfKey(ctx context.Context, account common.Address, st
 	if len(version) > 0 {
 		args = append(args, version[0])
 	}
-	err = c.provider.CallContext(ctx, &isWriter, "kv_isWriterOfKey", args...)
+	err = c.wrapError(c.provider.CallContext(ctx, &isWriter, "kv_isWriterOfKey", args...), "kv_isWriterOfKey")
 	return
 }
 
@@ -141,6 +141,6 @@ func (c *KvClient) IsWriterOfStream(ctx context.Context, account common.Address,
 	if len(version) > 0 {
 		args = append(args, version[0])
 	}
-	err = c.provider.CallContext(ctx, &isWriter, "kv_isWriterOfStream", args...)
+	err = c.wrapError(c.provider.CallContext(ctx, &isWriter, "kv_isWriterOfStream", args...), "kv_isWriterOfStream")
 	return
 }
