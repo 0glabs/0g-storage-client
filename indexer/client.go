@@ -148,7 +148,7 @@ func (c *Client) Upload(ctx context.Context, flow *contract.FlowContract, data c
 		var rpcError *node.RPCError
 		if errors.As(err, &rpcError) {
 			dropped = append(dropped, rpcError.URL)
-			c.logger.Infof("dropped problematic node %v and retry..", rpcError.URL)
+			c.logger.Infof("dropped problematic node and retry: %v", rpcError.Error())
 		} else {
 			return err
 		}
@@ -173,7 +173,7 @@ func (c *Client) BatchUpload(ctx context.Context, flow *contract.FlowContract, d
 		var rpcError *node.RPCError
 		if errors.As(err, &rpcError) {
 			dropped = append(dropped, rpcError.URL)
-			c.logger.Infof("dropped problematic node %v and retry..", rpcError.URL)
+			c.logger.Infof("dropped problematic node and retry: %v", rpcError.Error())
 		} else {
 			return hash, roots, err
 		}
@@ -191,6 +191,11 @@ func (c *Client) Download(ctx context.Context, root, filename string, withProof 
 		client, err := node.NewZgsClient(location.URL, c.option.ProviderOption)
 		if err != nil {
 			c.logger.Debugf("failed to initialize client of node %v, dropped.", location.URL)
+			continue
+		}
+		config, err := client.GetShardConfig(ctx)
+		if err != nil || !config.IsValid() {
+			c.logger.Debugf("failed to get shard config of node %v, dropped.", client.URL())
 			continue
 		}
 		clients = append(clients, client)

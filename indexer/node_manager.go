@@ -83,11 +83,13 @@ func (nm *NodeManager) Trusted() ([]*shard.ShardedNode, error) {
 		start := time.Now()
 		config, err := v.GetShardConfig(context.Background())
 		if err != nil {
-			return nil, errors.WithMessagef(err, "Failed to retrieve shard config from trusted storage node %v", v.URL())
+			logrus.Debugf("Failed to retrieve shard config from trusted storage node %v, error: %v", v.URL(), err)
+			continue
 		}
 
 		if !config.IsValid() {
-			return nil, errors.Errorf("Invalid shard config retrieved from trusted storage node %v", v.URL())
+			logrus.Debugf("Invalid shard config retrieved from trusted storage node %v: %v", v.URL(), config)
+			continue
 		}
 
 		nodes = append(nodes, &shard.ShardedNode{
