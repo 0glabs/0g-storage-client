@@ -38,7 +38,8 @@ var (
 		finalityRequired bool
 		taskSize         uint
 
-		fee float64
+		fee   float64
+		nonce uint
 
 		timeout time.Duration
 	}
@@ -81,6 +82,7 @@ func init() {
 	kvWriteCmd.Flags().DurationVar(&kvWriteArgs.timeout, "timeout", 0, "cli task timeout, 0 for no timeout")
 
 	kvWriteCmd.Flags().Float64Var(&kvWriteArgs.fee, "fee", 0, "fee paid in a0gi")
+	kvWriteCmd.Flags().UintVar(&kvWriteArgs.nonce, "nonce", 0, "nonce of upload transaction")
 
 	rootCmd.AddCommand(kvWriteCmd)
 }
@@ -93,7 +95,7 @@ func kvWrite(*cobra.Command, []string) {
 		defer cancel()
 	}
 
-	w3client := blockchain.MustNewWeb3(kvWriteArgs.url, kvWriteArgs.key)
+	w3client := blockchain.MustNewWeb3(kvWriteArgs.url, kvWriteArgs.key, providerOption)
 	defer w3client.Close()
 	contractAddr := common.HexToAddress(kvWriteArgs.contract)
 	flow, err := contract.NewFlowContract(contractAddr, w3client)
@@ -106,17 +108,25 @@ func kvWrite(*cobra.Command, []string) {
 		feeInA0GI := big.NewFloat(kvWriteArgs.fee)
 		fee, _ = feeInA0GI.Mul(feeInA0GI, big.NewFloat(1e18)).Int(nil)
 	}
+	var nonce *big.Int
+	if kvWriteArgs.nonce > 0 {
+		nonce = big.NewInt(int64(kvWriteArgs.nonce))
+	}
 	opt := transfer.UploadOption{
 		FinalityRequired: kvWriteArgs.finalityRequired,
 		TaskSize:         kvWriteArgs.taskSize,
 		ExpectedReplica:  kvWriteArgs.expectedReplica,
 		SkipTx:           kvWriteArgs.skipTx,
 		Fee:              fee,
+		Nonce:            nonce,
 	}
 
 	var clients []*node.ZgsClient
 	if kvWriteArgs.indexer != "" {
-		indexerClient, err := indexer.NewClient(kvWriteArgs.indexer, indexer.IndexerClientOption{LogOption: zg_common.LogOption{Logger: logrus.StandardLogger()}})
+		indexerClient, err := indexer.NewClient(kvWriteArgs.indexer, indexer.IndexerClientOption{
+			ProviderOption: providerOption,
+			LogOption:      zg_common.LogOption{Logger: logrus.StandardLogger()},
+		})
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to initialize indexer client")
 		}
@@ -128,7 +138,7 @@ func kvWrite(*cobra.Command, []string) {
 		if len(kvWriteArgs.node) == 0 {
 			logrus.Fatal("At least one of --node and --indexer should not be empty")
 		}
-		clients = node.MustNewZgsClients(kvWriteArgs.node)
+		clients = node.MustNewZgsClients(kvWriteArgs.node, providerOption)
 		for _, client := range clients {
 			defer client.Close()
 		}
