@@ -36,7 +36,8 @@ var (
 		finalityRequired bool
 		taskSize         uint
 
-		fee float64
+		fee   float64
+		nonce uint
 
 		timeout time.Duration
 	}
@@ -73,6 +74,7 @@ func init() {
 	uploadCmd.Flags().DurationVar(&uploadArgs.timeout, "timeout", 0, "cli task timeout, 0 for no timeout")
 
 	uploadCmd.Flags().Float64Var(&uploadArgs.fee, "fee", 0, "fee paid in a0gi")
+	uploadCmd.Flags().UintVar(&uploadArgs.nonce, "nonce", 0, "nonce of upload transaction")
 
 	rootCmd.AddCommand(uploadCmd)
 }
@@ -85,7 +87,7 @@ func upload(*cobra.Command, []string) {
 		defer cancel()
 	}
 
-	w3client := blockchain.MustNewWeb3(uploadArgs.url, uploadArgs.key)
+	w3client := blockchain.MustNewWeb3(uploadArgs.url, uploadArgs.key, providerOption)
 	defer w3client.Close()
 	contractAddr := common.HexToAddress(uploadArgs.contract)
 	flow, err := contract.NewFlowContract(contractAddr, w3client)
@@ -97,6 +99,10 @@ func upload(*cobra.Command, []string) {
 		feeInA0GI := big.NewFloat(uploadArgs.fee)
 		fee, _ = feeInA0GI.Mul(feeInA0GI, big.NewFloat(1e18)).Int(nil)
 	}
+	var nonce *big.Int
+	if uploadArgs.nonce > 0 {
+		nonce = big.NewInt(int64(uploadArgs.nonce))
+	}
 	opt := transfer.UploadOption{
 		Tags:             hexutil.MustDecode(uploadArgs.tags),
 		FinalityRequired: uploadArgs.finalityRequired,
@@ -104,6 +110,7 @@ func upload(*cobra.Command, []string) {
 		ExpectedReplica:  uploadArgs.expectedReplica,
 		SkipTx:           uploadArgs.skipTx,
 		Fee:              fee,
+		Nonce:            nonce,
 	}
 
 	file, err := core.Open(uploadArgs.file)
@@ -113,7 +120,10 @@ func upload(*cobra.Command, []string) {
 	defer file.Close()
 
 	if uploadArgs.indexer != "" {
-		indexerClient, err := indexer.NewClient(uploadArgs.indexer, indexer.IndexerClientOption{LogOption: zg_common.LogOption{Logger: logrus.StandardLogger()}})
+		indexerClient, err := indexer.NewClient(uploadArgs.indexer, indexer.IndexerClientOption{
+			ProviderOption: providerOption,
+			LogOption:      zg_common.LogOption{Logger: logrus.StandardLogger()},
+		})
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to initialize indexer client")
 		}
@@ -123,7 +133,7 @@ func upload(*cobra.Command, []string) {
 		return
 	}
 
-	clients := node.MustNewZgsClients(uploadArgs.node)
+	clients := node.MustNewZgsClients(uploadArgs.node, providerOption)
 	for _, client := range clients {
 		defer client.Close()
 	}

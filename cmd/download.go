@@ -58,7 +58,10 @@ func download(*cobra.Command, []string) {
 	}
 
 	if downloadArgs.indexer != "" {
-		indexerClient, err := indexer.NewClient(downloadArgs.indexer, indexer.IndexerClientOption{LogOption: common.LogOption{Logger: logrus.StandardLogger()}})
+		indexerClient, err := indexer.NewClient(downloadArgs.indexer, indexer.IndexerClientOption{
+			ProviderOption: providerOption,
+			LogOption:      common.LogOption{Logger: logrus.StandardLogger()},
+		})
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to initialize indexer client")
 		}
@@ -68,7 +71,7 @@ func download(*cobra.Command, []string) {
 		return
 	}
 
-	nodes := node.MustNewZgsClients(downloadArgs.nodes)
+	nodes := node.MustNewZgsClients(downloadArgs.nodes, providerOption)
 
 	downloader, err := transfer.NewDownloader(nodes, common.LogOption{Logger: logrus.StandardLogger()})
 	if err != nil {

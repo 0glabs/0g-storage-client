@@ -44,6 +44,7 @@ type UploadOption struct {
 	ExpectedReplica  uint     // expected number of replications
 	SkipTx           bool     // skip sending transaction on chain, this can set to true only if the data has already settled on chain before
 	Fee              *big.Int // fee in neuron
+	Nonce            *big.Int // nonce for transaction
 }
 
 // Uploader uploader to upload file to 0g storage, send on-chain transactions and transfer data to storage nodes.
@@ -102,6 +103,7 @@ func (uploader *Uploader) checkLogExistance(ctx context.Context, root common.Has
 }
 
 // BatchUpload submit multiple data to 0g storage contract batchly in single on-chain transaction, then transfer the data to the storage nodes.
+// The nonce for upload transaction will be the first non-nil nonce in given upload options, the protocol fee is the sum of fees in upload options.
 func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.IterableData, waitForLogEntry bool, option ...[]UploadOption) (common.Hash, []common.Hash, error) {
 	stageTimer := time.Now()
 
@@ -126,6 +128,7 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 	toSubmitDatas := make([]core.IterableData, 0)
 	toSubmitTags := make([][]byte, 0)
 	dataRoots := make([]common.Hash, n)
+	var nonce, fee *big.Int
 	var lastTreeToSubmit *merkle.Tree
 	for i := 0; i < n; i++ {
 		data := datas[i]
@@ -154,6 +157,16 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 		if !opts[i].SkipTx || !exist {
 			toSubmitDatas = append(toSubmitDatas, data)
 			toSubmitTags = append(toSubmitTags, opt.Tags)
+			if opt.Fee != nil {
+				if fee == nil {
+					fee = new(big.Int).Set(opt.Fee)
+				} else {
+					fee.Add(fee, opt.Fee)
+				}
+			}
+			if nonce == nil && opts[i].Nonce != nil {
+				nonce = new(big.Int).Set(opts[i].Nonce)
+			}
 		}
 		lastTreeToSubmit = trees[i]
 	}
@@ -163,7 +176,7 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 	var receipt *types.Receipt
 	if len(toSubmitDatas) > 0 {
 		var err error
-		if txHash, receipt, err = uploader.SubmitLogEntry(ctx, toSubmitDatas, toSubmitTags, waitForLogEntry, nil); err != nil {
+		if txHash, receipt, err = uploader.SubmitLogEntry(ctx, toSubmitDatas, toSubmitTags, waitForLogEntry, nonce, fee); err != nil {
 			return common.Hash{}, nil, errors.WithMessage(err, "Failed to submit log entry")
 		}
 		if waitForLogEntry {
@@ -224,7 +237,7 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 	if !opt.SkipTx || !exist {
 		var receipt *types.Receipt
 
-		if _, receipt, err = uploader.SubmitLogEntry(ctx, []core.IterableData{data}, [][]byte{opt.Tags}, true, opt.Fee); err != nil {
+		if _, receipt, err = uploader.SubmitLogEntry(ctx, []core.IterableData{data}, [][]byte{opt.Tags}, true, opt.Nonce, opt.Fee); err != nil {
 			return errors.WithMessage(err, "Failed to submit log entry")
 		}
 
@@ -257,7 +270,7 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 }
 
 // SubmitLogEntry submit the data to 0g storage contract by sending a transaction
-func (uploader *Uploader) SubmitLogEntry(ctx context.Context, datas []core.IterableData, tags [][]byte, waitForReceipt bool, fee *big.Int) (common.Hash, *types.Receipt, error) {
+func (uploader *Uploader) SubmitLogEntry(ctx context.Context, datas []core.IterableData, tags [][]byte, waitForReceipt bool, nonce *big.Int, fee *big.Int) (common.Hash, *types.Receipt, error) {
 	// Construct submission
 	submissions := make([]contract.Submission, len(datas))
 	for i := 0; i < len(datas); i++ {

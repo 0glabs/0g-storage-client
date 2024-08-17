@@ -57,7 +57,7 @@ func kvRead(*cobra.Command, []string) {
 		defer cancel()
 	}
 
-	client := node.MustNewKvClient(kvReadArgs.node)
+	client := node.MustNewKvClient(kvReadArgs.node, providerOption)
 	defer client.Close()
 	kvClient := kv.NewClient(client)
 	streamId := common.HexToHash(kvReadArgs.streamId)

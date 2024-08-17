@@ -7,6 +7,7 @@ import (
 	"github.com/0glabs/0g-storage-client/common/util"
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/mcuadros/go-defaults"
 	providers "github.com/openweb3/go-rpc-provider/provider_wrapper"
 	"github.com/openweb3/web3go"
 	"github.com/openweb3/web3go/interfaces"
@@ -23,8 +24,8 @@ type RetryOption struct {
 	logger   *logrus.Logger
 }
 
-func MustNewWeb3(url, key string) *web3go.Client {
-	client, err := NewWeb3(url, key)
+func MustNewWeb3(url, key string, opt ...providers.Option) *web3go.Client {
+	client, err := NewWeb3(url, key, opt...)
 	if err != nil {
 		logrus.WithError(err).WithField("url", url).Fatal("Failed to connect to fullnode")
 	}
@@ -32,13 +33,15 @@ func MustNewWeb3(url, key string) *web3go.Client {
 	return client
 }
 
-func NewWeb3(url, key string) (*web3go.Client, error) {
+func NewWeb3(url, key string, opt ...providers.Option) (*web3go.Client, error) {
 	sm := signers.MustNewSignerManagerByPrivateKeyStrings([]string{key})
 
-	option := new(web3go.ClientOption).
-		WithRetry(3, time.Second).
-		WithTimout(5 * time.Second).
-		WithSignerManager(sm)
+	option := new(web3go.ClientOption)
+	if len(opt) > 0 {
+		option.Option = opt[0]
+	}
+	defaults.SetDefaults(option.Option)
+	option.WithSignerManager(sm)
 
 	if Web3LogEnabled {
 		option = option.WithLooger(logrus.StandardLogger().Out)
