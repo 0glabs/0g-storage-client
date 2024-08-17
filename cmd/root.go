@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/0glabs/0g-storage-client/common/blockchain"
+	"github.com/mcuadros/go-defaults"
 	providers "github.com/openweb3/go-rpc-provider/provider_wrapper"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -22,6 +23,7 @@ var (
 		Short: "ZeroGStorage client to interact with ZeroGStorage network",
 		PersistentPreRun: func(*cobra.Command, []string) {
 			initLog()
+			defaults.SetDefaults(&providerOption)
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cmd.Help()

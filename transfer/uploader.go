@@ -287,6 +287,9 @@ func (uploader *Uploader) SubmitLogEntry(ctx context.Context, datas []core.Itera
 	if err != nil {
 		return common.Hash{}, nil, errors.WithMessage(err, "Failed to create opts to send transaction")
 	}
+	if nonce != nil {
+		opts.Nonce = nonce
+	}
 
 	var tx *types.Transaction
 	pricePerSector, err := uploader.market.PricePerSector(&bind.CallOpts{Context: ctx})
