@@ -40,7 +40,7 @@ func NewWeb3(url, key string, opt ...providers.Option) (*web3go.Client, error) {
 	if len(opt) > 0 {
 		option.Option = opt[0]
 	}
-	defaults.SetDefaults(option.Option)
+	defaults.SetDefaults(&option.Option)
 	option.WithSignerManager(sm)
 
 	if Web3LogEnabled {
