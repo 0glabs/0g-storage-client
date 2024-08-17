@@ -2,6 +2,7 @@ package shard
 
 import (
 	"sort"
+	"time"
 
 	"golang.org/x/exp/rand"
 )
@@ -79,8 +80,9 @@ func Select(nodes []*ShardedNode, expectedReplica uint, random bool) ([]*Sharded
 	}
 	if random {
 		// shuffle
+		rng := rand.New(rand.NewSource(uint64(time.Now().UnixNano())))
 		for i := range nodes {
-			j := rand.Intn(i + 1)
+			j := rng.Intn(i + 1)
 			nodes[i], nodes[j] = nodes[j], nodes[i]
 		}
 	} else {
