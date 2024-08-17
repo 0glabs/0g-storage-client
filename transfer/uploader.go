@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"runtime"
 	"sort"
+	"strings"
 	"time"
 
 	zg_common "github.com/0glabs/0g-storage-client/common"
@@ -33,7 +34,7 @@ var dataAlreadyExistsError = "Invalid params: root; data: already uploaded and f
 var segmentAlreadyExistsError = "segment has already been uploaded or is being uploaded"
 
 func isDuplicateError(msg string) bool {
-	return msg == dataAlreadyExistsError || msg == segmentAlreadyExistsError
+	return strings.Contains(msg, dataAlreadyExistsError) || strings.Contains(msg, segmentAlreadyExistsError)
 }
 
 // UploadOption upload option for a file
@@ -92,7 +93,7 @@ func (uploader *Uploader) checkLogExistance(ctx context.Context, root common.Has
 	for _, client := range uploader.clients {
 		info, err := client.GetFileInfo(ctx, root)
 		if err != nil {
-			return false, errors.WithMessage(err, fmt.Sprintf("Failed to get file info from storage node %v", client.URL()))
+			return false, err
 		}
 		// log entry available
 		if info != nil {
@@ -346,7 +347,7 @@ func (uploader *Uploader) waitForLogEntry(ctx context.Context, root common.Hash,
 		for _, client := range uploader.clients {
 			info, err := client.GetFileInfo(ctx, root)
 			if err != nil {
-				return errors.WithMessage(err, fmt.Sprintf("Failed to get file info from storage node %v", client.URL()))
+				return err
 			}
 			// log entry unavailable yet
 			if info == nil {

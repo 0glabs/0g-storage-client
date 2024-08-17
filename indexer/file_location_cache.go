@@ -59,7 +59,7 @@ func (c *FileLocationCache) close() {
 
 func (c *FileLocationCache) GetFileLocations(ctx context.Context, txSeq uint64) ([]*shard.ShardedNode, error) {
 	if nodes, ok := c.cache.Get(txSeq); ok {
-		if _, covered := shard.Select(nodes, 1); covered {
+		if _, covered := shard.Select(nodes, 1, false); covered {
 			return nodes, nil
 		}
 	}
@@ -85,7 +85,7 @@ func (c *FileLocationCache) GetFileLocations(ctx context.Context, txSeq uint64) 
 		selected[v.URL()] = struct{}{}
 	}
 	logrus.Debugf("find file #%v from trusted nodes, got %v nodes holding the file", txSeq, len(nodes))
-	if _, covered := shard.Select(nodes, 1); covered {
+	if _, covered := shard.Select(nodes, 1, false); covered {
 		return nodes, nil
 	}
 	// trusted nodes do not hold all shards of the file, try to find file
@@ -149,7 +149,7 @@ func (c *FileLocationCache) GetFileLocations(ctx context.Context, txSeq uint64) 
 				break
 			}
 		}
-		if _, covered := shard.Select(nodes, 1); covered {
+		if _, covered := shard.Select(nodes, 1, false); covered {
 			return nodes, nil
 		}
 		if val, ok := c.latestFindFile.Load(txSeq); ok {

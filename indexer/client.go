@@ -3,6 +3,7 @@ package indexer
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/0glabs/0g-storage-client/common"
@@ -72,7 +73,7 @@ func (c *Client) GetFileLocations(ctx context.Context, root string) (locations [
 }
 
 // SelectNodes get node list from indexer service and select a subset of it, which is sufficient to store expected number of replications.
-func (c *Client) SelectNodes(ctx context.Context, expectedReplica uint) ([]*node.ZgsClient, error) {
+func (c *Client) SelectNodes(ctx context.Context, expectedReplica uint, dropped []string) ([]*node.ZgsClient, error) {
 	allNodes, err := c.GetShardedNodes(ctx)
 	if err != nil {
 		return nil, err
@@ -80,6 +81,9 @@ func (c *Client) SelectNodes(ctx context.Context, expectedReplica uint) ([]*node
 	// filter out nodes unable to connect
 	nodes := make([]*shard.ShardedNode, 0)
 	for _, shardedNode := range allNodes.Trusted {
+		if slices.Contains(dropped, shardedNode.URL) {
+			continue
+		}
 		client, err := node.NewZgsClient(shardedNode.URL, c.option.ProviderOption)
 		if err != nil {
 			c.logger.Debugf("failed to initialize client of node %v, dropped.", shardedNode.URL)
@@ -99,8 +103,8 @@ func (c *Client) SelectNodes(ctx context.Context, expectedReplica uint) ([]*node
 			Latency: time.Since(start).Milliseconds(),
 		})
 	}
-	// select proper subset
-	trusted, ok := shard.Select(nodes, expectedReplica)
+	// randomly select proper subset
+	trusted, ok := shard.Select(nodes, expectedReplica, true)
 	if !ok {
 		return nil, fmt.Errorf("cannot select a subset from the returned nodes that meets the replication requirement")
 	}
@@ -115,8 +119,8 @@ func (c *Client) SelectNodes(ctx context.Context, expectedReplica uint) ([]*node
 }
 
 // NewUploaderFromIndexerNodes return an uploader with selected storage nodes from indexer service.
-func (c *Client) NewUploaderFromIndexerNodes(ctx context.Context, flow *contract.FlowContract, expectedReplica uint) (*transfer.Uploader, error) {
-	clients, err := c.SelectNodes(ctx, expectedReplica)
+func (c *Client) NewUploaderFromIndexerNodes(ctx context.Context, flow *contract.FlowContract, expectedReplica uint, dropped []string) (*transfer.Uploader, error) {
+	clients, err := c.SelectNodes(ctx, expectedReplica, dropped)
 	if err != nil {
 		return nil, err
 	}
@@ -134,11 +138,21 @@ func (c *Client) Upload(ctx context.Context, flow *contract.FlowContract, data c
 	if len(option) > 0 {
 		expectedReplica = max(expectedReplica, option[0].ExpectedReplica)
 	}
-	uploader, err := c.NewUploaderFromIndexerNodes(ctx, flow, expectedReplica)
-	if err != nil {
-		return err
+	dropped := make([]string, 0)
+	for {
+		uploader, err := c.NewUploaderFromIndexerNodes(ctx, flow, expectedReplica, dropped)
+		if err != nil {
+			return err
+		}
+		err = uploader.Upload(ctx, data, option...)
+		var rpcError *node.RPCError
+		if errors.As(err, &rpcError) {
+			dropped = append(dropped, rpcError.URL)
+			c.logger.Infof("dropped problematic node %v and retry..", rpcError.URL)
+		} else {
+			return err
+		}
 	}
-	return uploader.Upload(ctx, data, option...)
 }
 
 // BatchUpload submit multiple data to 0g storage contract batchly in single on-chain transaction, then transfer the data to the storage nodes selected from indexer service.
@@ -149,11 +163,21 @@ func (c *Client) BatchUpload(ctx context.Context, flow *contract.FlowContract, d
 			expectedReplica = max(expectedReplica, opt.ExpectedReplica)
 		}
 	}
-	uploader, err := c.NewUploaderFromIndexerNodes(ctx, flow, expectedReplica)
-	if err != nil {
-		return eth_common.Hash{}, nil, err
+	dropped := make([]string, 0)
+	for {
+		uploader, err := c.NewUploaderFromIndexerNodes(ctx, flow, expectedReplica, dropped)
+		if err != nil {
+			return eth_common.Hash{}, nil, err
+		}
+		hash, roots, err := uploader.BatchUpload(ctx, datas, waitForLogEntry, option...)
+		var rpcError *node.RPCError
+		if errors.As(err, &rpcError) {
+			dropped = append(dropped, rpcError.URL)
+			c.logger.Infof("dropped problematic node %v and retry..", rpcError.URL)
+		} else {
+			return hash, roots, err
+		}
 	}
-	return uploader.BatchUpload(ctx, datas, waitForLogEntry, option...)
 }
 
 // Download download file by given data root

@@ -66,7 +66,7 @@ func (downloader *Downloader) queryFile(ctx context.Context, root common.Hash) (
 	for _, v := range downloader.clients {
 		info, err = v.GetFileInfo(ctx, root)
 		if err != nil {
-			return nil, errors.WithMessagef(err, "Failed to get file info on node %v", v.URL())
+			return nil, err
 		}
 
 		if info == nil {

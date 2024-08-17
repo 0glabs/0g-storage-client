@@ -2,6 +2,8 @@ package shard
 
 import (
 	"sort"
+
+	"golang.org/x/exp/rand"
 )
 
 type ShardConfig struct {
@@ -70,18 +72,27 @@ func (node *shardSegmentTreeNode) insert(numShard uint, shardId uint, expectedRe
 
 // select a set of given sharded node and make the data is replicated at least expctedReplica times
 // return the selected nodes and if selection is successful
-func Select(nodes []*ShardedNode, expectedReplica uint) ([]*ShardedNode, bool) {
+func Select(nodes []*ShardedNode, expectedReplica uint, random bool) ([]*ShardedNode, bool) {
 	selected := make([]*ShardedNode, 0)
 	if expectedReplica == 0 {
 		return selected, true
 	}
-	// sort by shard size from large to small
-	sort.Slice(nodes, func(i, j int) bool {
-		if nodes[i].Config.NumShard == nodes[j].Config.NumShard {
-			return nodes[i].Config.ShardId < nodes[j].Config.ShardId
+	if random {
+		// shuffle
+		for i := range nodes {
+			j := rand.Intn(i + 1)
+			nodes[i], nodes[j] = nodes[j], nodes[i]
 		}
-		return nodes[i].Config.NumShard < nodes[j].Config.NumShard
-	})
+	} else {
+		// sort by shard size from large to small
+		sort.Slice(nodes, func(i, j int) bool {
+			if nodes[i].Config.NumShard == nodes[j].Config.NumShard {
+				return nodes[i].Config.ShardId < nodes[j].Config.ShardId
+			}
+			return nodes[i].Config.NumShard < nodes[j].Config.NumShard
+		})
+
+	}
 	// build segment tree to select proper nodes
 	root := shardSegmentTreeNode{
 		numShard: 1,
@@ -108,6 +119,6 @@ func CheckReplica(shardConfigs []*ShardConfig, expectedReplica uint) bool {
 			ShardId:  uint64(shardConfig.ShardId),
 		}}
 	}
-	_, ok := Select(shardedNodes, expectedReplica)
+	_, ok := Select(shardedNodes, expectedReplica, false)
 	return ok
 }
