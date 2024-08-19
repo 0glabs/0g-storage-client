@@ -177,7 +177,7 @@ func TestRenameFile(t *testing.T) {
 	assert.Len(t, dir.Entries, 1)
 	assert.Equal(t, "file2.txt", dir.Entries[0].Name)
 
-	// Rename to an existing name (should replace)
+	// Rename to an existing name (not allowed)
 	err = dir.Add(&unixfs.FsNode{Name: "file3.txt", Type: unixfs.File, Size: 5678})
 	assert.NoError(t, err)
 	err = dir.Rename("file2.txt", "file3.txt")
