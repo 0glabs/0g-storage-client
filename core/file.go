@@ -1,9 +1,11 @@
 package core
 
 import (
-	"errors"
 	"io"
 	"os"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -72,6 +74,24 @@ func Open(name string) (*File, error) {
 		underlying: file,
 		paddedSize: IteratorPaddedSize(info.Size(), true),
 	}, nil
+}
+
+// MerkleRoot returns the merkle root hash of a file on disk
+func MerkleRoot(filename string) (common.Hash, error) {
+	file, err := Open(filename)
+	if err != nil {
+		return common.Hash{}, errors.WithMessage(err, "failed to open file")
+	}
+	defer file.Close()
+
+	// Generate the Merkle tree from the file content
+	tree, err := MerkleTree(file)
+	if err != nil {
+		return common.Hash{}, errors.WithMessage(err, "failed to create merkle tree")
+	}
+
+	// Return the root hash of the Merkle tree
+	return tree.Root(), nil
 }
 
 func (file *File) Close() error {
