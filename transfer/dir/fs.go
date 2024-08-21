@@ -100,6 +100,41 @@ func (node *FsNode) Equal(rhs *FsNode) bool {
 	}
 }
 
+// Traverse recursively traverses the FsNode tree and applies the provided actionFunc to each node.
+// This method only requires the user to handle relative paths.
+//
+// Parameters:
+//
+//   - actionFunc: A function that defines the action to perform on each node. The function
+//     takes the current node and its relative path as arguments. This function can perform any necessary
+//     operations, such as collecting nodes, uploading files, or logging information.
+func (node *FsNode) Traverse(actionFunc func(node *FsNode, relativePath string) error) error {
+	return node.traverse("", actionFunc)
+}
+
+// traverse is a helper function that manages relative paths during the traversal process.
+func (node *FsNode) traverse(baseDir string, actionFunc func(node *FsNode, relativePath string) error) error {
+	relative := filepath.Join(baseDir, node.Name)
+
+	// Apply the action function to the current node
+	if err := actionFunc(node, relative); err != nil {
+		return err
+	}
+
+	if node.Type != FileTypeDirectory {
+		return nil
+	}
+
+	// If the node is a directory, recursively traverse its entries
+	for _, entry := range node.Entries {
+		if err := entry.traverse(relative, actionFunc); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // BuildFileTree recursively builds a file tree for the specified directory.
 func BuildFileTree(path string) (*FsNode, error) {
 	info, err := os.Stat(path)

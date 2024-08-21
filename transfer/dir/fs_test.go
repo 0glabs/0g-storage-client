@@ -1,6 +1,7 @@
 package dir_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -206,4 +207,55 @@ func TestBuildFileTree(t *testing.T) {
 		assert.Equal(t, dir.FileTypeSymbolic, node.Type)
 		assert.Equal(t, filePath, node.Link)
 	})
+}
+
+func TestTraverse(t *testing.T) {
+	// Create a mock directory structure
+	root := &dir.FsNode{
+		Name: "root",
+		Type: dir.FileTypeDirectory,
+		Entries: []*dir.FsNode{
+			{
+				Name: "file1.txt",
+				Type: dir.FileTypeFile,
+			},
+			{
+				Name: "subdir",
+				Type: dir.FileTypeDirectory,
+				Entries: []*dir.FsNode{
+					{
+						Name: "file2.txt",
+						Type: dir.FileTypeFile,
+					},
+				},
+			},
+		},
+	}
+
+	// Define the expected paths
+	expectedPaths := map[string]bool{
+		"root":                  false,
+		"root/file1.txt":        false,
+		"root/subdir":           false,
+		"root/subdir/file2.txt": false,
+	}
+
+	// Define the action function to check the paths
+	actionFunc := func(node *dir.FsNode, path string) error {
+		if _, ok := expectedPaths[path]; ok {
+			expectedPaths[path] = true
+			return nil
+		} else {
+			return fmt.Errorf("Unexpected path: %s", path)
+		}
+	}
+
+	// Perform the traversal
+	err := root.Traverse(actionFunc)
+	assert.NoError(t, err)
+
+	// Verify all expected paths were visited
+	for path, visited := range expectedPaths {
+		assert.True(t, visited, "Path not visited: %s", path)
+	}
 }
