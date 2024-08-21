@@ -95,8 +95,29 @@ func (node *FsNode) Search(fileName string) (*FsNode, bool) {
 	return nil, false
 }
 
-// BuildFileTree recursively builds a file tree starting from the specified path.
+// BuildFileTree recursively builds a file tree for the specified directory.
 func BuildFileTree(path string) (*FsNode, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, errors.WithMessagef(err, "failed to stat file %s", path)
+	}
+
+	if !info.IsDir() {
+		return nil, errors.New("file tree building is only supported for directory")
+	}
+
+	root, err := build(path)
+	if err != nil {
+		return nil, err
+	}
+
+	// Root directory represented as "."
+	root.Name = "."
+	return root, nil
+}
+
+// build is a helper function that recursively builds a file tree starting from the specified path.
+func build(path string) (*FsNode, error) {
 	info, err := os.Lstat(path)
 	if err != nil {
 		return nil, errors.WithMessagef(err, "failed to stat file %s", path)
@@ -124,7 +145,7 @@ func buildDirectoryNode(path string, info os.FileInfo) (*FsNode, error) {
 	var entryNodes []*FsNode
 	for _, entry := range entries {
 		entryPath := filepath.Join(path, entry.Name())
-		entryNode, err := BuildFileTree(entryPath)
+		entryNode, err := build(entryPath)
 		if err != nil {
 			return nil, err
 		}
@@ -137,7 +158,7 @@ func buildDirectoryNode(path string, info os.FileInfo) (*FsNode, error) {
 func buildSymbolicNode(path string, info os.FileInfo) (*FsNode, error) {
 	link, err := os.Readlink(path)
 	if err != nil {
-		return nil, errors.WithMessage(err, "invalid symbolic link")
+		return nil, errors.WithMessagef(err, "invalid symbolic link %s", path)
 	}
 
 	return NewSymbolicFsNode(info.Name(), link), nil

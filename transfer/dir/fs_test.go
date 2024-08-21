@@ -76,24 +76,40 @@ func TestBuildFileTree(t *testing.T) {
 	err = os.Symlink(filePath, linkPath)
 	assert.NoError(t, err)
 
-	// create test directory
-	dirPath := filepath.Join(tempDir, "subdir")
-	err = os.Mkdir(dirPath, 0755)
+	// Create a subdirectory
+	subDirPath := filepath.Join(tempDir, "subdir")
+	err = os.Mkdir(subDirPath, 0755)
 	assert.NoError(t, err)
 
-	t.Run("test directory node", func(t *testing.T) {
-		node, err := dir.BuildFileTree(tempDir)
+	// Create a test file inside the subdirectory
+	subDirFilePath := filepath.Join(subDirPath, "subdirfile.txt")
+	err = os.WriteFile(subDirFilePath, []byte("subdir content"), 0644)
+	assert.NoError(t, err)
+
+	// Build the file tree
+	var root *dir.FsNode
+	t.Run("test building file tree", func(t *testing.T) {
+		root, err = dir.BuildFileTree(tempDir)
 		assert.NoError(t, err)
-		assert.Equal(t, dir.Directory, node.Type)
-		assert.Len(t, node.Entries, 3) // "testfile.txt", "symlink", "subdir"
+		assert.Equal(t, dir.Directory, root.Type)
+		assert.Equal(t, root.Name, ".")
+		assert.Len(t, root.Entries, 3) // "testfile.txt", "symlink", "subdir"
+	})
+
+	t.Run("test subdir file node", func(t *testing.T) {
+		subDirNode, found := root.Search("subdir")
+		assert.True(t, found)
+		assert.Equal(t, dir.Directory, subDirNode.Type)
+		assert.Len(t, subDirNode.Entries, 1) // "subdirfile.txt"
+
+		subDirFileNode, found := subDirNode.Search("subdirfile.txt")
+		assert.True(t, found)
+		assert.Equal(t, dir.File, subDirFileNode.Type)
 	})
 
 	t.Run("test file node", func(t *testing.T) {
-		node, err := dir.BuildFileTree(filePath)
-		assert.NoError(t, err)
-		assert.Equal(t, dir.File, node.Type)
-		assert.Equal(t, int64(len("content")), node.Size)
-
+		node, found := root.Search("testfile.txt")
+		assert.True(t, found)
 		// Calculate expected hash using core.MerkleRoot
 		expectedHash, err := core.MerkleRoot(filePath)
 		assert.NoError(t, err)
@@ -101,8 +117,8 @@ func TestBuildFileTree(t *testing.T) {
 	})
 
 	t.Run("test symbolic link node", func(t *testing.T) {
-		node, err := dir.BuildFileTree(linkPath)
-		assert.NoError(t, err)
+		node, found := root.Search("symlink")
+		assert.True(t, found)
 		assert.Equal(t, dir.Symbolic, node.Type)
 		assert.Equal(t, filePath, node.Link)
 	})
