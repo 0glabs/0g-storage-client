@@ -151,7 +151,6 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 	errs := make(chan error, opts.TaskSize)
 	for i := 0; i < n; i++ {
 		wg.Add(1)
-		fmt.Println(i)
 		go func(i int) {
 			defer wg.Done()
 
