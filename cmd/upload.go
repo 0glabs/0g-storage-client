@@ -241,7 +241,7 @@ func newUploader(ctx context.Context, w3client *web3go.Client, opt transfer.Uplo
 			return nil, nil, errors.WithMessage(err, "failed to initialize uploader")
 		}
 
-		return up, func() { indexerClient.Close() }, nil
+		return up, indexerClient.Close, nil
 	}
 
 	clients := node.MustNewZgsClients(uploadArgs.node, providerOption)
