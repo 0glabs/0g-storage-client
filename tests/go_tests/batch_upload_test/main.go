@@ -51,7 +51,10 @@ func runTest() error {
 	if err != nil {
 		return errors.WithMessage(err, "failed to initialize indexer client")
 	}
-	_, roots, err := indexerClient.BatchUpload(ctx, flow, datas, true, opts)
+	_, roots, err := indexerClient.BatchUpload(ctx, flow, datas, true, transfer.BatchUploadOption{
+		TaskSize:    5,
+		DataOptions: opts,
+	})
 	if err != nil {
 		return errors.WithMessage(err, "failed to upload file")
 	}
