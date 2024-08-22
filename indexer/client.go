@@ -156,10 +156,10 @@ func (c *Client) Upload(ctx context.Context, flow *contract.FlowContract, data c
 }
 
 // BatchUpload submit multiple data to 0g storage contract batchly in single on-chain transaction, then transfer the data to the storage nodes selected from indexer service.
-func (c *Client) BatchUpload(ctx context.Context, flow *contract.FlowContract, datas []core.IterableData, waitForLogEntry bool, option ...[]transfer.UploadOption) (eth_common.Hash, []eth_common.Hash, error) {
+func (c *Client) BatchUpload(ctx context.Context, flow *contract.FlowContract, datas []core.IterableData, waitForLogEntry bool, option ...transfer.BatchUploadOption) (eth_common.Hash, []eth_common.Hash, error) {
 	expectedReplica := uint(1)
 	if len(option) > 0 {
-		for _, opt := range option[0] {
+		for _, opt := range option[0].DataOptions {
 			expectedReplica = max(expectedReplica, opt.ExpectedReplica)
 		}
 	}

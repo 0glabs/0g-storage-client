@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	zg_common "github.com/0glabs/0g-storage-client/common"
@@ -46,6 +47,14 @@ type UploadOption struct {
 	SkipTx           bool     // skip sending transaction on chain, this can set to true only if the data has already settled on chain before
 	Fee              *big.Int // fee in neuron
 	Nonce            *big.Int // nonce for transaction
+}
+
+// BatchUploadOption upload option for a batching
+type BatchUploadOption struct {
+	Fee         *big.Int       // fee in neuron
+	Nonce       *big.Int       // nonce for transaction
+	TaskSize    uint           // number of files to upload simutanously
+	DataOptions []UploadOption // upload option for single file, nonce and fee are ignored
 }
 
 // Uploader uploader to upload file to 0g storage, send on-chain transactions and transfer data to storage nodes.
@@ -105,22 +114,28 @@ func (uploader *Uploader) checkLogExistance(ctx context.Context, root common.Has
 
 // BatchUpload submit multiple data to 0g storage contract batchly in single on-chain transaction, then transfer the data to the storage nodes.
 // The nonce for upload transaction will be the first non-nil nonce in given upload options, the protocol fee is the sum of fees in upload options.
-func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.IterableData, waitForLogEntry bool, option ...[]UploadOption) (common.Hash, []common.Hash, error) {
+func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.IterableData, waitForLogEntry bool, option ...BatchUploadOption) (common.Hash, []common.Hash, error) {
 	stageTimer := time.Now()
 
 	n := len(datas)
 	if n == 0 {
 		return common.Hash{}, nil, errors.New("empty datas")
 	}
-	var opts []UploadOption
+	var opts BatchUploadOption
 	if len(option) > 0 {
 		opts = option[0]
 	} else {
-		opts = make([]UploadOption, n)
+		opts = BatchUploadOption{
+			Fee:         nil,
+			Nonce:       nil,
+			DataOptions: make([]UploadOption, n),
+		}
 	}
-	if len(opts) != n {
+	opts.TaskSize = max(opts.TaskSize, 1)
+	if len(opts.DataOptions) != n {
 		return common.Hash{}, nil, errors.New("datas and tags length mismatch")
 	}
+
 	uploader.logger.WithFields(logrus.Fields{
 		"dataNum": n,
 	}).Info("Prepare to upload batchly")
@@ -129,47 +144,60 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 	toSubmitDatas := make([]core.IterableData, 0)
 	toSubmitTags := make([][]byte, 0)
 	dataRoots := make([]common.Hash, n)
-	var nonce, fee *big.Int
+	exists := make([]bool, n)
 	var lastTreeToSubmit *merkle.Tree
+
+	var wg sync.WaitGroup
+	errs := make(chan error, opts.TaskSize)
 	for i := 0; i < n; i++ {
-		data := datas[i]
-		opt := opts[i]
+		wg.Add(1)
+		fmt.Println(i)
+		go func(i int) {
+			defer wg.Done()
 
-		uploader.logger.WithFields(logrus.Fields{
-			"size":     data.Size(),
-			"chunks":   data.NumChunks(),
-			"segments": data.NumSegments(),
-		}).Info("Data prepared to upload")
+			data := datas[i]
+			uploader.logger.WithFields(logrus.Fields{
+				"size":     data.Size(),
+				"chunks":   data.NumChunks(),
+				"segments": data.NumSegments(),
+			}).Info("Data prepared to upload")
 
-		// Calculate file merkle root.
-		tree, err := core.MerkleTree(data)
-		if err != nil {
-			return common.Hash{}, nil, errors.WithMessage(err, "Failed to create data merkle tree")
-		}
-		uploader.logger.WithField("root", tree.Root()).Info("Data merkle root calculated")
-		trees[i] = tree
-		dataRoots[i] = trees[i].Root()
+			// Calculate file merkle root.
+			tree, err := core.MerkleTree(data)
+			if err != nil {
+				errs <- errors.WithMessage(err, "Failed to create data merkle tree")
+				return
+			}
+			uploader.logger.WithField("root", tree.Root()).Info("Data merkle root calculated")
+			trees[i] = tree
+			dataRoots[i] = trees[i].Root()
 
-		// Check existance
-		exist, err := uploader.checkLogExistance(ctx, trees[i].Root())
-		if err != nil {
-			return common.Hash{}, nil, errors.WithMessage(err, "Failed to check if skipped log entry available on storage node")
-		}
-		if !opts[i].SkipTx || !exist {
-			toSubmitDatas = append(toSubmitDatas, data)
-			toSubmitTags = append(toSubmitTags, opt.Tags)
-			if opt.Fee != nil {
-				if fee == nil {
-					fee = new(big.Int).Set(opt.Fee)
-				} else {
-					fee.Add(fee, opt.Fee)
+			// Check existance
+			exist, err := uploader.checkLogExistance(ctx, trees[i].Root())
+			if err != nil {
+				errs <- errors.WithMessage(err, "Failed to check if skipped log entry available on storage node")
+				return
+			}
+			exists[i] = exist
+		}(i)
+		if (i+1)%int(opts.TaskSize) == 0 || i == n-1 {
+			wg.Wait()
+			close(errs)
+			for e := range errs {
+				if e != nil {
+					return common.Hash{}, nil, e
 				}
 			}
-			if nonce == nil && opts[i].Nonce != nil {
-				nonce = new(big.Int).Set(opts[i].Nonce)
-			}
+			errs = make(chan error, opts.TaskSize)
 		}
-		lastTreeToSubmit = trees[i]
+	}
+	for i := 0; i < n; i += 1 {
+		opt := opts.DataOptions[i]
+		if !opt.SkipTx || !exists[i] {
+			toSubmitDatas = append(toSubmitDatas, datas[i])
+			toSubmitTags = append(toSubmitTags, opt.Tags)
+			lastTreeToSubmit = trees[i]
+		}
 	}
 
 	// Append log on blockchain
@@ -177,7 +205,7 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 	var receipt *types.Receipt
 	if len(toSubmitDatas) > 0 {
 		var err error
-		if txHash, receipt, err = uploader.SubmitLogEntry(ctx, toSubmitDatas, toSubmitTags, waitForLogEntry, nonce, fee); err != nil {
+		if txHash, receipt, err = uploader.SubmitLogEntry(ctx, toSubmitDatas, toSubmitTags, waitForLogEntry, opts.Nonce, opts.Fee); err != nil {
 			return common.Hash{}, nil, errors.WithMessage(err, "Failed to submit log entry")
 		}
 		if waitForLogEntry {
@@ -189,16 +217,33 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 	}
 
 	for i := 0; i < n; i++ {
-		// Upload file to storage node
-		if err := uploader.uploadFile(ctx, datas[i], trees[i], opts[i].ExpectedReplica, opts[i].TaskSize); err != nil {
-			return common.Hash{}, nil, errors.WithMessage(err, "Failed to upload file")
-		}
-
-		if waitForLogEntry {
-			// Wait for transaction finality
-			if err := uploader.waitForLogEntry(ctx, trees[i].Root(), opts[i].FinalityRequired, receipt); err != nil {
-				return common.Hash{}, nil, errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			// Upload file to storage node
+			if err := uploader.uploadFile(ctx, datas[i], trees[i], opts.DataOptions[i].ExpectedReplica, opts.DataOptions[i].TaskSize); err != nil {
+				errs <- errors.WithMessage(err, "Failed to upload file")
+				return
 			}
+
+			if waitForLogEntry {
+				// Wait for transaction finality
+				if err := uploader.waitForLogEntry(ctx, trees[i].Root(), opts.DataOptions[i].FinalityRequired, receipt); err != nil {
+					errs <- errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
+					return
+				}
+			}
+			errs <- nil
+		}(i)
+		if (i+1)%int(opts.TaskSize) == 0 || i == n-1 {
+			wg.Wait()
+			close(errs)
+			for e := range errs {
+				if e != nil {
+					return common.Hash{}, nil, e
+				}
+			}
+			errs = make(chan error, opts.TaskSize)
 		}
 	}
 
