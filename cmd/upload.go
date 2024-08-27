@@ -134,7 +134,14 @@ func upload(*cobra.Command, []string) {
 	}
 }
 
+// uploadDir handles the directory upload process by traversing the directory, batching the file uploads, and then uploading the directory metadata.
 func uploadDir(ctx context.Context, uploader *transfer.Uploader, opt transfer.UploadOption) error {
+	// Ensure nonce and fee options are not set for directory uploads since we might use batch.
+	if opt.Nonce != nil || opt.Fee != nil {
+		return errors.New("nonce and fee options are not supported for directory uploading")
+	}
+
+	// Build the file tree representation of the directory.
 	root, err := dir.BuildFileTree(uploadArgs.file)
 	if err != nil {
 		return errors.WithMessage(err, "failed to build file tree")
@@ -145,45 +152,65 @@ func uploadDir(ctx context.Context, uploader *transfer.Uploader, opt transfer.Up
 		return errors.WithMessage(err, "failed to encode file tree")
 	}
 
+	// Create an in-memory data object from the encoded file tree.
 	iterdata, err := core.NewDataInMemory(tdata)
 	if err != nil {
 		return errors.WithMessage(err, "failed to create data in memory")
 	}
 
+	// Generate the Merkle tree from the in-memory data.
 	merkleTree, err := core.MerkleTree(iterdata)
 	if err != nil {
 		return errors.WithMessage(err, "failed to create merkle tree")
 	}
 
+	// Check if the directory already exists in the storage network.
+	if found, err := uploader.FileExists(ctx, merkleTree.Root()); err == nil && found {
+		logrus.Info("This folder already exists in the storage network")
+		return nil
+	}
+
+	// Traverse the file tree and batch upload files.
 	var uploadFilePaths []string
 	if err = root.Traverse(func(fn *dir.FsNode, path string) error {
-		if fn.Type == dir.FileTypeFile {
-			uploadFilePaths = append(uploadFilePaths, path)
-		}
-
-		if uint(len(uploadFilePaths)) < uploadArgs.maxBatchUploadFiles {
+		if fn.Type != dir.FileTypeFile {
 			return nil
 		}
 
-		if err := batchUploadFiles(ctx, uploader, uploadFilePaths, opt); err != nil {
-			return err
+		uploadFilePaths = append(uploadFilePaths, path)
+		// If the batch size limit is reached, upload the batch.
+		if len(uploadFilePaths) >= int(uploadArgs.maxBatchUploadFiles) {
+			if err := batchUploadFiles(ctx, uploader, uploadFilePaths, opt); err != nil {
+				return err
+			}
+			// Clear the slice after uploading the batch.
+			uploadFilePaths = uploadFilePaths[:0]
 		}
 
-		uploadFilePaths = uploadFilePaths[:0]
 		return nil
-	}); err == nil {
-		err = batchUploadFiles(ctx, uploader, uploadFilePaths, opt, iterdata)
+	}); err != nil {
+		return err
 	}
 
-	if err != nil {
-		return errors.WithMessage(err, "failed to batch upload files")
+	// Upload any remaining files in the last batch.
+	if len(uploadFilePaths) > 0 {
+		if err = batchUploadFiles(ctx, uploader, uploadFilePaths, opt); err != nil {
+			return err
+		}
 	}
 
-	logrus.WithField("merkleRoot", merkleTree.Root()).Info("Directory upload finished")
+	// Finally, upload the directory metadata.
+	if err := uploader.Upload(ctx, iterdata, opt); err != nil {
+		return err
+	}
+
+	logrus.WithField("root", merkleTree.Root()).Info("Directory upload finished")
 	return nil
 }
 
-func batchUploadFiles(ctx context.Context, up *transfer.Uploader, filePaths []string, opt transfer.UploadOption, datas ...core.IterableData) error {
+// batchUploadFiles handles the batch upload of files to the storage network.
+func batchUploadFiles(ctx context.Context, up *transfer.Uploader, filePaths []string, opt transfer.UploadOption) error {
+	var datas []core.IterableData
 	for _, path := range filePaths {
 		file, err := core.Open(filepath.Join(uploadArgs.file, path))
 		if err != nil {
@@ -194,21 +221,21 @@ func batchUploadFiles(ctx context.Context, up *transfer.Uploader, filePaths []st
 		datas = append(datas, file)
 	}
 
-	var opts []transfer.UploadOption
+	batchOpt := transfer.BatchUploadOption{}
 	for range datas {
-		opts = append(opts, opt)
+		batchOpt.DataOptions = append(batchOpt.DataOptions, opt)
 	}
 
-	txHash, dataRoots, err := up.BatchUpload(ctx, datas, true, opts)
+	txHash, dataRoots, err := up.BatchUpload(ctx, datas, true, batchOpt)
 	if err != nil {
-		return errors.WithMessage(err, "failed to batch upload file nodes")
+		return err
 	}
 
 	logrus.WithFields(logrus.Fields{
 		"txHash":    txHash,
 		"dataRoots": dataRoots,
 		"filePaths": filePaths,
-	}).Info("Batch upload finished")
+	}).Info("Batch upload completed")
 	return nil
 }
 
@@ -238,7 +265,7 @@ func newUploader(ctx context.Context, w3client *web3go.Client, opt transfer.Uplo
 
 		up, err := indexerClient.NewUploaderFromIndexerNodes(ctx, w3client, opt.ExpectedReplica, nil)
 		if err != nil {
-			return nil, nil, errors.WithMessage(err, "failed to initialize uploader")
+			return nil, nil, err
 		}
 
 		return up, indexerClient.Close, nil
