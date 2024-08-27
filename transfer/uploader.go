@@ -129,6 +129,11 @@ func NewUploader(ctx context.Context, w3Client *web3go.Client, clients []*node.Z
 	return uploader, nil
 }
 
+// FileExists check if a file with specified root hash exists in storage nodes
+func (uploader *Uploader) FileExists(ctx context.Context, root common.Hash) (bool, error) {
+	return uploader.checkLogExistance(ctx, root)
+}
+
 func (uploader *Uploader) checkLogExistance(ctx context.Context, root common.Hash) (bool, error) {
 	for _, client := range uploader.clients {
 		info, err := client.GetFileInfo(ctx, root)
