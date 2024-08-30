@@ -70,7 +70,7 @@ func (c *FileLocationCache) GetFileLocations(ctx context.Context, txSeq uint64) 
 	for _, v := range trusted {
 		start := time.Now()
 		fileInfo, err := v.GetFileInfoByTxSeq(ctx, txSeq)
-		if err != nil || !fileInfo.Finalized {
+		if err != nil || fileInfo == nil || !fileInfo.Finalized {
 			continue
 		}
 		config, err := v.GetShardConfig(context.Background())
@@ -123,7 +123,7 @@ func (c *FileLocationCache) GetFileLocations(ctx context.Context, txSeq uint64) 
 					c.latestFailedCall.Store(url, time.Now())
 					continue
 				}
-				if !fileInfo.Finalized {
+				if fileInfo == nil || !fileInfo.Finalized {
 					continue
 				}
 				start := time.Now()
