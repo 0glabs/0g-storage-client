@@ -7,12 +7,10 @@ import (
 
 	zg_common "github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/common/blockchain"
-	"github.com/0glabs/0g-storage-client/contract"
 	"github.com/0glabs/0g-storage-client/core"
 	"github.com/0glabs/0g-storage-client/indexer"
 	"github.com/0glabs/0g-storage-client/node"
 	"github.com/0glabs/0g-storage-client/transfer"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -23,9 +21,8 @@ var (
 		file string
 		tags string
 
-		url      string
-		contract string
-		key      string
+		url string
+		key string
 
 		node    []string
 		indexer string
@@ -56,14 +53,13 @@ func init() {
 
 	uploadCmd.Flags().StringVar(&uploadArgs.url, "url", "", "Fullnode URL to interact with ZeroGStorage smart contract")
 	uploadCmd.MarkFlagRequired("url")
-	uploadCmd.Flags().StringVar(&uploadArgs.contract, "contract", "", "ZeroGStorage smart contract to interact with")
-	uploadCmd.MarkFlagRequired("contract")
 	uploadCmd.Flags().StringVar(&uploadArgs.key, "key", "", "Private key to interact with smart contract")
 	uploadCmd.MarkFlagRequired("key")
 
 	uploadCmd.Flags().StringSliceVar(&uploadArgs.node, "node", []string{}, "ZeroGStorage storage node URL")
 	uploadCmd.Flags().StringVar(&uploadArgs.indexer, "indexer", "", "ZeroGStorage indexer URL")
 	uploadCmd.MarkFlagsOneRequired("indexer", "node")
+	uploadCmd.MarkFlagsMutuallyExclusive("indexer", "node")
 
 	uploadCmd.Flags().UintVar(&uploadArgs.expectedReplica, "expected-replica", 1, "expected number of replications to upload")
 
@@ -89,11 +85,7 @@ func upload(*cobra.Command, []string) {
 
 	w3client := blockchain.MustNewWeb3(uploadArgs.url, uploadArgs.key, providerOption)
 	defer w3client.Close()
-	contractAddr := common.HexToAddress(uploadArgs.contract)
-	flow, err := contract.NewFlowContract(contractAddr, w3client)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create flow contract")
-	}
+
 	var fee *big.Int
 	if uploadArgs.fee > 0 {
 		feeInA0GI := big.NewFloat(uploadArgs.fee)
@@ -127,7 +119,7 @@ func upload(*cobra.Command, []string) {
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to initialize indexer client")
 		}
-		if err := indexerClient.Upload(ctx, flow, file, opt); err != nil {
+		if err := indexerClient.Upload(ctx, w3client, file, opt); err != nil {
 			logrus.WithError(err).Fatal("Failed to upload file")
 		}
 		return
@@ -138,7 +130,7 @@ func upload(*cobra.Command, []string) {
 		defer client.Close()
 	}
 
-	uploader, err := transfer.NewUploader(ctx, flow, clients, zg_common.LogOption{Logger: logrus.StandardLogger()})
+	uploader, err := transfer.NewUploader(ctx, w3client, clients, zg_common.LogOption{Logger: logrus.StandardLogger()})
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to initialize uploader")
 	}
