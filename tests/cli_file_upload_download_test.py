@@ -49,7 +49,6 @@ class FileUploadDownloadTest(TestFramework):
 
         root = self._upload_file_use_cli(
             self.blockchain_nodes[0].rpc_url,
-            self.contract.address(),
             GENESIS_ACCOUNT.key,
             self.nodes[node_idx].rpc_url,
             None,

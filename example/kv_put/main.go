@@ -6,7 +6,6 @@ import (
 	"math"
 
 	"github.com/0glabs/0g-storage-client/common/blockchain"
-	"github.com/0glabs/0g-storage-client/contract"
 	"github.com/0glabs/0g-storage-client/kv"
 	"github.com/0glabs/0g-storage-client/node"
 	"github.com/ethereum/go-ethereum/common"
@@ -15,7 +14,6 @@ import (
 const ZgsClientAddr = "http://127.0.0.1:5678"
 const BlockchainClientAddr = ""
 const PrivKey = ""
-const FlowContractAddr = ""
 
 func main() {
 	zgsClient, err := node.NewZgsClient(ZgsClientAddr)
@@ -26,12 +24,8 @@ func main() {
 	blockchainClient := blockchain.MustNewWeb3(BlockchainClientAddr, PrivKey)
 	defer blockchainClient.Close()
 	blockchain.CustomGasLimit = 1000000
-	flow, err := contract.NewFlowContract(common.HexToAddress(FlowContractAddr), blockchainClient)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	batcher := kv.NewBatcher(math.MaxUint64, []*node.ZgsClient{zgsClient}, flow)
+
+	batcher := kv.NewBatcher(math.MaxUint64, []*node.ZgsClient{zgsClient}, blockchainClient)
 	batcher.Set(common.HexToHash("0x000000000000000000000000000000000000000000000000000000000000f2bd"),
 		[]byte("TESTKEY0"),
 		[]byte{69, 70, 71, 72, 73},
