@@ -92,6 +92,15 @@ func NewUploader(ctx context.Context, w3Client *web3go.Client, clients []*node.Z
 		return nil, errors.WithMessagef(err, "Failed to get status from storage node %v", clients[0].URL())
 	}
 
+	chainId, err := w3Client.Eth.ChainId()
+	if err != nil {
+		return nil, errors.WithMessage(err, "Failed to get chain ID from blockchain node")
+	}
+
+	if chainId != nil && *chainId != status.NetworkIdentity.ChainId {
+		return nil, errors.Errorf("Chain ID mismatch, blockchain = %v, storage node = %v", *chainId, status.NetworkIdentity.ChainId)
+	}
+
 	flow, err := contract.NewFlowContract(status.NetworkIdentity.FlowContractAddress, w3Client)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to create flow contract")
