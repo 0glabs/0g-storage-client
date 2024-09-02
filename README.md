@@ -48,7 +48,7 @@ To generate a file for test purpose, with a fixed file size or random file size 
 **Upload file**
 
 ```
-./0g-storage-client upload --url <blockchain_rpc_endpoint> --contract <0g-storage_contract_address> --key <private_key> --indexer <storage_indexer_endpoint> --file <file_path>
+./0g-storage-client upload --url <blockchain_rpc_endpoint> --key <private_key> --indexer <storage_indexer_endpoint> --file <file_path>
 ```
 
 The client will submit the data segments to the storage nodes which is determined by the indexer according to their shard configurations.
@@ -64,7 +64,7 @@ If you want to verify the **merkle proof** of downloaded segment, please specify
 
 By indexer:
 ```
-./0g-storage-client kv-write --url <blockchain_rpc_endpoint> --contract <0g-storage_contract_address> --key <private_key> --indexer <storage_indexer_endpoint> --stream-id <stream_id> --stream-keys <stream_keys> --stream-values <stream_values>
+./0g-storage-client kv-write --url <blockchain_rpc_endpoint> --key <private_key> --indexer <storage_indexer_endpoint> --stream-id <stream_id> --stream-keys <stream_keys> --stream-values <stream_values>
 ```
 
 `--stream-keys` and `--stream-values` are comma separated string list and their length must be equal.

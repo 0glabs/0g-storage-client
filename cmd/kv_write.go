@@ -8,7 +8,6 @@ import (
 
 	zg_common "github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/common/blockchain"
-	"github.com/0glabs/0g-storage-client/contract"
 	"github.com/0glabs/0g-storage-client/indexer"
 	"github.com/0glabs/0g-storage-client/kv"
 	"github.com/0glabs/0g-storage-client/node"
@@ -25,9 +24,8 @@ var (
 		values   []string
 		version  uint64
 
-		url      string
-		contract string
-		key      string
+		url string
+		key string
 
 		node    []string
 		indexer string
@@ -64,8 +62,6 @@ func init() {
 
 	kvWriteCmd.Flags().StringVar(&kvWriteArgs.url, "url", "", "Fullnode URL to interact with ZeroGStorage smart contract")
 	kvWriteCmd.MarkFlagRequired("url")
-	kvWriteCmd.Flags().StringVar(&kvWriteArgs.contract, "contract", "", "ZeroGStorage smart contract to interact with")
-	kvWriteCmd.MarkFlagRequired("contract")
 	kvWriteCmd.Flags().StringVar(&kvWriteArgs.key, "key", "", "Private key to interact with smart contract")
 	kvWriteCmd.MarkFlagRequired("key")
 
@@ -97,11 +93,6 @@ func kvWrite(*cobra.Command, []string) {
 
 	w3client := blockchain.MustNewWeb3(kvWriteArgs.url, kvWriteArgs.key, providerOption)
 	defer w3client.Close()
-	contractAddr := common.HexToAddress(kvWriteArgs.contract)
-	flow, err := contract.NewFlowContract(contractAddr, w3client)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create flow contract")
-	}
 
 	var fee *big.Int
 	if kvWriteArgs.fee > 0 {
@@ -144,7 +135,7 @@ func kvWrite(*cobra.Command, []string) {
 		}
 	}
 
-	batcher := kv.NewBatcher(kvWriteArgs.version, clients, flow, zg_common.LogOption{Logger: logrus.StandardLogger()})
+	batcher := kv.NewBatcher(kvWriteArgs.version, clients, w3client, zg_common.LogOption{Logger: logrus.StandardLogger()})
 	if len(kvWriteArgs.keys) != len(kvWriteArgs.values) {
 		logrus.Fatal("keys and values length mismatch")
 	}
@@ -160,8 +151,7 @@ func kvWrite(*cobra.Command, []string) {
 		)
 	}
 
-	err = batcher.Exec(ctx, opt)
-	if err != nil {
+	if err := batcher.Exec(ctx, opt); err != nil {
 		logrus.WithError(err).Fatal("fail to execute kv batch")
 	}
 }

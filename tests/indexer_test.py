@@ -18,7 +18,6 @@ class IndexerTest(TestFramework):
             os.path.join(os.path.dirname(__file__), "go_tests", "indexer_test", "main.go"),
             # arguments passed to go
             GENESIS_PRIV_KEY,
-            self.contract.address(),
             self.blockchain_nodes[0].rpc_url,
             ",".join([x.rpc_url for x in self.nodes]),
             self.indexer_rpc_url

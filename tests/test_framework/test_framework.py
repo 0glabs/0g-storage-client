@@ -276,7 +276,6 @@ class TestFramework:
     def _upload_file_use_cli(
         self,
         blockchain_node_rpc_url,
-        contract_address,
         key,
         node_rpc_url,
         indexer_url,
@@ -288,8 +287,6 @@ class TestFramework:
             "upload",
             "--url",
             blockchain_node_rpc_url,
-            "--contract",
-            contract_address,
             "--key",
             encode_hex(key),
             "--skip-tx="+str(skip_tx),
@@ -398,7 +395,6 @@ class TestFramework:
     def _kv_write_use_cli(
         self,
         blockchain_node_rpc_url,
-        contract_address,
         key,
         node_rpc_url,
         indexer_url,
@@ -412,8 +408,6 @@ class TestFramework:
             "kv-write",
             "--url",
             blockchain_node_rpc_url,
-            "--contract",
-            contract_address,
             "--key",
             encode_hex(key),
             "--skip-tx="+str(skip_tx),

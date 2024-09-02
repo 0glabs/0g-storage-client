@@ -18,7 +18,6 @@ class KVTest(TestFramework):
         self.setup_kv_node(0, [to_stream_id(0)])
         self._kv_write_use_cli(
             self.blockchain_nodes[0].rpc_url,
-            self.contract.address(),
             GENESIS_ACCOUNT.key,
             self.nodes[0].rpc_url,
             None,

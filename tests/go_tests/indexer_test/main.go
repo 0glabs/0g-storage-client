@@ -10,12 +10,10 @@ import (
 	"github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/common/blockchain"
 	"github.com/0glabs/0g-storage-client/common/util"
-	"github.com/0glabs/0g-storage-client/contract"
 	"github.com/0glabs/0g-storage-client/core"
 	"github.com/0glabs/0g-storage-client/indexer"
 	"github.com/0glabs/0g-storage-client/node"
 	"github.com/0glabs/0g-storage-client/transfer"
-	eth_common "github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -25,17 +23,13 @@ func runTest() error {
 	// load args, indexer's trusted & discover node is node[0]
 	args := os.Args[1:]
 	key := args[0]
-	contractAddr := eth_common.HexToAddress(args[1])
-	chainUrl := args[2]
-	zgsNodeUrls := strings.Split(args[3], ",")
-	indexerUrl := args[4]
+	chainUrl := args[1]
+	zgsNodeUrls := strings.Split(args[2], ",")
+	indexerUrl := args[3]
 
 	w3client := blockchain.MustNewWeb3(chainUrl, key)
 	defer w3client.Close()
-	flow, err := contract.NewFlowContract(contractAddr, w3client)
-	if err != nil {
-		return fmt.Errorf("failed to create flow contract")
-	}
+
 	// upload by indexer
 	data, err := core.NewDataInMemory([]byte("indexer_test_data"))
 	if err != nil {
@@ -45,7 +39,7 @@ func runTest() error {
 	if err != nil {
 		return errors.WithMessage(err, "failed to initialize indexer client")
 	}
-	if err := indexerClient.Upload(ctx, flow, data, transfer.UploadOption{
+	if err := indexerClient.Upload(ctx, w3client, data, transfer.UploadOption{
 		FinalityRequired: true,
 	}); err != nil {
 		return errors.WithMessage(err, "failed to upload file")
@@ -76,7 +70,7 @@ func runTest() error {
 		defer client.Close()
 	}
 
-	uploader, err := transfer.NewUploader(ctx, flow, clients, common.LogOption{Logger: logrus.StandardLogger()})
+	uploader, err := transfer.NewUploader(ctx, w3client, clients, common.LogOption{Logger: logrus.StandardLogger()})
 	if err != nil {
 		return errors.WithMessage(err, "failed to initialize uploader")
 	}

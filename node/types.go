@@ -7,11 +7,26 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
+// NetworkProtocolVersion P2P network protocol version.
+type NetworkProtocolVersion struct {
+	Major uint8 `json:"major"`
+	Minor uint8 `json:"minor"`
+	Build uint8 `json:"build"`
+}
+
+// NetworkIdentity network identity of 0g storage node to distinguish different networks.
+type NetworkIdentity struct {
+	ChainId                uint64                 `json:"chainId"`
+	FlowContractAddress    common.Address         `json:"flowAddress"`
+	NetworkProtocolVersion NetworkProtocolVersion `json:"p2pProtocolVersion"`
+}
+
 // Status sync status of 0g storage node
 type Status struct {
-	ConnectedPeers uint        `json:"connectedPeers"`
-	LogSyncHeight  uint64      `json:"logSyncHeight"`
-	LogSyncBlock   common.Hash `json:"logSyncBlock"`
+	ConnectedPeers  uint            `json:"connectedPeers"`
+	LogSyncHeight   uint64          `json:"logSyncHeight"`
+	LogSyncBlock    common.Hash     `json:"logSyncBlock"`
+	NetworkIdentity NetworkIdentity `json:"networkIdentity"`
 }
 
 // Transaction on-chain transaction about a file
