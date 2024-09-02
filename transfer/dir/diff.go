@@ -9,10 +9,10 @@ import (
 type DiffStatus string
 
 const (
-	Added     DiffStatus = "added"
-	Removed   DiffStatus = "removed"
-	Modified  DiffStatus = "modified"
-	Unchanged DiffStatus = "unchanged"
+	DiffStatusAdded     DiffStatus = "added"
+	DiffStatusRemoved   DiffStatus = "removed"
+	DiffStatusModified  DiffStatus = "modified"
+	DiffStatusUnchanged DiffStatus = "unchanged"
 )
 
 // DiffNode represents a node in the diff structure with its status.
@@ -29,7 +29,7 @@ func NewDiffNode(node *FsNode, status DiffStatus) *DiffNode {
 		Status: status,
 	}
 
-	if node.Type == Directory {
+	if node.Type == FileTypeDirectory {
 		diffNode.Entries = btree.NewG(2, func(a, b *DiffNode) bool {
 			return a.Node.Name < b.Node.Name
 		})
@@ -40,7 +40,7 @@ func NewDiffNode(node *FsNode, status DiffStatus) *DiffNode {
 
 // Diff compares two directories and returns a DiffNode tree with the differences.
 func Diff(current, next *FsNode, recursive bool) (*DiffNode, error) {
-	if current.Type != Directory || next.Type != Directory {
+	if current.Type != FileTypeDirectory || next.Type != FileTypeDirectory {
 		return nil, errors.New("diff is only supported for directories")
 	}
 
@@ -49,36 +49,36 @@ func Diff(current, next *FsNode, recursive bool) (*DiffNode, error) {
 
 // diff is a recursive function that computes the differences between two directory nodes.
 func diff(current, next *FsNode, recursive bool) *DiffNode {
-	root := NewDiffNode(current, Unchanged)
+	root := NewDiffNode(current, DiffStatusUnchanged)
 
 	// processes entries from the current directory.
 	for _, currentEntry := range current.Entries {
 		nextEntry, found := next.Search(currentEntry.Name)
 		if !found {
-			root.Entries.ReplaceOrInsert(NewDiffNode(currentEntry, Removed))
-			root.Status = Modified
+			root.Entries.ReplaceOrInsert(NewDiffNode(currentEntry, DiffStatusRemoved))
+			root.Status = DiffStatusModified
 			continue
 		}
 
 		if currentEntry.Hash == nextEntry.Hash {
-			root.Entries.ReplaceOrInsert(NewDiffNode(currentEntry, Unchanged))
+			root.Entries.ReplaceOrInsert(NewDiffNode(currentEntry, DiffStatusUnchanged))
 			continue
 		}
 
-		root.Status = Modified
-		if recursive && currentEntry.Type == Directory && nextEntry.Type == Directory {
+		root.Status = DiffStatusModified
+		if recursive && currentEntry.Type == FileTypeDirectory && nextEntry.Type == FileTypeDirectory {
 			subDiff := diff(currentEntry, nextEntry, recursive)
 			root.Entries.ReplaceOrInsert(subDiff)
 		} else {
-			root.Entries.ReplaceOrInsert(NewDiffNode(currentEntry, Modified))
+			root.Entries.ReplaceOrInsert(NewDiffNode(currentEntry, DiffStatusModified))
 		}
 	}
 
 	// processes entries from the next directory that were not found in the current directory.
 	for _, nextEntry := range next.Entries {
 		if _, found := current.Search(nextEntry.Name); !found {
-			root.Status = Modified
-			root.Entries.ReplaceOrInsert(NewDiffNode(nextEntry, Added))
+			root.Status = DiffStatusModified
+			root.Entries.ReplaceOrInsert(NewDiffNode(nextEntry, DiffStatusAdded))
 		}
 	}
 

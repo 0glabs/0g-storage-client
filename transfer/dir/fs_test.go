@@ -20,7 +20,7 @@ func TestNewDirFsNode(t *testing.T) {
 	node := dir.NewDirFsNode("root", children)
 
 	assert.Equal(t, "root", node.Name)
-	assert.Equal(t, dir.Directory, node.Type)
+	assert.Equal(t, dir.FileTypeDirectory, node.Type)
 	assert.NotEqual(t, common.Hash{}, node.Hash)
 	assert.Len(t, node.Entries, 2)
 	assert.Equal(t, "child1", node.Entries[0].Name)
@@ -32,9 +32,28 @@ func TestNewFileFsNode(t *testing.T) {
 	node := dir.NewFileFsNode("file.txt", hash, 1024)
 
 	assert.Equal(t, "file.txt", node.Name)
-	assert.Equal(t, dir.File, node.Type)
+	assert.Equal(t, dir.FileTypeFile, node.Type)
 	assert.Equal(t, hash, node.Hash)
 	assert.Equal(t, int64(1024), node.Size)
+}
+
+func TestNewRawFsNode(t *testing.T) {
+	data := []byte("content")
+
+	iterdata, err := core.NewDataInMemory(data)
+	assert.NoError(t, err)
+
+	tree, err := core.MerkleTree(iterdata)
+	assert.NoError(t, err)
+
+	node, err := dir.NewRawFsNode("file.txt", data)
+	assert.NoError(t, err)
+
+	assert.Equal(t, "file.txt", node.Name)
+	assert.Equal(t, dir.FileTypeRaw, node.Type)
+	assert.Equal(t, int64(len(data)), node.Size)
+	assert.Equal(t, tree.Root(), node.Hash)
+	assert.Equal(t, data, node.Data)
 }
 
 func TestNewSymbolicFsNode(t *testing.T) {
@@ -42,7 +61,7 @@ func TestNewSymbolicFsNode(t *testing.T) {
 	node := dir.NewSymbolicFsNode("symlink", link)
 
 	assert.Equal(t, "symlink", node.Name)
-	assert.Equal(t, dir.Symbolic, node.Type)
+	assert.Equal(t, dir.FileTypeSymbolic, node.Type)
 	assert.Equal(t, crypto.Keccak256Hash([]byte(link)), node.Hash)
 	assert.Equal(t, link, node.Link)
 }
@@ -91,20 +110,20 @@ func TestBuildFileTree(t *testing.T) {
 	t.Run("test building file tree", func(t *testing.T) {
 		root, err = dir.BuildFileTree(tempDir)
 		assert.NoError(t, err)
-		assert.Equal(t, dir.Directory, root.Type)
-		assert.Equal(t, root.Name, ".")
+		assert.Equal(t, dir.FileTypeDirectory, root.Type)
+		assert.Equal(t, root.Name, dir.RootDir)
 		assert.Len(t, root.Entries, 3) // "testfile.txt", "symlink", "subdir"
 	})
 
 	t.Run("test subdir file node", func(t *testing.T) {
 		subDirNode, found := root.Search("subdir")
 		assert.True(t, found)
-		assert.Equal(t, dir.Directory, subDirNode.Type)
+		assert.Equal(t, dir.FileTypeDirectory, subDirNode.Type)
 		assert.Len(t, subDirNode.Entries, 1) // "subdirfile.txt"
 
 		subDirFileNode, found := subDirNode.Search("subdirfile.txt")
 		assert.True(t, found)
-		assert.Equal(t, dir.File, subDirFileNode.Type)
+		assert.Equal(t, dir.FileTypeFile, subDirFileNode.Type)
 	})
 
 	t.Run("test file node", func(t *testing.T) {
@@ -119,7 +138,7 @@ func TestBuildFileTree(t *testing.T) {
 	t.Run("test symbolic link node", func(t *testing.T) {
 		node, found := root.Search("symlink")
 		assert.True(t, found)
-		assert.Equal(t, dir.Symbolic, node.Type)
+		assert.Equal(t, dir.FileTypeSymbolic, node.Type)
 		assert.Equal(t, filePath, node.Link)
 	})
 }

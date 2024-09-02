@@ -21,7 +21,7 @@ func TestDiffIdenticalDirectories(t *testing.T) {
 
 	diffNode, err := dir.Diff(dir1, dir2, true)
 	assert.NoError(t, err)
-	assert.Equal(t, dir.Unchanged, diffNode.Status)
+	assert.Equal(t, dir.DiffStatusUnchanged, diffNode.Status)
 	assert.Equal(t, 2, diffNode.Entries.Len())
 }
 
@@ -37,13 +37,13 @@ func TestDiffFileAdded(t *testing.T) {
 
 	diffNode, err := dir.Diff(dir1, dir2, true)
 	assert.NoError(t, err)
-	assert.Equal(t, dir.Modified, diffNode.Status)
+	assert.Equal(t, dir.DiffStatusModified, diffNode.Status)
 	assert.Equal(t, 2, diffNode.Entries.Len())
 
 	// Check that the added file is correctly identified
 	addedNode := findDiffNodeByName(diffNode, "file2.txt")
 	assert.NotNil(t, addedNode)
-	assert.Equal(t, dir.Added, addedNode.Status)
+	assert.Equal(t, dir.DiffStatusAdded, addedNode.Status)
 }
 
 func TestDiffFileRemoved(t *testing.T) {
@@ -58,13 +58,13 @@ func TestDiffFileRemoved(t *testing.T) {
 
 	diffNode, err := dir.Diff(dir1, dir2, true)
 	assert.NoError(t, err)
-	assert.Equal(t, dir.Modified, diffNode.Status)
+	assert.Equal(t, dir.DiffStatusModified, diffNode.Status)
 	assert.Equal(t, 2, diffNode.Entries.Len())
 
 	// Check that the removed file is correctly identified
 	removedNode := findDiffNodeByName(diffNode, "file2.txt")
 	assert.NotNil(t, removedNode)
-	assert.Equal(t, dir.Removed, removedNode.Status)
+	assert.Equal(t, dir.DiffStatusRemoved, removedNode.Status)
 }
 
 func TestDiffFileModified(t *testing.T) {
@@ -78,13 +78,13 @@ func TestDiffFileModified(t *testing.T) {
 
 	diffNode, err := dir.Diff(dir1, dir2, true)
 	assert.NoError(t, err)
-	assert.Equal(t, dir.Modified, diffNode.Status)
+	assert.Equal(t, dir.DiffStatusModified, diffNode.Status)
 	assert.Equal(t, 1, diffNode.Entries.Len())
 
 	// Check that the modified file is correctly identified
 	modifiedNode := findDiffNodeByName(diffNode, "file1.txt")
 	assert.NotNil(t, modifiedNode)
-	assert.Equal(t, dir.Modified, modifiedNode.Status)
+	assert.Equal(t, dir.DiffStatusModified, modifiedNode.Status)
 }
 
 func TestDiffSubdirectoryChanges(t *testing.T) {
@@ -101,18 +101,18 @@ func TestDiffSubdirectoryChanges(t *testing.T) {
 
 	diffNode, err := dir.Diff(dir1, dir2, true)
 	assert.NoError(t, err)
-	assert.Equal(t, dir.Modified, diffNode.Status)
+	assert.Equal(t, dir.DiffStatusModified, diffNode.Status)
 	assert.Equal(t, 1, diffNode.Entries.Len())
 
 	// Check the subdirectory for changes
 	subDirDiffNode := findDiffNodeByName(diffNode, "subdir")
 	assert.NotNil(t, subDirDiffNode)
-	assert.Equal(t, dir.Modified, subDirDiffNode.Status)
+	assert.Equal(t, dir.DiffStatusModified, subDirDiffNode.Status)
 
 	// Check that the modified file is correctly identified
 	modifiedNode := findDiffNodeByName(subDirDiffNode, "file1.txt")
 	assert.NotNil(t, modifiedNode)
-	assert.Equal(t, dir.Modified, modifiedNode.Status)
+	assert.Equal(t, dir.DiffStatusModified, modifiedNode.Status)
 }
 
 // Utility function to find a DiffNode by name

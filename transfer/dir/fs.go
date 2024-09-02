@@ -3,6 +3,7 @@ package dir
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -12,23 +13,35 @@ import (
 	"github.com/pkg/errors"
 )
 
+var RootDir string
+
+func init() {
+	if runtime.GOOS == "windows" {
+		RootDir = "\\"
+	} else {
+		RootDir = "/"
+	}
+}
+
 // FileType represents the file type in the FsNode structure.
 type FileType string
 
 const (
-	File      FileType = "file"
-	Directory FileType = "directory"
-	Symbolic  FileType = "symbolic"
+	FileTypeFile      FileType = "file"
+	FileTypeDirectory FileType = "directory"
+	FileTypeSymbolic  FileType = "symbolic"
+	FileTypeRaw       FileType = "raw"
 )
 
 // FsNode represents a node in the filesystem hierarchy.
 type FsNode struct {
 	Name    string      `json:"name"`              // File or directory name
 	Type    FileType    `json:"type"`              // File type of the node
-	Hash    common.Hash `json:"hash,omitempty"`    // Merkle hash
-	Size    int64       `json:"size,omitempty"`    // File size in bytes (only for files)
-	Link    string      `json:"link,omitempty"`    // Symbolic link target
+	Hash    common.Hash `json:"hash"`              // Merkle hash
+	Size    int64       `json:"size,omitempty"`    // File size in bytes (only for reguar or raw files)
+	Link    string      `json:"link,omitempty"`    // Symbolic link target (only for symbolic)
 	Entries []*FsNode   `json:"entries,omitempty"` // Directory entries (only for directories)
+	Data    []byte      `json:"-"`                 // Raw data (only for raw files)
 }
 
 // NewDirFsNode creates a new FsNode representing a directory.
@@ -41,7 +54,7 @@ func NewDirFsNode(name string, entryNodes []*FsNode) *FsNode {
 
 	return &FsNode{
 		Name:    name,
-		Type:    Directory,
+		Type:    FileTypeDirectory,
 		Hash:    rootHash,
 		Entries: entryNodes,
 	}
@@ -55,29 +68,50 @@ func calculateRootHash(entries []*FsNode) common.Hash {
 		return root
 	}
 
-	root = crypto.Keccak256Hash(entries[len(entries)-1].Hash[:])
-	for i := len(entries) - 2; i >= 0; i-- {
+	root = crypto.Keccak256Hash(entries[0].Hash[:])
+	for i := 1; i < len(entries); i++ {
 		root = crypto.Keccak256Hash(entries[i].Hash[:], root[:])
 	}
 
 	return root
 }
 
-// NewFileFsNode creates a new FsNode representing a file.
+// NewFileFsNode creates a new FsNode representing a regular file.
 func NewFileFsNode(name string, hash common.Hash, size int64) *FsNode {
 	return &FsNode{
 		Name: name,
-		Type: File,
+		Type: FileTypeFile,
 		Hash: hash,
 		Size: size,
 	}
+}
+
+// NewRawFsNode creates a new FsNode representing a raw file.
+func NewRawFsNode(name string, data []byte) (*FsNode, error) {
+	iterdata, err := core.NewDataInMemory(data)
+	if err != nil {
+		return nil, err
+	}
+
+	tree, err := core.MerkleTree(iterdata)
+	if err != nil {
+		return nil, err
+	}
+
+	return &FsNode{
+		Name: name,
+		Type: FileTypeRaw,
+		Hash: tree.Root(),
+		Size: int64(len(data)),
+		Data: data,
+	}, nil
 }
 
 // NewSymbolicFsNode creates a new FsNode representing a symbolic link.
 func NewSymbolicFsNode(name, link string) *FsNode {
 	return &FsNode{
 		Name: name,
-		Type: Symbolic,
+		Type: FileTypeSymbolic,
 		Hash: crypto.Keccak256Hash([]byte(link)),
 		Link: link,
 	}
@@ -111,8 +145,8 @@ func BuildFileTree(path string) (*FsNode, error) {
 		return nil, err
 	}
 
-	// Root directory represented as "."
-	root.Name = "."
+	// Set root directory name
+	root.Name = RootDir
 	return root, nil
 }
 
@@ -130,6 +164,7 @@ func build(path string) (*FsNode, error) {
 		return buildSymbolicNode(path, info)
 	case info.Mode().IsRegular():
 		return buildFileNode(path, info)
+	// TODO: build raw file node based on file size?
 	default:
 		return nil, errors.New("unsupported file type")
 	}
