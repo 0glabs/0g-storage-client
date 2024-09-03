@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/0glabs/0g-storage-client/transfer/dir"
-	"github.com/ethereum/go-ethereum/common"
 )
 
 func TestEncodeDecodeFsNode(t *testing.T) {
@@ -14,29 +13,26 @@ func TestEncodeDecodeFsNode(t *testing.T) {
 	rootNode := dir.FsNode{
 		Name: "root",
 		Type: dir.FileTypeDirectory,
-		Hash: common.HexToHash("0x12"),
 		Entries: []*dir.FsNode{
 			{
 				Name: "file1.txt",
 				Type: dir.FileTypeFile,
-				Hash: common.HexToHash("0x34"),
+				Hash: "0xabc123",
 				Size: 1024,
 			},
 			{
 				Name: "symlink",
 				Type: dir.FileTypeSymbolic,
-				Hash: common.HexToHash("0x56"),
 				Link: "/path/to/target",
 			},
 			{
 				Name: "subdir",
 				Type: dir.FileTypeDirectory,
-				Hash: common.HexToHash("0x78"),
 				Entries: []*dir.FsNode{
 					{
 						Name: "file2.txt",
 						Type: dir.FileTypeFile,
-						Hash: common.HexToHash("0x90"),
+						Hash: "0xdef456",
 						Size: 2048,
 					},
 				},
@@ -68,7 +64,7 @@ func TestInvalidMagicBytes(t *testing.T) {
 	originalNode := dir.FsNode{
 		Name: "testfile.txt",
 		Type: dir.FileTypeFile,
-		Hash: common.HexToHash("0x1234"),
+		Hash: "0x1234",
 		Size: 1024,
 	}
 	encodedData, err := originalNode.MarshalBinary()
@@ -92,7 +88,7 @@ func TestInvalidVersion(t *testing.T) {
 	originalNode := dir.FsNode{
 		Name: "testfile.txt",
 		Type: dir.FileTypeFile,
-		Hash: common.HexToHash("0x1234"),
+		Hash: "0x1234",
 		Size: 1024,
 	}
 	encodedData, err := originalNode.MarshalBinary()

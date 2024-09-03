@@ -22,12 +22,12 @@ const (
 
 // FsNode represents a node in the filesystem hierarchy.
 type FsNode struct {
-	Name    string      `json:"name"`              // File or directory name
-	Type    FileType    `json:"type"`              // File type of the node
-	Hash    common.Hash `json:"hash"`              // Merkle hash (only for regular files)
-	Size    int64       `json:"size,omitempty"`    // File size in bytes (only for regular files)
-	Link    string      `json:"link,omitempty"`    // Symbolic link target (only for symbolic links)
-	Entries []*FsNode   `json:"entries,omitempty"` // Directory entries (only for directories)
+	Name    string    `json:"name"`              // File or directory name
+	Type    FileType  `json:"type"`              // File type of the node
+	Hash    string    `json:"hash,omitempty"`    // Merkle hash (only for regular files)
+	Size    int64     `json:"size,omitempty"`    // File size in bytes (only for regular files)
+	Link    string    `json:"link,omitempty"`    // Symbolic link target (only for symbolic links)
+	Entries []*FsNode `json:"entries,omitempty"` // Directory entries (only for directories)
 }
 
 // NewDirFsNode creates a new FsNode representing a directory.
@@ -48,7 +48,7 @@ func NewFileFsNode(name string, hash common.Hash, size int64) *FsNode {
 	return &FsNode{
 		Name: name,
 		Type: FileTypeFile,
-		Hash: hash,
+		Hash: hash.Hex(),
 		Size: size,
 	}
 }
