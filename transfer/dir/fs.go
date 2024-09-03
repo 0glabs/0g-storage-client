@@ -3,25 +3,13 @@ package dir
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 
 	"github.com/0glabs/0g-storage-client/core"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 )
-
-var RootDir string
-
-func init() {
-	if runtime.GOOS == "windows" {
-		RootDir = "\\"
-	} else {
-		RootDir = "/"
-	}
-}
 
 // FileType represents the file type in the FsNode structure.
 type FileType string
@@ -30,18 +18,16 @@ const (
 	FileTypeFile      FileType = "file"
 	FileTypeDirectory FileType = "directory"
 	FileTypeSymbolic  FileType = "symbolic"
-	FileTypeRaw       FileType = "raw"
 )
 
 // FsNode represents a node in the filesystem hierarchy.
 type FsNode struct {
 	Name    string      `json:"name"`              // File or directory name
 	Type    FileType    `json:"type"`              // File type of the node
-	Hash    common.Hash `json:"hash"`              // Merkle hash
-	Size    int64       `json:"size,omitempty"`    // File size in bytes (only for reguar or raw files)
-	Link    string      `json:"link,omitempty"`    // Symbolic link target (only for symbolic)
+	Hash    common.Hash `json:"hash"`              // Merkle hash (only for regular files)
+	Size    int64       `json:"size,omitempty"`    // File size in bytes (only for regular files)
+	Link    string      `json:"link,omitempty"`    // Symbolic link target (only for symbolic links)
 	Entries []*FsNode   `json:"entries,omitempty"` // Directory entries (only for directories)
-	Data    []byte      `json:"-"`                 // Raw data (only for raw files)
 }
 
 // NewDirFsNode creates a new FsNode representing a directory.
@@ -50,30 +36,11 @@ func NewDirFsNode(name string, entryNodes []*FsNode) *FsNode {
 		return entryNodes[i].Name < entryNodes[j].Name
 	})
 
-	rootHash := calculateRootHash(entryNodes)
-
 	return &FsNode{
 		Name:    name,
 		Type:    FileTypeDirectory,
-		Hash:    rootHash,
 		Entries: entryNodes,
 	}
-}
-
-// calculateRootHash computes the Merkle root hash for a list of FsNode entries.
-func calculateRootHash(entries []*FsNode) common.Hash {
-	var root common.Hash
-
-	if len(entries) == 0 {
-		return root
-	}
-
-	root = crypto.Keccak256Hash(entries[0].Hash[:])
-	for i := 1; i < len(entries); i++ {
-		root = crypto.Keccak256Hash(entries[i].Hash[:], root[:])
-	}
-
-	return root
 }
 
 // NewFileFsNode creates a new FsNode representing a regular file.
@@ -86,33 +53,11 @@ func NewFileFsNode(name string, hash common.Hash, size int64) *FsNode {
 	}
 }
 
-// NewRawFsNode creates a new FsNode representing a raw file.
-func NewRawFsNode(name string, data []byte) (*FsNode, error) {
-	iterdata, err := core.NewDataInMemory(data)
-	if err != nil {
-		return nil, err
-	}
-
-	tree, err := core.MerkleTree(iterdata)
-	if err != nil {
-		return nil, err
-	}
-
-	return &FsNode{
-		Name: name,
-		Type: FileTypeRaw,
-		Hash: tree.Root(),
-		Size: int64(len(data)),
-		Data: data,
-	}, nil
-}
-
 // NewSymbolicFsNode creates a new FsNode representing a symbolic link.
 func NewSymbolicFsNode(name, link string) *FsNode {
 	return &FsNode{
 		Name: name,
 		Type: FileTypeSymbolic,
-		Hash: crypto.Keccak256Hash([]byte(link)),
 		Link: link,
 	}
 }
@@ -127,6 +72,32 @@ func (node *FsNode) Search(fileName string) (*FsNode, bool) {
 		return node.Entries[i], true
 	}
 	return nil, false
+}
+
+// Equal compares two FsNode structures for equality.
+func (node *FsNode) Equal(rhs *FsNode) bool {
+	if node.Type != rhs.Type || node.Name != rhs.Name {
+		return false
+	}
+
+	switch node.Type {
+	case FileTypeFile:
+		return node.Hash == rhs.Hash && node.Size == rhs.Size
+	case FileTypeSymbolic:
+		return node.Link == rhs.Link
+	case FileTypeDirectory:
+		if len(node.Entries) != len(rhs.Entries) {
+			return false
+		}
+		for i := 0; i < len(node.Entries); i++ {
+			if !node.Entries[i].Equal(rhs.Entries[i]) {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
+	}
 }
 
 // BuildFileTree recursively builds a file tree for the specified directory.
@@ -146,7 +117,7 @@ func BuildFileTree(path string) (*FsNode, error) {
 	}
 
 	// Set root directory name
-	root.Name = RootDir
+	root.Name = "/"
 	return root, nil
 }
 
@@ -164,7 +135,6 @@ func build(path string) (*FsNode, error) {
 		return buildSymbolicNode(path, info)
 	case info.Mode().IsRegular():
 		return buildFileNode(path, info)
-	// TODO: build raw file node based on file size?
 	default:
 		return nil, errors.New("unsupported file type")
 	}

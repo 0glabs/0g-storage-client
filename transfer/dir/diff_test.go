@@ -19,7 +19,7 @@ func TestDiffIdenticalDirectories(t *testing.T) {
 		dir.NewFileFsNode("file2.txt", common.HexToHash("0x2"), 200),
 	})
 
-	diffNode, err := dir.Diff(dir1, dir2, true)
+	diffNode, err := dir.Diff(dir1, dir2)
 	assert.NoError(t, err)
 	assert.Equal(t, dir.DiffStatusUnchanged, diffNode.Status)
 	assert.Equal(t, 2, diffNode.Entries.Len())
@@ -35,7 +35,7 @@ func TestDiffFileAdded(t *testing.T) {
 		dir.NewFileFsNode("file2.txt", common.HexToHash("0x2"), 200),
 	})
 
-	diffNode, err := dir.Diff(dir1, dir2, true)
+	diffNode, err := dir.Diff(dir1, dir2)
 	assert.NoError(t, err)
 	assert.Equal(t, dir.DiffStatusModified, diffNode.Status)
 	assert.Equal(t, 2, diffNode.Entries.Len())
@@ -56,7 +56,7 @@ func TestDiffFileRemoved(t *testing.T) {
 		dir.NewFileFsNode("file1.txt", common.HexToHash("0x1"), 100),
 	})
 
-	diffNode, err := dir.Diff(dir1, dir2, true)
+	diffNode, err := dir.Diff(dir1, dir2)
 	assert.NoError(t, err)
 	assert.Equal(t, dir.DiffStatusModified, diffNode.Status)
 	assert.Equal(t, 2, diffNode.Entries.Len())
@@ -76,7 +76,7 @@ func TestDiffFileModified(t *testing.T) {
 		dir.NewFileFsNode("file1.txt", common.HexToHash("0x2"), 150),
 	})
 
-	diffNode, err := dir.Diff(dir1, dir2, true)
+	diffNode, err := dir.Diff(dir1, dir2)
 	assert.NoError(t, err)
 	assert.Equal(t, dir.DiffStatusModified, diffNode.Status)
 	assert.Equal(t, 1, diffNode.Entries.Len())
@@ -99,7 +99,7 @@ func TestDiffSubdirectoryChanges(t *testing.T) {
 	dir1 := dir.NewDirFsNode("root", []*dir.FsNode{subDir1})
 	dir2 := dir.NewDirFsNode("root", []*dir.FsNode{subDir2})
 
-	diffNode, err := dir.Diff(dir1, dir2, true)
+	diffNode, err := dir.Diff(dir1, dir2)
 	assert.NoError(t, err)
 	assert.Equal(t, dir.DiffStatusModified, diffNode.Status)
 	assert.Equal(t, 1, diffNode.Entries.Len())

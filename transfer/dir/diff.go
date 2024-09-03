@@ -39,16 +39,16 @@ func NewDiffNode(node *FsNode, status DiffStatus) *DiffNode {
 }
 
 // Diff compares two directories and returns a DiffNode tree with the differences.
-func Diff(current, next *FsNode, recursive bool) (*DiffNode, error) {
+func Diff(current, next *FsNode) (*DiffNode, error) {
 	if current.Type != FileTypeDirectory || next.Type != FileTypeDirectory {
 		return nil, errors.New("diff is only supported for directories")
 	}
 
-	return diff(current, next, recursive), nil
+	return diff(current, next), nil
 }
 
 // diff is a recursive function that computes the differences between two directory nodes.
-func diff(current, next *FsNode, recursive bool) *DiffNode {
+func diff(current, next *FsNode) *DiffNode {
 	root := NewDiffNode(current, DiffStatusUnchanged)
 
 	// processes entries from the current directory.
@@ -60,17 +60,17 @@ func diff(current, next *FsNode, recursive bool) *DiffNode {
 			continue
 		}
 
-		if currentEntry.Hash == nextEntry.Hash {
-			root.Entries.ReplaceOrInsert(NewDiffNode(currentEntry, DiffStatusUnchanged))
-			continue
-		}
-
-		root.Status = DiffStatusModified
-		if recursive && currentEntry.Type == FileTypeDirectory && nextEntry.Type == FileTypeDirectory {
-			subDiff := diff(currentEntry, nextEntry, recursive)
+		if currentEntry.Type == FileTypeDirectory && nextEntry.Type == FileTypeDirectory {
+			subDiff := diff(currentEntry, nextEntry)
 			root.Entries.ReplaceOrInsert(subDiff)
+			if subDiff.Status != DiffStatusUnchanged {
+				root.Status = DiffStatusModified
+			}
+		} else if currentEntry.Equal(nextEntry) {
+			root.Entries.ReplaceOrInsert(NewDiffNode(currentEntry, DiffStatusUnchanged))
 		} else {
 			root.Entries.ReplaceOrInsert(NewDiffNode(currentEntry, DiffStatusModified))
+			root.Status = DiffStatusModified
 		}
 	}
 

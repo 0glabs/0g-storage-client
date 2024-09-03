@@ -19,39 +19,25 @@ func TestEncodeDecodeFsNode(t *testing.T) {
 			{
 				Name: "file1.txt",
 				Type: dir.FileTypeFile,
-				Hash: common.HexToHash("0x23"),
-				Size: 1024,
-			},
-			{
-				Name: "rawfile2.bin",
-				Type: dir.FileTypeRaw,
 				Hash: common.HexToHash("0x34"),
-				Size: 7,
-				Data: []byte("rawdata"),
+				Size: 1024,
 			},
 			{
 				Name: "symlink",
 				Type: dir.FileTypeSymbolic,
-				Hash: common.HexToHash("0x45"),
+				Hash: common.HexToHash("0x56"),
 				Link: "/path/to/target",
 			},
 			{
 				Name: "subdir",
 				Type: dir.FileTypeDirectory,
-				Hash: common.HexToHash("0x56"),
+				Hash: common.HexToHash("0x78"),
 				Entries: []*dir.FsNode{
 					{
 						Name: "file2.txt",
 						Type: dir.FileTypeFile,
-						Hash: common.HexToHash("0x67"),
+						Hash: common.HexToHash("0x90"),
 						Size: 2048,
-					},
-					{
-						Name: "rawfile.bin",
-						Type: dir.FileTypeRaw,
-						Hash: common.HexToHash("0x78"),
-						Size: 7,
-						Data: []byte("rawdata"),
 					},
 				},
 			},
@@ -73,7 +59,7 @@ func TestEncodeDecodeFsNode(t *testing.T) {
 
 	// Compare the original and decoded FsNode to ensure they are the same
 	if !reflect.DeepEqual(rootNode, decodedNode) {
-		t.Errorf("Expected FsNode to be equal, but got %v and %v", rootNode, decodedNode)
+		t.Errorf("Expected `FsNode` to be equal, but got %v and %v", rootNode, decodedNode)
 	}
 }
 
@@ -122,55 +108,5 @@ func TestInvalidVersion(t *testing.T) {
 	err = decodedNode.UnmarshalBinary(encodedData)
 	if err == nil || !bytes.Contains([]byte(err.Error()), []byte("unsupported codec version")) {
 		t.Fatalf("expected version error, got %v", err)
-	}
-}
-
-func TestIncompleteRawData(t *testing.T) {
-	// Create an FsNode structure with raw data
-	originalNode := dir.FsNode{
-		Name: "rawfile",
-		Type: dir.FileTypeRaw,
-		Hash: common.HexToHash("0x1234"),
-		Size: 1024,
-		Data: make([]byte, 1024),
-	}
-
-	// Encode the FsNode to bytes
-	encodedData, err := originalNode.MarshalBinary()
-	if err != nil {
-		t.Fatalf("Binary marshal failed: %v", err)
-	}
-
-	// Truncate the encoded data to simulate incomplete raw data
-	truncatedData := encodedData[:len(encodedData)-10]
-
-	// Attempt to decode the truncated data
-	var decodedNode dir.FsNode
-	err = decodedNode.UnmarshalBinary(truncatedData)
-	if err == nil || !bytes.Contains([]byte(err.Error()), []byte("expected to read")) {
-		t.Fatalf("expected read error, got %v", err)
-	}
-}
-
-func TestEmptyNodeEncodeDecode(t *testing.T) {
-	// Create an empty FsNode
-	originalNode := dir.FsNode{}
-
-	// Encode the FsNode to bytes
-	encodedData, err := originalNode.MarshalBinary()
-	if err != nil {
-		t.Fatalf("Binary marshal failed: %v", err)
-	}
-
-	// Decode the bytes back into an FsNode
-	var decodedNode dir.FsNode
-	err = decodedNode.UnmarshalBinary(encodedData)
-	if err != nil {
-		t.Fatalf("Binary unmarshal failed: %v", err)
-	}
-
-	// Compare the original and decoded FsNode to ensure they are the same
-	if !reflect.DeepEqual(originalNode, decodedNode) {
-		t.Errorf("Expected FsNode to be equal, but got %v and %v", originalNode, decodedNode)
 	}
 }
