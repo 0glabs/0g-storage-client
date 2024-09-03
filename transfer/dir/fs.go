@@ -24,7 +24,7 @@ const (
 type FsNode struct {
 	Name    string    `json:"name"`              // File or directory name
 	Type    FileType  `json:"type"`              // File type of the node
-	Hash    string    `json:"hash,omitempty"`    // Merkle hash (only for regular files)
+	Root    string    `json:"hash,omitempty"`    // Merkle root hash (only for regular files)
 	Size    int64     `json:"size,omitempty"`    // File size in bytes (only for regular files)
 	Link    string    `json:"link,omitempty"`    // Symbolic link target (only for symbolic links)
 	Entries []*FsNode `json:"entries,omitempty"` // Directory entries (only for directories)
@@ -44,11 +44,11 @@ func NewDirFsNode(name string, entryNodes []*FsNode) *FsNode {
 }
 
 // NewFileFsNode creates a new FsNode representing a regular file.
-func NewFileFsNode(name string, hash common.Hash, size int64) *FsNode {
+func NewFileFsNode(name string, rootHash common.Hash, size int64) *FsNode {
 	return &FsNode{
 		Name: name,
 		Type: FileTypeFile,
-		Hash: hash.Hex(),
+		Root: rootHash.Hex(),
 		Size: size,
 	}
 }
@@ -82,7 +82,7 @@ func (node *FsNode) Equal(rhs *FsNode) bool {
 
 	switch node.Type {
 	case FileTypeFile:
-		return node.Hash == rhs.Hash && node.Size == rhs.Size
+		return node.Root == rhs.Root
 	case FileTypeSymbolic:
 		return node.Link == rhs.Link
 	case FileTypeDirectory:

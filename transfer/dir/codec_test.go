@@ -17,7 +17,7 @@ func TestEncodeDecodeFsNode(t *testing.T) {
 			{
 				Name: "file1.txt",
 				Type: dir.FileTypeFile,
-				Hash: "0xabc123",
+				Root: "0xabc123",
 				Size: 1024,
 			},
 			{
@@ -32,7 +32,7 @@ func TestEncodeDecodeFsNode(t *testing.T) {
 					{
 						Name: "file2.txt",
 						Type: dir.FileTypeFile,
-						Hash: "0xdef456",
+						Root: "0xdef456",
 						Size: 2048,
 					},
 				},
@@ -64,7 +64,7 @@ func TestInvalidMagicBytes(t *testing.T) {
 	originalNode := dir.FsNode{
 		Name: "testfile.txt",
 		Type: dir.FileTypeFile,
-		Hash: "0x1234",
+		Root: "0x1234",
 		Size: 1024,
 	}
 	encodedData, err := originalNode.MarshalBinary()
@@ -88,7 +88,7 @@ func TestInvalidVersion(t *testing.T) {
 	originalNode := dir.FsNode{
 		Name: "testfile.txt",
 		Type: dir.FileTypeFile,
-		Hash: "0x1234",
+		Root: "0x1234",
 		Size: 1024,
 	}
 	encodedData, err := originalNode.MarshalBinary()

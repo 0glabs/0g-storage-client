@@ -35,8 +35,8 @@ func (node *FsNode) MarshalBinary() ([]byte, error) {
 	}
 
 	// Calculate the total length needed for the byte slice:
-	// MagicBytes + CodecVersion (2 bytes) + Metadata Length (4 bytes) + JSON Metadata
-	totalLength := len(CodecMagicBytes) + 2 + 4 + len(mdata)
+	// MagicBytes + CodecVersion (2 bytes) + JSON Metadata
+	totalLength := len(CodecMagicBytes) + 2 + len(mdata)
 
 	// Create the byte slice with the calculated total length
 	data := make([]byte, totalLength)
@@ -51,10 +51,6 @@ func (node *FsNode) MarshalBinary() ([]byte, error) {
 	// Write codec version
 	binary.BigEndian.PutUint16(data[offset:], CodecVersion)
 	offset += 2
-
-	// Write metadata length
-	binary.BigEndian.PutUint32(data[offset:], uint32(len(mdata)))
-	offset += 4
 
 	// Write JSON data
 	copy(data[offset:], mdata)
@@ -84,19 +80,6 @@ func (node *FsNode) UnmarshalBinary(data []byte) error {
 		return errors.Errorf("unsupported codec version: got %d, expected %d", version, CodecVersion)
 	}
 	data = data[2:]
-
-	// Read metadata length
-	if len(data) < 4 {
-		return errors.New("not enough data to read metadata length")
-	}
-	metalen := binary.BigEndian.Uint32(data[:4])
-	data = data[4:]
-
-	// Read JSON metadata
-	if uint32(len(data)) < metalen {
-		return errors.New("not enough data to read JSON metadata")
-	}
-	data = data[:metalen]
 
 	// Deserialize the FsNode from JSON metadata
 	if err := json.Unmarshal(data, node); err != nil {
