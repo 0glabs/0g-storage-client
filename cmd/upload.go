@@ -200,7 +200,7 @@ func uploadDir(ctx context.Context, uploader *transfer.Uploader, opt transfer.Up
 	}
 
 	// Finally, upload the directory metadata.
-	if err := uploader.Upload(ctx, iterdata, opt); err != nil {
+	if _, err := uploader.Upload(ctx, iterdata, opt); err != nil {
 		return err
 	}
 
@@ -246,7 +246,7 @@ func uploadFile(ctx context.Context, up *transfer.Uploader, opt transfer.UploadO
 	}
 	defer file.Close()
 
-	if err := up.Upload(ctx, file, opt); err != nil {
+	if _, err := up.Upload(ctx, file, opt); err != nil {
 		return errors.WithMessage(err, "failed to upload file")
 	}
 
