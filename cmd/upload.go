@@ -177,7 +177,7 @@ func uploadDir(ctx context.Context, uploader *transfer.Uploader, opt transfer.Up
 	// Traverse the file tree and batch upload files.
 	var uploadFilePaths []string
 	if err = root.Traverse(func(fn *dir.FsNode, path string) error {
-		if fn.Type != dir.FileTypeFile {
+		if fn.Type != dir.FileTypeFile || fn.Size == 0 {
 			return nil
 		}
 

@@ -206,6 +206,10 @@ func buildSymbolicNode(path string, info os.FileInfo) (*FsNode, error) {
 
 // buildFileNode creates an FsNode for a regular file, including its Merkle root hash.
 func buildFileNode(path string, info os.FileInfo) (*FsNode, error) {
+	if info.Size() == 0 {
+		return NewFileFsNode(info.Name(), common.Hash{}, 0), nil
+	}
+
 	hash, err := core.MerkleRoot(path)
 	if err != nil {
 		return nil, errors.WithMessagef(err, "failed to calculate merkle root for %s", path)
