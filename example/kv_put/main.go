@@ -34,7 +34,7 @@ func main() {
 		[]byte("TESTKEY1"),
 		[]byte{74, 75, 76, 77, 78},
 	)
-	err = batcher.Exec(context.Background())
+	_, err = batcher.Exec(context.Background())
 	if err != nil {
 		fmt.Println(err)
 		return

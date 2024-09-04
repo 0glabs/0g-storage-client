@@ -119,7 +119,7 @@ func upload(*cobra.Command, []string) {
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to initialize indexer client")
 		}
-		if err := indexerClient.Upload(ctx, w3client, file, opt); err != nil {
+		if _, err := indexerClient.Upload(ctx, w3client, file, opt); err != nil {
 			logrus.WithError(err).Fatal("Failed to upload file")
 		}
 		return
@@ -135,7 +135,7 @@ func upload(*cobra.Command, []string) {
 		logrus.WithError(err).Fatal("Failed to initialize uploader")
 	}
 
-	if err := uploader.Upload(ctx, file, opt); err != nil {
+	if _, err := uploader.Upload(ctx, file, opt); err != nil {
 		logrus.WithError(err).Fatal("Failed to upload file")
 	}
 }

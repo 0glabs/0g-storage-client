@@ -151,7 +151,8 @@ func kvWrite(*cobra.Command, []string) {
 		)
 	}
 
-	if err := batcher.Exec(ctx, opt); err != nil {
+	_, err := batcher.Exec(ctx, opt)
+	if err != nil {
 		logrus.WithError(err).Fatal("fail to execute kv batch")
 	}
 }

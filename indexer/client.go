@@ -133,7 +133,7 @@ func (c *Client) NewUploaderFromIndexerNodes(ctx context.Context, w3Client *web3
 }
 
 // Upload submit data to 0g storage contract, then transfer the data to the storage nodes selected from indexer service.
-func (c *Client) Upload(ctx context.Context, w3Client *web3go.Client, data core.IterableData, option ...transfer.UploadOption) error {
+func (c *Client) Upload(ctx context.Context, w3Client *web3go.Client, data core.IterableData, option ...transfer.UploadOption) (eth_common.Hash, error) {
 	expectedReplica := uint(1)
 	if len(option) > 0 {
 		expectedReplica = max(expectedReplica, option[0].ExpectedReplica)
@@ -142,15 +142,15 @@ func (c *Client) Upload(ctx context.Context, w3Client *web3go.Client, data core.
 	for {
 		uploader, err := c.NewUploaderFromIndexerNodes(ctx, w3Client, expectedReplica, dropped)
 		if err != nil {
-			return err
+			return eth_common.Hash{}, err
 		}
-		err = uploader.Upload(ctx, data, option...)
+		txHash, err := uploader.Upload(ctx, data, option...)
 		var rpcError *node.RPCError
 		if errors.As(err, &rpcError) {
 			dropped = append(dropped, rpcError.URL)
 			c.logger.Infof("dropped problematic node and retry: %v", rpcError.Error())
 		} else {
-			return err
+			return txHash, err
 		}
 	}
 }
