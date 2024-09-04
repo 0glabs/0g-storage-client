@@ -205,12 +205,12 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 	if len(toSubmitDatas) > 0 {
 		var err error
 		if txHash, receipt, err = uploader.SubmitLogEntry(ctx, toSubmitDatas, toSubmitTags, waitForLogEntry, opts.Nonce, opts.Fee); err != nil {
-			return common.Hash{}, nil, errors.WithMessage(err, "Failed to submit log entry")
+			return txHash, nil, errors.WithMessage(err, "Failed to submit log entry")
 		}
 		if waitForLogEntry {
 			// Wait for storage node to retrieve log entry from blockchain
 			if err := uploader.waitForLogEntry(ctx, lastTreeToSubmit.Root(), false, receipt); err != nil {
-				return common.Hash{}, nil, errors.WithMessage(err, "Failed to check if log entry available on storage node")
+				return txHash, nil, errors.WithMessage(err, "Failed to check if log entry available on storage node")
 			}
 		}
 	}
@@ -239,7 +239,7 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 			close(errs)
 			for e := range errs {
 				if e != nil {
-					return common.Hash{}, nil, e
+					return txHash, nil, e
 				}
 			}
 			errs = make(chan error, opts.TaskSize)
@@ -252,7 +252,8 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 }
 
 // Upload submit data to 0g storage contract, then transfer the data to the storage nodes.
-func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, option ...UploadOption) error {
+// returns the submission transaction hash and the hash will be zero if transaction is skipped.
+func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, option ...UploadOption) (common.Hash, error) {
 	stageTimer := time.Now()
 
 	var opt UploadOption
@@ -269,21 +270,23 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 	// Calculate file merkle root.
 	tree, err := core.MerkleTree(data)
 	if err != nil {
-		return errors.WithMessage(err, "Failed to create data merkle tree")
+		return common.Hash{}, errors.WithMessage(err, "Failed to create data merkle tree")
 	}
 	uploader.logger.WithField("root", tree.Root()).Info("Data merkle root calculated")
 
 	// Check existance
 	exist, err := uploader.checkLogExistance(ctx, tree.Root())
 	if err != nil {
-		return errors.WithMessage(err, "Failed to check if skipped log entry available on storage node")
+		return common.Hash{}, errors.WithMessage(err, "Failed to check if skipped log entry available on storage node")
 	}
+	txHash := common.Hash{}
 	// Append log on blockchain
 	if !opt.SkipTx || !exist {
 		var receipt *types.Receipt
 
-		if _, receipt, err = uploader.SubmitLogEntry(ctx, []core.IterableData{data}, [][]byte{opt.Tags}, true, opt.Nonce, opt.Fee); err != nil {
-			return errors.WithMessage(err, "Failed to submit log entry")
+		txHash, receipt, err = uploader.SubmitLogEntry(ctx, []core.IterableData{data}, [][]byte{opt.Tags}, true, opt.Nonce, opt.Fee)
+		if err != nil {
+			return txHash, errors.WithMessage(err, "Failed to submit log entry")
 		}
 
 		// For small data, could upload file to storage node immediately.
@@ -294,24 +297,24 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 		} else {
 			// Wait for storage node to retrieve log entry from blockchain
 			if err = uploader.waitForLogEntry(ctx, tree.Root(), false, receipt); err != nil {
-				return errors.WithMessage(err, "Failed to check if log entry available on storage node")
+				return txHash, errors.WithMessage(err, "Failed to check if log entry available on storage node")
 			}
 		}
 	}
 
 	// Upload file to storage node
-	if err = uploader.uploadFile(ctx, data, tree, opt.ExpectedReplica, opt.TaskSize); err != nil {
-		return errors.WithMessage(err, "Failed to upload file")
+	if err := uploader.uploadFile(ctx, data, tree, opt.ExpectedReplica, opt.TaskSize); err != nil {
+		return txHash, errors.WithMessage(err, "Failed to upload file")
 	}
 
 	// Wait for transaction finality
 	if err = uploader.waitForLogEntry(ctx, tree.Root(), opt.FinalityRequired, nil); err != nil {
-		return errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
+		return txHash, errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
 	}
 
 	uploader.logger.WithField("duration", time.Since(stageTimer)).Info("upload took")
 
-	return nil
+	return txHash, nil
 }
 
 // SubmitLogEntry submit the data to 0g storage contract by sending a transaction
