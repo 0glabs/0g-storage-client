@@ -20,6 +20,7 @@ import (
 	"github.com/0glabs/0g-storage-client/node"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/openweb3/web3go"
 	"github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -81,20 +82,42 @@ func getShardConfigs(ctx context.Context, clients []*node.ZgsClient) ([]*shard.S
 }
 
 // NewUploader Initialize a new uploader.
-func NewUploader(ctx context.Context, flow *contract.FlowContract, clients []*node.ZgsClient, opts ...zg_common.LogOption) (*Uploader, error) {
+func NewUploader(ctx context.Context, w3Client *web3go.Client, clients []*node.ZgsClient, opts ...zg_common.LogOption) (*Uploader, error) {
 	if len(clients) == 0 {
-		return nil, errors.New("storage node not specified")
+		return nil, errors.New("Storage node not specified")
 	}
+
+	status, err := clients[0].GetStatus(context.Background())
+	if err != nil {
+		return nil, errors.WithMessagef(err, "Failed to get status from storage node %v", clients[0].URL())
+	}
+
+	chainId, err := w3Client.Eth.ChainId()
+	if err != nil {
+		return nil, errors.WithMessage(err, "Failed to get chain ID from blockchain node")
+	}
+
+	if chainId != nil && *chainId != status.NetworkIdentity.ChainId {
+		return nil, errors.Errorf("Chain ID mismatch, blockchain = %v, storage node = %v", *chainId, status.NetworkIdentity.ChainId)
+	}
+
+	flow, err := contract.NewFlowContract(status.NetworkIdentity.FlowContractAddress, w3Client)
+	if err != nil {
+		return nil, errors.WithMessage(err, "Failed to create flow contract")
+	}
+
 	market, err := flow.GetMarketContract(ctx)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithMessagef(err, "Failed to get market contract from flow contract %v", status.NetworkIdentity.FlowContractAddress)
 	}
+
 	uploader := &Uploader{
 		clients: clients,
 		logger:  zg_common.NewLogger(opts...),
 		flow:    flow,
 		market:  market,
 	}
+
 	return uploader, nil
 }
 

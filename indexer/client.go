@@ -8,13 +8,13 @@ import (
 
 	"github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/common/shard"
-	"github.com/0glabs/0g-storage-client/contract"
 	"github.com/0glabs/0g-storage-client/core"
 	"github.com/0glabs/0g-storage-client/node"
 	"github.com/0glabs/0g-storage-client/transfer"
 	eth_common "github.com/ethereum/go-ethereum/common"
 	"github.com/openweb3/go-rpc-provider/interfaces"
 	providers "github.com/openweb3/go-rpc-provider/provider_wrapper"
+	"github.com/openweb3/web3go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -119,7 +119,7 @@ func (c *Client) SelectNodes(ctx context.Context, expectedReplica uint, dropped 
 }
 
 // NewUploaderFromIndexerNodes return an uploader with selected storage nodes from indexer service.
-func (c *Client) NewUploaderFromIndexerNodes(ctx context.Context, flow *contract.FlowContract, expectedReplica uint, dropped []string) (*transfer.Uploader, error) {
+func (c *Client) NewUploaderFromIndexerNodes(ctx context.Context, w3Client *web3go.Client, expectedReplica uint, dropped []string) (*transfer.Uploader, error) {
 	clients, err := c.SelectNodes(ctx, expectedReplica, dropped)
 	if err != nil {
 		return nil, err
@@ -129,18 +129,18 @@ func (c *Client) NewUploaderFromIndexerNodes(ctx context.Context, flow *contract
 		urls[i] = client.URL()
 	}
 	c.logger.Infof("get %v storage nodes from indexer: %v", len(urls), urls)
-	return transfer.NewUploader(ctx, flow, clients, c.option.LogOption)
+	return transfer.NewUploader(ctx, w3Client, clients, c.option.LogOption)
 }
 
 // Upload submit data to 0g storage contract, then transfer the data to the storage nodes selected from indexer service.
-func (c *Client) Upload(ctx context.Context, flow *contract.FlowContract, data core.IterableData, option ...transfer.UploadOption) (eth_common.Hash, error) {
+func (c *Client) Upload(ctx context.Context, w3Client *web3go.Client, data core.IterableData, option ...transfer.UploadOption) (eth_common.Hash, error) {
 	expectedReplica := uint(1)
 	if len(option) > 0 {
 		expectedReplica = max(expectedReplica, option[0].ExpectedReplica)
 	}
 	dropped := make([]string, 0)
 	for {
-		uploader, err := c.NewUploaderFromIndexerNodes(ctx, flow, expectedReplica, dropped)
+		uploader, err := c.NewUploaderFromIndexerNodes(ctx, w3Client, expectedReplica, dropped)
 		if err != nil {
 			return eth_common.Hash{}, err
 		}
@@ -156,7 +156,7 @@ func (c *Client) Upload(ctx context.Context, flow *contract.FlowContract, data c
 }
 
 // BatchUpload submit multiple data to 0g storage contract batchly in single on-chain transaction, then transfer the data to the storage nodes selected from indexer service.
-func (c *Client) BatchUpload(ctx context.Context, flow *contract.FlowContract, datas []core.IterableData, waitForLogEntry bool, option ...transfer.BatchUploadOption) (eth_common.Hash, []eth_common.Hash, error) {
+func (c *Client) BatchUpload(ctx context.Context, w3Client *web3go.Client, datas []core.IterableData, waitForLogEntry bool, option ...transfer.BatchUploadOption) (eth_common.Hash, []eth_common.Hash, error) {
 	expectedReplica := uint(1)
 	if len(option) > 0 {
 		for _, opt := range option[0].DataOptions {
@@ -165,7 +165,7 @@ func (c *Client) BatchUpload(ctx context.Context, flow *contract.FlowContract, d
 	}
 	dropped := make([]string, 0)
 	for {
-		uploader, err := c.NewUploaderFromIndexerNodes(ctx, flow, expectedReplica, dropped)
+		uploader, err := c.NewUploaderFromIndexerNodes(ctx, w3Client, expectedReplica, dropped)
 		if err != nil {
 			return eth_common.Hash{}, nil, err
 		}
