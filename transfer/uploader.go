@@ -39,15 +39,23 @@ func isDuplicateError(msg string) bool {
 	return strings.Contains(msg, dataAlreadyExistsError) || strings.Contains(msg, segmentAlreadyExistsError)
 }
 
+type FinalityRequirement uint
+
+const (
+	FileFinalized     FinalityRequirement = iota // wait for file finalization
+	TransactionPacked                            // wait for transaction receipt, but don't wait for file finalization
+	WaitNothing                                  // wait nothing
+)
+
 // UploadOption upload option for a file
 type UploadOption struct {
-	Tags             []byte   // transaction tags
-	FinalityRequired bool     // wait for file finalized on uploaded nodes or not
-	TaskSize         uint     // number of segment to upload in single rpc request
-	ExpectedReplica  uint     // expected number of replications
-	SkipTx           bool     // skip sending transaction on chain, this can set to true only if the data has already settled on chain before
-	Fee              *big.Int // fee in neuron
-	Nonce            *big.Int // nonce for transaction
+	Tags             []byte              // transaction tags
+	FinalityRequired FinalityRequirement // finality setting
+	TaskSize         uint                // number of segment to upload in single rpc request
+	ExpectedReplica  uint                // expected number of replications
+	SkipTx           bool                // skip sending transaction on chain, this can set to true only if the data has already settled on chain before
+	Fee              *big.Int            // fee in neuron
+	Nonce            *big.Int            // nonce for transaction
 }
 
 // BatchUploadOption upload option for a batching
@@ -232,7 +240,7 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 		}
 		if waitForLogEntry {
 			// Wait for storage node to retrieve log entry from blockchain
-			if err := uploader.waitForLogEntry(ctx, lastTreeToSubmit.Root(), false, receipt); err != nil {
+			if err := uploader.waitForLogEntry(ctx, lastTreeToSubmit.Root(), TransactionPacked, receipt); err != nil {
 				return txHash, nil, errors.WithMessage(err, "Failed to check if log entry available on storage node")
 			}
 		}
@@ -307,7 +315,7 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 	if !opt.SkipTx || !exist {
 		var receipt *types.Receipt
 
-		txHash, receipt, err = uploader.SubmitLogEntry(ctx, []core.IterableData{data}, [][]byte{opt.Tags}, true, opt.Nonce, opt.Fee)
+		txHash, receipt, err = uploader.SubmitLogEntry(ctx, []core.IterableData{data}, [][]byte{opt.Tags}, opt.FinalityRequired <= TransactionPacked, opt.Nonce, opt.Fee)
 		if err != nil {
 			return txHash, errors.WithMessage(err, "Failed to submit log entry")
 		}
@@ -317,9 +325,9 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 		// which requires transaction confirmed on blockchain.
 		if data.Size() <= smallFileSizeThreshold {
 			uploader.logger.Info("Upload small data immediately")
-		} else {
+		} else if opt.FinalityRequired <= TransactionPacked {
 			// Wait for storage node to retrieve log entry from blockchain
-			if err = uploader.waitForLogEntry(ctx, tree.Root(), false, receipt); err != nil {
+			if err = uploader.waitForLogEntry(ctx, tree.Root(), TransactionPacked, receipt); err != nil {
 				return txHash, errors.WithMessage(err, "Failed to check if log entry available on storage node")
 			}
 		}
@@ -402,7 +410,10 @@ func (uploader *Uploader) SubmitLogEntry(ctx context.Context, datas []core.Itera
 }
 
 // Wait for log entry ready on storage node.
-func (uploader *Uploader) waitForLogEntry(ctx context.Context, root common.Hash, finalityRequired bool, receipt *types.Receipt) error {
+func (uploader *Uploader) waitForLogEntry(ctx context.Context, root common.Hash, finalityRequired FinalityRequirement, receipt *types.Receipt) error {
+	if finalityRequired == WaitNothing {
+		return nil
+	}
 	uploader.logger.WithFields(logrus.Fields{
 		"root":     root,
 		"finality": finalityRequired,
@@ -434,7 +445,7 @@ func (uploader *Uploader) waitForLogEntry(ctx context.Context, root common.Hash,
 				break
 			}
 
-			if finalityRequired && !info.Finalized {
+			if finalityRequired <= FileFinalized && !info.Finalized {
 				reminder.Remind("Log entry is available, but not finalized yet", logrus.Fields{
 					"cached":           info.IsCached,
 					"uploadedSegments": info.UploadedSegNum,
