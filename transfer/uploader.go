@@ -240,7 +240,7 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 		}
 		if waitForLogEntry {
 			// Wait for storage node to retrieve log entry from blockchain
-			if err := uploader.waitForLogEntry(ctx, lastTreeToSubmit.Root(), false, receipt); err != nil {
+			if err := uploader.waitForLogEntry(ctx, lastTreeToSubmit.Root(), TransactionPacked, receipt); err != nil {
 				return txHash, nil, errors.WithMessage(err, "Failed to check if log entry available on storage node")
 			}
 		}
@@ -258,7 +258,7 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 
 			if waitForLogEntry {
 				// Wait for transaction finality
-				if err := uploader.waitForLogEntry(ctx, trees[i].Root(), opts.DataOptions[i].FinalityRequired <= FileFinalized, receipt); err != nil {
+				if err := uploader.waitForLogEntry(ctx, trees[i].Root(), opts.DataOptions[i].FinalityRequired, receipt); err != nil {
 					errs <- errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
 					return
 				}
@@ -325,9 +325,9 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 		// which requires transaction confirmed on blockchain.
 		if data.Size() <= smallFileSizeThreshold {
 			uploader.logger.Info("Upload small data immediately")
-		} else {
+		} else if opt.FinalityRequired <= TransactionPacked {
 			// Wait for storage node to retrieve log entry from blockchain
-			if err = uploader.waitForLogEntry(ctx, tree.Root(), false, receipt); err != nil {
+			if err = uploader.waitForLogEntry(ctx, tree.Root(), TransactionPacked, receipt); err != nil {
 				return txHash, errors.WithMessage(err, "Failed to check if log entry available on storage node")
 			}
 		}
@@ -339,7 +339,7 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 	}
 
 	// Wait for transaction finality
-	if err = uploader.waitForLogEntry(ctx, tree.Root(), opt.FinalityRequired <= FileFinalized, nil); err != nil {
+	if err = uploader.waitForLogEntry(ctx, tree.Root(), opt.FinalityRequired, nil); err != nil {
 		return txHash, errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
 	}
 
@@ -410,7 +410,10 @@ func (uploader *Uploader) SubmitLogEntry(ctx context.Context, datas []core.Itera
 }
 
 // Wait for log entry ready on storage node.
-func (uploader *Uploader) waitForLogEntry(ctx context.Context, root common.Hash, finalityRequired bool, receipt *types.Receipt) error {
+func (uploader *Uploader) waitForLogEntry(ctx context.Context, root common.Hash, finalityRequired FinalityRequirement, receipt *types.Receipt) error {
+	if finalityRequired == WaitNothing {
+		return nil
+	}
 	uploader.logger.WithFields(logrus.Fields{
 		"root":     root,
 		"finality": finalityRequired,
@@ -442,7 +445,7 @@ func (uploader *Uploader) waitForLogEntry(ctx context.Context, root common.Hash,
 				break
 			}
 
-			if finalityRequired && !info.Finalized {
+			if finalityRequired <= FileFinalized && !info.Finalized {
 				reminder.Remind("Log entry is available, but not finalized yet", logrus.Fields{
 					"cached":           info.IsCached,
 					"uploadedSegments": info.UploadedSegNum,
