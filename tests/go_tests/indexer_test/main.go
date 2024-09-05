@@ -46,7 +46,7 @@ func runTest() error {
 		return errors.WithMessage(err, "failed to initialize indexer client")
 	}
 	if _, err := indexerClient.Upload(ctx, flow, data, transfer.UploadOption{
-		FinalityRequired: true,
+		FinalityRequired: transfer.FileFinalized,
 	}); err != nil {
 		return errors.WithMessage(err, "failed to upload file")
 	}
@@ -82,7 +82,7 @@ func runTest() error {
 	}
 
 	if _, err := uploader.Upload(context.Background(), data, transfer.UploadOption{
-		FinalityRequired: true,
+		FinalityRequired: transfer.FileFinalized,
 	}); err != nil {
 		return errors.WithMessage(err, "failed to upload file")
 	}

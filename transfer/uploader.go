@@ -38,15 +38,23 @@ func isDuplicateError(msg string) bool {
 	return strings.Contains(msg, dataAlreadyExistsError) || strings.Contains(msg, segmentAlreadyExistsError)
 }
 
+type FinalityRequirement uint
+
+const (
+	FileFinalized     FinalityRequirement = iota // wait for file finalization
+	TransactionPacked                            // wait for transaction receipt, but don't wait for file finalization
+	WaitNothing                                  // wait nothing
+)
+
 // UploadOption upload option for a file
 type UploadOption struct {
-	Tags             []byte   // transaction tags
-	FinalityRequired bool     // wait for file finalized on uploaded nodes or not
-	TaskSize         uint     // number of segment to upload in single rpc request
-	ExpectedReplica  uint     // expected number of replications
-	SkipTx           bool     // skip sending transaction on chain, this can set to true only if the data has already settled on chain before
-	Fee              *big.Int // fee in neuron
-	Nonce            *big.Int // nonce for transaction
+	Tags             []byte              // transaction tags
+	FinalityRequired FinalityRequirement // finality setting
+	TaskSize         uint                // number of segment to upload in single rpc request
+	ExpectedReplica  uint                // expected number of replications
+	SkipTx           bool                // skip sending transaction on chain, this can set to true only if the data has already settled on chain before
+	Fee              *big.Int            // fee in neuron
+	Nonce            *big.Int            // nonce for transaction
 }
 
 // BatchUploadOption upload option for a batching
@@ -227,7 +235,7 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 
 			if waitForLogEntry {
 				// Wait for transaction finality
-				if err := uploader.waitForLogEntry(ctx, trees[i].Root(), opts.DataOptions[i].FinalityRequired, receipt); err != nil {
+				if err := uploader.waitForLogEntry(ctx, trees[i].Root(), opts.DataOptions[i].FinalityRequired <= FileFinalized, receipt); err != nil {
 					errs <- errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
 					return
 				}
@@ -284,7 +292,7 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 	if !opt.SkipTx || !exist {
 		var receipt *types.Receipt
 
-		txHash, receipt, err = uploader.SubmitLogEntry(ctx, []core.IterableData{data}, [][]byte{opt.Tags}, true, opt.Nonce, opt.Fee)
+		txHash, receipt, err = uploader.SubmitLogEntry(ctx, []core.IterableData{data}, [][]byte{opt.Tags}, opt.FinalityRequired <= TransactionPacked, opt.Nonce, opt.Fee)
 		if err != nil {
 			return txHash, errors.WithMessage(err, "Failed to submit log entry")
 		}
@@ -308,7 +316,7 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 	}
 
 	// Wait for transaction finality
-	if err = uploader.waitForLogEntry(ctx, tree.Root(), opt.FinalityRequired, nil); err != nil {
+	if err = uploader.waitForLogEntry(ctx, tree.Root(), opt.FinalityRequired <= FileFinalized, nil); err != nil {
 		return txHash, errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
 	}
 

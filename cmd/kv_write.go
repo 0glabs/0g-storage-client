@@ -112,8 +112,12 @@ func kvWrite(*cobra.Command, []string) {
 	if kvWriteArgs.nonce > 0 {
 		nonce = big.NewInt(int64(kvWriteArgs.nonce))
 	}
+	finalityRequired := transfer.TransactionPacked
+	if uploadArgs.finalityRequired {
+		finalityRequired = transfer.FileFinalized
+	}
 	opt := transfer.UploadOption{
-		FinalityRequired: kvWriteArgs.finalityRequired,
+		FinalityRequired: finalityRequired,
 		TaskSize:         kvWriteArgs.taskSize,
 		ExpectedReplica:  kvWriteArgs.expectedReplica,
 		SkipTx:           kvWriteArgs.skipTx,

@@ -44,7 +44,7 @@ func runTest() error {
 			return errors.WithMessage(err, "failed to initialize data")
 		}
 		opts[i] = transfer.UploadOption{
-			FinalityRequired: true,
+			FinalityRequired: transfer.FileFinalized,
 		}
 	}
 	indexerClient, err := indexer.NewClient(indexerUrl, indexer.IndexerClientOption{LogOption: common.LogOption{Logger: logrus.StandardLogger()}})

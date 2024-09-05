@@ -103,9 +103,13 @@ func upload(*cobra.Command, []string) {
 	if uploadArgs.nonce > 0 {
 		nonce = big.NewInt(int64(uploadArgs.nonce))
 	}
+	finalityRequired := transfer.TransactionPacked
+	if uploadArgs.finalityRequired {
+		finalityRequired = transfer.FileFinalized
+	}
 	opt := transfer.UploadOption{
 		Tags:             hexutil.MustDecode(uploadArgs.tags),
-		FinalityRequired: uploadArgs.finalityRequired,
+		FinalityRequired: finalityRequired,
 		TaskSize:         uploadArgs.taskSize,
 		ExpectedReplica:  uploadArgs.expectedReplica,
 		SkipTx:           uploadArgs.skipTx,
