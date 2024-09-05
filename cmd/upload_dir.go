@@ -36,9 +36,13 @@ func uploadDir(*cobra.Command, []string) {
 	w3client := blockchain.MustNewWeb3(uploadDirArgs.url, uploadDirArgs.key, providerOption)
 	defer w3client.Close()
 
+	finalityRequired := transfer.TransactionPacked
+	if uploadArgs.finalityRequired {
+		finalityRequired = transfer.FileFinalized
+	}
 	opt := transfer.UploadOption{
 		Tags:             hexutil.MustDecode(uploadDirArgs.tags),
-		FinalityRequired: uploadDirArgs.finalityRequired,
+		FinalityRequired: finalityRequired,
 		TaskSize:         uploadDirArgs.taskSize,
 		ExpectedReplica:  uploadDirArgs.expectedReplica,
 		SkipTx:           uploadDirArgs.skipTx,
