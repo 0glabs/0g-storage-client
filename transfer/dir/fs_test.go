@@ -258,4 +258,23 @@ func TestTraverse(t *testing.T) {
 	for path, visited := range expectedPaths {
 		assert.True(t, visited, "Path not visited: %s", path)
 	}
+
+	// Define the expected flatten result
+	expectedFlattenResult := []struct {
+		node *dir.FsNode
+		path string
+	}{
+		{root.Entries[0], "root/file1.txt"},
+		{root.Entries[1].Entries[0], "root/subdir/file2.txt"},
+	}
+
+	// Test Flatten method
+	result, paths := root.Flatten(func(n *dir.FsNode) bool {
+		return n.Type == dir.FileTypeFile
+	})
+
+	for i, item := range expectedFlattenResult {
+		assert.Equal(t, item.node, result[i])
+		assert.Equal(t, item.path, paths[i])
+	}
 }

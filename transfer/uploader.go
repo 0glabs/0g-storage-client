@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	"github.com/0glabs/0g-storage-client/core"
 	"github.com/0glabs/0g-storage-client/core/merkle"
 	"github.com/0glabs/0g-storage-client/node"
+	"github.com/0glabs/0g-storage-client/transfer/dir"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/openweb3/web3go"
@@ -127,11 +129,6 @@ func NewUploader(ctx context.Context, w3Client *web3go.Client, clients []*node.Z
 	}
 
 	return uploader, nil
-}
-
-// FileExists check if a file with specified root hash exists in storage nodes
-func (uploader *Uploader) FileExists(ctx context.Context, root common.Hash) (bool, error) {
-	return uploader.checkLogExistance(ctx, root)
 }
 
 func (uploader *Uploader) checkLogExistance(ctx context.Context, root common.Hash) (bool, error) {
@@ -351,6 +348,97 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 	uploader.logger.WithField("duration", time.Since(stageTimer)).Info("upload took")
 
 	return txHash, nil
+}
+
+func (uploader *Uploader) UploadDir(ctx context.Context, folder string, option ...UploadOption) (txnHash, rootHash common.Hash, _ error) {
+	// Build the file tree representation of the directory.
+	root, err := dir.BuildFileTree(folder)
+	if err != nil {
+		return txnHash, rootHash, errors.WithMessage(err, "failed to build file tree")
+	}
+
+	tdata, err := root.MarshalBinary()
+	if err != nil {
+		return txnHash, rootHash, errors.WithMessage(err, "failed to encode file tree")
+	}
+
+	// Create an in-memory data object from the encoded file tree.
+	iterdata, err := core.NewDataInMemory(tdata)
+	if err != nil {
+		return txnHash, rootHash, errors.WithMessage(err, "failed to create `IterableData` in memory")
+	}
+
+	// Generate the Merkle tree from the in-memory data.
+	mtree, err := core.MerkleTree(iterdata)
+	if err != nil {
+		return txnHash, rootHash, errors.WithMessage(err, "failed to create merkle tree")
+	}
+
+	rootHash = mtree.Root()
+
+	// Check if the directory already exists in the storage network.
+	found, err := uploader.checkLogExistance(ctx, rootHash)
+	if err != nil {
+		return txnHash, rootHash, errors.WithMessage(err, "failed to check if folder exists")
+	}
+
+	if found { // Folder already exists
+		info, err := uploader.clients[0].GetFileInfo(ctx, rootHash)
+		if err != nil {
+			return txnHash, rootHash, errors.WithMessage(err, "failed to get folder info")
+		}
+
+		if info != nil {
+			txnHash = info.Tx.DataMerkleRoot
+
+			logrus.WithFields(logrus.Fields{
+				"root":    mtree.Root(),
+				"txnHash": txnHash,
+				"folder":  folder,
+			}).Warn("This folder already exists in the storage network")
+			return txnHash, rootHash, nil
+		}
+	}
+
+	// Flattening the file tree to get the list of files and their relative paths.
+	_, relPaths := root.Flatten(func(n *dir.FsNode) bool {
+		return n.Type == dir.FileTypeFile && n.Size > 0
+	})
+
+	logrus.Infof("Total %d files to be uploaded", len(relPaths))
+
+	// Upload each file to the storage network.
+	for i := range relPaths {
+		path := filepath.Join(folder, relPaths[i])
+		txhash, err := uploader.UploadFile(ctx, path, option...)
+		if err != nil {
+			return txnHash, rootHash, errors.WithMessagef(err, "failed to upload file %s", path)
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"txnHash": txhash,
+			"path":    path,
+		}).Info("File uploaded successfully")
+	}
+
+	// Finally, upload the directory metadata
+	txnHash, err = uploader.Upload(ctx, iterdata, option...)
+	if err != nil {
+		err = errors.WithMessage(err, "failed to upload directory metadata")
+	}
+
+	return txnHash, rootHash, err
+}
+
+func (uploader *Uploader) UploadFile(ctx context.Context, path string, option ...UploadOption) (txnHash common.Hash, err error) {
+	file, err := core.Open(path)
+	if err != nil {
+		err = errors.WithMessagef(err, "failed to open file %s", path)
+		return
+	}
+	defer file.Close()
+
+	return uploader.Upload(ctx, file, option...)
 }
 
 // SubmitLogEntry submit the data to 0g storage contract by sending a transaction
