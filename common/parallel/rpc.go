@@ -36,7 +36,7 @@ type rpcExecutor[CLIENT closable, T any] struct {
 }
 
 // QueryZgsRpc calls zgs RPC with given nodes in parallel.
-func QueryZgsRpc[T any](ctx context.Context, nodes []string, rpcFunc func(*node.ZgsClient, context.Context) (T, error), option ...RpcOption) (map[string]*RpcResult[T], error) {
+func QueryZgsRpc[T any](ctx context.Context, nodes []string, rpcFunc func(*node.ZgsClient, context.Context) (T, error), option ...RpcOption) map[string]*RpcResult[T] {
 	var opt RpcOption
 	if len(option) > 0 {
 		opt = option[0]
@@ -53,11 +53,10 @@ func QueryZgsRpc[T any](ctx context.Context, nodes []string, rpcFunc func(*node.
 		lastReportTime: time.Now(),
 	}
 
-	if err := Serial(ctx, &executor, len(nodes), opt.Parallel); err != nil {
-		return nil, err
-	}
+	// should not return err
+	Serial(ctx, &executor, len(nodes), opt.Parallel)
 
-	return executor.node2Results, nil
+	return executor.node2Results
 }
 
 func (executor *rpcExecutor[CLIENT, T]) ParallelDo(ctx context.Context, routine, task int) (interface{}, error) {
