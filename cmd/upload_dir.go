@@ -42,7 +42,7 @@ func uploadDir(*cobra.Command, []string) {
 	defer w3client.Close()
 
 	finalityRequired := transfer.TransactionPacked
-	if uploadArgs.finalityRequired {
+	if uploadDirArgs.finalityRequired {
 		finalityRequired = transfer.FileFinalized
 	}
 	opt := transfer.UploadOption{
