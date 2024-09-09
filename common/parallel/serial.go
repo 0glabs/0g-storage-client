@@ -2,27 +2,22 @@ package parallel
 
 import (
 	"context"
+	"runtime"
 	"sync"
 )
 
-func Serial(ctx context.Context, parallelizable Interface, tasks, routines, window int) error {
-	if tasks == 0 {
+func Serial(ctx context.Context, parallelizable Interface, tasks int, option ...SerialOption) error {
+	if tasks <= 0 {
 		return nil
 	}
 
-	if routines == 0 {
-		routines = 1
+	var opt SerialOption
+	if len(option) > 0 {
+		opt = option[0]
 	}
+	opt.Normalize(tasks)
 
-	if routines > tasks {
-		routines = tasks
-	}
-
-	channelLen := max(routines, window)
-	if window > 0 && window < routines {
-		window = routines
-	}
-
+	channelLen := max(opt.Routines, opt.Window)
 	taskCh := make(chan int, channelLen)
 	defer close(taskCh)
 	resultCh := make(chan *Result, channelLen)
@@ -32,12 +27,12 @@ func Serial(ctx context.Context, parallelizable Interface, tasks, routines, wind
 	ctx, cancel := context.WithCancel(ctx)
 
 	// start routines to do tasks
-	for i := 0; i < routines; i++ {
+	for i := 0; i < opt.Routines; i++ {
 		wg.Add(1)
 		go work(ctx, i, parallelizable, taskCh, resultCh, &wg)
 	}
 
-	err := collect(parallelizable, taskCh, resultCh, tasks, channelLen, window > 0)
+	err := collect(parallelizable, taskCh, resultCh, tasks, channelLen, opt.Window > 0)
 
 	// notify all routines to terminate
 	cancel()
@@ -111,4 +106,34 @@ func collect(parallelizable Interface, taskCh chan<- int, resultCh <-chan *Resul
 	}
 
 	return nil
+}
+
+type SerialOption struct {
+	Routines int
+	Window   int
+}
+
+func (opt *SerialOption) Normalize(tasks int) {
+	// 0 < routines <= tasks
+	if opt.Routines == 0 {
+		opt.Routines = runtime.GOMAXPROCS(0)
+	}
+
+	if opt.Routines > tasks {
+		opt.Routines = tasks
+	}
+
+	// window disabled
+	if opt.Window == 0 {
+		return
+	}
+
+	// routines <= window <= tasks
+	if opt.Window < opt.Routines {
+		opt.Window = opt.Routines
+	}
+
+	if opt.Window > tasks {
+		opt.Window = tasks
+	}
 }

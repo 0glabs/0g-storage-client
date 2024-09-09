@@ -530,7 +530,10 @@ func (uploader *Uploader) uploadFile(ctx context.Context, data core.IterableData
 		return err
 	}
 
-	err = parallel.Serial(ctx, segmentUploader, len(segmentUploader.tasks), min(runtime.GOMAXPROCS(0), len(uploader.clients)*5), 0)
+	opt := parallel.SerialOption{
+		Routines: min(runtime.GOMAXPROCS(0), len(uploader.clients)*5),
+	}
+	err = parallel.Serial(ctx, segmentUploader, len(segmentUploader.tasks), opt)
 	if err != nil {
 		return err
 	}
