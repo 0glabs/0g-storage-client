@@ -21,7 +21,12 @@ var (
 )
 
 func init() {
-	bindUploadFlags(uploadDirCmd, &uploadDirArgs, false)
+	bindUploadFlags(uploadDirCmd, &uploadDirArgs)
+	uploadDirCmd.Flags().StringVar(&uploadDirArgs.url, "url", "", "Fullnode URL to interact with ZeroGStorage smart contract")
+	uploadDirCmd.MarkFlagRequired("url")
+	uploadDirCmd.Flags().StringVar(&uploadDirArgs.key, "key", "", "Private key to interact with smart contract")
+	uploadDirCmd.MarkFlagRequired("key")
+
 	rootCmd.AddCommand(uploadDirCmd)
 }
 

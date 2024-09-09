@@ -18,12 +18,30 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type uploadArgument struct {
-	file string
-	tags string
-
+// L1 transaction relevant operations, including nonce, fee, and so on.
+type transactionArgument struct {
 	url string
 	key string
+
+	fee   float64
+	nonce uint
+}
+
+func bindTransactionFlags(cmd *cobra.Command, args *transactionArgument) {
+	cmd.Flags().StringVar(&args.url, "url", "", "Fullnode URL to interact with ZeroGStorage smart contract")
+	cmd.MarkFlagRequired("url")
+	cmd.Flags().StringVar(&args.key, "key", "", "Private key to interact with smart contract")
+	cmd.MarkFlagRequired("key")
+
+	cmd.Flags().Float64Var(&args.fee, "fee", 0, "fee paid in a0gi")
+	cmd.Flags().UintVar(&args.nonce, "nonce", 0, "nonce of upload transaction")
+}
+
+type uploadArgument struct {
+	transactionArgument
+
+	file string
+	tags string
 
 	node    []string
 	indexer string
@@ -34,36 +52,13 @@ type uploadArgument struct {
 	finalityRequired bool
 	taskSize         uint
 
-	fee   float64
-	nonce uint
-
 	timeout time.Duration
 }
 
-var (
-	uploadArgs uploadArgument
-
-	uploadCmd = &cobra.Command{
-		Use:   "upload",
-		Short: "Upload file to ZeroGStorage network",
-		Run:   upload,
-	}
-)
-
-func init() {
-	bindUploadFlags(uploadCmd, &uploadArgs, true)
-	rootCmd.AddCommand(uploadCmd)
-}
-
-func bindUploadFlags(cmd *cobra.Command, args *uploadArgument, enableNonceFee bool) {
+func bindUploadFlags(cmd *cobra.Command, args *uploadArgument) {
 	cmd.Flags().StringVar(&args.file, "file", "", "File name to upload")
 	cmd.MarkFlagRequired("file")
 	cmd.Flags().StringVar(&args.tags, "tags", "0x", "Tags of the file")
-
-	cmd.Flags().StringVar(&args.url, "url", "", "Fullnode URL to interact with ZeroGStorage smart contract")
-	cmd.MarkFlagRequired("url")
-	cmd.Flags().StringVar(&args.key, "key", "", "Private key to interact with smart contract")
-	cmd.MarkFlagRequired("key")
 
 	cmd.Flags().StringSliceVar(&args.node, "node", []string{}, "ZeroGStorage storage node URL")
 	cmd.Flags().StringVar(&args.indexer, "indexer", "", "ZeroGStorage indexer URL")
@@ -77,11 +72,23 @@ func bindUploadFlags(cmd *cobra.Command, args *uploadArgument, enableNonceFee bo
 	cmd.Flags().UintVar(&args.taskSize, "task-size", 10, "Number of segments to upload in single rpc request")
 
 	cmd.Flags().DurationVar(&args.timeout, "timeout", 0, "cli task timeout, 0 for no timeout")
+}
 
-	if enableNonceFee {
-		cmd.Flags().Float64Var(&args.fee, "fee", 0, "fee paid in a0gi")
-		cmd.Flags().UintVar(&args.nonce, "nonce", 0, "nonce of upload transaction")
+var (
+	uploadArgs uploadArgument
+
+	uploadCmd = &cobra.Command{
+		Use:   "upload",
+		Short: "Upload file to ZeroGStorage network",
+		Run:   upload,
 	}
+)
+
+func init() {
+	bindUploadFlags(uploadCmd, &uploadArgs)
+	bindTransactionFlags(uploadCmd, &uploadArgs.transactionArgument)
+
+	rootCmd.AddCommand(uploadCmd)
 }
 
 func upload(*cobra.Command, []string) {

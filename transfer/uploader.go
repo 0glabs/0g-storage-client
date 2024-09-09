@@ -373,32 +373,7 @@ func (uploader *Uploader) UploadDir(ctx context.Context, folder string, option .
 	if err != nil {
 		return txnHash, rootHash, errors.WithMessage(err, "failed to create merkle tree")
 	}
-
 	rootHash = mtree.Root()
-
-	// Check if the directory already exists in the storage network.
-	found, err := uploader.checkLogExistance(ctx, rootHash)
-	if err != nil {
-		return txnHash, rootHash, errors.WithMessage(err, "failed to check if folder exists")
-	}
-
-	if found { // Folder already exists
-		info, err := uploader.clients[0].GetFileInfo(ctx, rootHash)
-		if err != nil {
-			return txnHash, rootHash, errors.WithMessage(err, "failed to get folder info")
-		}
-
-		if info != nil {
-			txnHash = info.Tx.DataMerkleRoot
-
-			logrus.WithFields(logrus.Fields{
-				"root":    mtree.Root(),
-				"txnHash": txnHash,
-				"folder":  folder,
-			}).Warn("This folder already exists in the storage network")
-			return txnHash, rootHash, nil
-		}
-	}
 
 	// Flattening the file tree to get the list of files and their relative paths.
 	_, relPaths := root.Flatten(func(n *dir.FsNode) bool {
