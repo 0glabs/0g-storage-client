@@ -3,7 +3,6 @@ package transfer
 import (
 	"context"
 	"fmt"
-	"runtime"
 
 	"github.com/0glabs/0g-storage-client/common/parallel"
 	"github.com/0glabs/0g-storage-client/common/shard"
@@ -58,7 +57,7 @@ func newSegmentDownloader(clients []*node.ZgsClient, shardConfigs []*shard.Shard
 func (downloader *segmentDownloader) Download(ctx context.Context) error {
 	numTasks := downloader.numSegments - downloader.segmentOffset
 
-	return parallel.Serial(ctx, downloader, int(numTasks), runtime.GOMAXPROCS(0), 0)
+	return parallel.Serial(ctx, downloader, int(numTasks))
 }
 
 // ParallelDo implements the parallel.Interface interface.

@@ -31,7 +31,7 @@ func TestSerial(t *testing.T) {
 
 	tasks := 100
 
-	err := Serial(context.Background(), &f, tasks, 4, 16)
+	err := Serial(context.Background(), &f, tasks, SerialOption{4, 16})
 	assert.Nil(t, err)
 	assert.Equal(t, tasks, len(f.result))
 

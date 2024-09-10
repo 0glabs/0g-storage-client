@@ -4,7 +4,6 @@ import (
 	"context"
 	"math"
 	"math/big"
-	"runtime"
 
 	"github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/common/parallel"
@@ -115,7 +114,7 @@ func (flow *Flow) createSegmentNode(offset, batch, size int64) (*contract.Submis
 		builder: &builder,
 	}
 
-	err := parallel.Serial(context.Background(), initializer, int((size-1)/batch+1), runtime.GOMAXPROCS(0), 0)
+	err := parallel.Serial(context.Background(), initializer, int((size-1)/batch+1))
 	if err != nil {
 		return nil, err
 	}

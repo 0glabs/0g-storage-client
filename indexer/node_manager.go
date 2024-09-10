@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/0glabs/0g-storage-client/common/parallel"
 	"github.com/0glabs/0g-storage-client/common/shard"
 	"github.com/0glabs/0g-storage-client/common/util"
 	"github.com/0glabs/0g-storage-client/node"
@@ -18,6 +19,13 @@ import (
 var (
 	defaultZgsClientOpt = providers.Option{
 		RequestTimeout: 3 * time.Second,
+	}
+
+	defaultRpcOpt = parallel.RpcOption{
+		Parallel: parallel.SerialOption{
+			Routines: 500,
+		},
+		Provider: defaultZgsClientOpt,
 	}
 
 	defaultNodeManager = NodeManager{}
@@ -176,6 +184,7 @@ func (nm *NodeManager) discover() error {
 	}).Debug("Succeeded to retrieve peers from storage node")
 
 	var numNew int
+	var newPeers []string
 
 	for _, v := range peers {
 		// public ip address required
@@ -200,21 +209,32 @@ func (nm *NodeManager) discover() error {
 				continue
 			}
 
-			// add new storage node
-			node, err := nm.updateNode(url)
-			if err != nil {
-				logrus.WithError(err).WithField("url", url).Debug("Failed to add new peer")
-			} else {
-				logrus.WithFields(logrus.Fields{
-					"url":     url,
-					"shard":   node.Config,
-					"latency": node.Latency,
-				}).Debug("New peer discovered")
-			}
-
-			numNew++
+			newPeers = append(newPeers, url)
 			break
 		}
+	}
+
+	result := queryShardConfigs(newPeers)
+	for url, rpcResult := range result {
+		if rpcResult.Err != nil {
+			logrus.WithError(rpcResult.Err).WithField("url", url).Debug("Failed to add new peer")
+			continue
+		}
+
+		nm.discovered.Store(url, &shard.ShardedNode{
+			URL:     url,
+			Config:  rpcResult.Data,
+			Latency: rpcResult.Latency.Milliseconds(),
+			Since:   time.Now().Unix(),
+		})
+
+		numNew++
+
+		logrus.WithFields(logrus.Fields{
+			"url":     url,
+			"shard":   rpcResult.Data,
+			"latency": rpcResult.Latency.Milliseconds(),
+		}).Debug("New peer discovered")
 	}
 
 	if numNew > 0 {
@@ -222,43 +242,6 @@ func (nm *NodeManager) discover() error {
 	}
 
 	return nil
-}
-
-// updateNode updates the shard config of specified storage node by `url`.
-func (nm *NodeManager) updateNode(url string) (*shard.ShardedNode, error) {
-	// query ip location at first
-	ip := parseIP(url)
-	if _, err := defaultIPLocationManager.Query(ip); err != nil {
-		logrus.WithError(err).WithField("ip", ip).Warn("Failed to query IP location")
-	}
-
-	zgsClient, err := node.NewZgsClient(url, defaultZgsClientOpt)
-	if err != nil {
-		return nil, errors.WithMessage(err, "Failed to create zgs client")
-	}
-	defer zgsClient.Close()
-
-	start := time.Now()
-
-	config, err := zgsClient.GetShardConfig(context.Background())
-	if err != nil {
-		return nil, errors.WithMessage(err, "Failed to retrieve shard config from storage node")
-	}
-
-	if !config.IsValid() {
-		return nil, errors.Errorf("Invalid shard config retrieved %v", config)
-	}
-
-	node := &shard.ShardedNode{
-		URL:     url,
-		Config:  config,
-		Latency: time.Since(start).Milliseconds(),
-		Since:   time.Now().Unix(),
-	}
-
-	nm.discovered.Store(url, node)
-
-	return node, nil
 }
 
 // update updates shard configs of all storage nodes.
@@ -277,10 +260,18 @@ func (nm *NodeManager) update() error {
 
 	start := time.Now()
 
-	for _, v := range urls {
-		if _, err := nm.updateNode(v); err != nil {
-			logrus.WithError(err).WithField("url", v).Debug("Failed to update shard config, remove from cache")
-			nm.discovered.Delete(v)
+	result := queryShardConfigs(urls)
+	for url, rpcResult := range result {
+		if rpcResult.Err == nil {
+			nm.discovered.Store(url, &shard.ShardedNode{
+				URL:     url,
+				Config:  rpcResult.Data,
+				Latency: rpcResult.Latency.Milliseconds(),
+				Since:   time.Now().Unix(),
+			})
+		} else {
+			logrus.WithError(rpcResult.Err).WithField("url", url).Debug("Failed to update shard config, remove from cache")
+			nm.discovered.Delete(url)
 		}
 	}
 
@@ -290,4 +281,29 @@ func (nm *NodeManager) update() error {
 	}).Info("Completed to update shard config")
 
 	return nil
+}
+
+func queryShardConfigs(nodes []string) map[string]*parallel.RpcResult[shard.ShardConfig] {
+	// update IP if absent
+	for _, v := range nodes {
+		ip := parseIP(v)
+		if _, err := defaultIPLocationManager.Query(v); err != nil {
+			logrus.WithError(err).WithField("ip", ip).Warn("Failed to query IP location")
+		}
+	}
+
+	rpcFunc := func(client *node.ZgsClient, ctx context.Context) (shard.ShardConfig, error) {
+		config, err := client.GetShardConfig(ctx)
+		if err != nil {
+			return shard.ShardConfig{}, err
+		}
+
+		if !config.IsValid() {
+			return shard.ShardConfig{}, errors.Errorf("Invalid shard config retrieved %v", config)
+		}
+
+		return config, nil
+	}
+
+	return parallel.QueryZgsRpc(context.Background(), nodes, rpcFunc, defaultRpcOpt)
 }
