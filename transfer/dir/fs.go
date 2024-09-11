@@ -102,9 +102,9 @@ func (node *FsNode) Equal(rhs *FsNode) bool {
 
 // Flatten recursively flattens the FsNode tree into a slice of FsNode pointers and a slice of relative paths.
 // The filterFunc is applied to each node to determine if it should be included in the result.
-func (node *FsNode) Flatten(filterFunc func(*FsNode) bool) (result []*FsNode, relpaths []string) {
+func (node *FsNode) Flatten(filterFunc ...func(*FsNode) bool) (result []*FsNode, relpaths []string) {
 	node.Traverse(func(n *FsNode, p string) error {
-		if filterFunc(n) {
+		if len(filterFunc) == 0 || filterFunc[0](n) {
 			result = append(result, n)
 			relpaths = append(relpaths, p)
 		}

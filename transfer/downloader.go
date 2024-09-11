@@ -14,6 +14,16 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var (
+	_ IDownloader = (*Downloader)(nil)
+
+	ErrFileAlreadyExists = errors.New("File already exists")
+)
+
+type IDownloader interface {
+	Download(ctx context.Context, root, filename string, withProof bool) error
+}
+
 // Downloader downloader to download file to storage nodes
 type Downloader struct {
 	clients []*node.ZgsClient
@@ -97,7 +107,7 @@ func (downloader *Downloader) checkExistence(filename string, hash common.Hash) 
 	}
 
 	if tree.Root().Hex() == hash.Hex() {
-		return errors.New("File already exists")
+		return ErrFileAlreadyExists
 	}
 
 	return errors.New("File already exists with different hash")

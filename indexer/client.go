@@ -19,8 +19,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// Requires `Client` implements the `Interface` interface.
-var _ Interface = (*Client)(nil)
+var (
+	// Requires `Client` implements the `Interface` interface.
+	_ Interface = (*Client)(nil)
+	// Requires `Client` implements the `IDownloader` interface.
+	_ transfer.IDownloader = (*Client)(nil)
+)
 
 // Client indexer client
 type Client struct {
