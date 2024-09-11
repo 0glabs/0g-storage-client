@@ -8,6 +8,7 @@ import (
 	"github.com/0glabs/0g-storage-client/transfer/dir"
 	"github.com/0glabs/0g-storage-client/transfer/download"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 // DownloadDir downloads files within a directory recursively from the ZeroGStorage network.
@@ -46,6 +47,11 @@ func DownloadDir(ctx context.Context, downloader IDownloader, root, filename str
 			persist = downloadPersistFunc(downloader, ctx, nodes[i].Root, withProof)
 		}
 
+		logrus.WithFields(logrus.Fields{
+			"node":     nodes[i],
+			"filename": relpaths[i],
+		}).Debug("Adding file to downloading folder")
+
 		// Add the node (file or directory) to the local folder.
 		if err := folder.Add(nodes[i], relpaths[i], persist); err != nil {
 			return errors.WithMessagef(err, "failed to add `%s` to folder", relpaths[i])
@@ -76,6 +82,11 @@ func DownloadDir(ctx context.Context, downloader IDownloader, root, filename str
 func BuildFileTree(ctx context.Context, downloader IDownloader, root string, proof bool) (*dir.FsNode, error) {
 	// Create a temporary path to store the downloaded metadata file.
 	metapath := filepath.Join(os.TempDir(), root+".zgdm")
+
+	logrus.WithFields(logrus.Fields{
+		"root":     root,
+		"filename": metapath,
+	}).Debug("Downloading directory metadata to build file tree")
 
 	// Download the directory metadata from the ZeroGStorage network.
 	// If the file already exists, skip re-downloading it.
