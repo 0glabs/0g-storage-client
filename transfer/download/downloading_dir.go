@@ -57,8 +57,8 @@ func (directory *DownloadingDir) Add(node *dir.FsNode, relpath string, persist f
 			return errors.WithMessagef(err, "failed to create directory %s", savePath)
 		}
 	case dir.FileTypeSymbolic:
-		// Create a symbolic link at the specified path.
-		if err := os.Symlink(node.Link, savePath); err != nil {
+		// Create or update a symbolic link at the specified path.
+		if err := createOrUpdateSymlink(node.Link, savePath); err != nil {
 			return errors.WithMessagef(err, "failed to create symbolic link %s", savePath)
 		}
 	default:
@@ -79,6 +79,30 @@ func (directory *DownloadingDir) Seal() error {
 	}
 
 	return nil
+}
+
+// createOrUpdateSymlink creates a symlink, replacing any existing one
+func createOrUpdateSymlink(target, linkName string) error {
+	// Check if the link already exists
+	if _, err := os.Lstat(linkName); os.IsNotExist(err) {
+		// Create a new symlink if file doesn't exist
+		return os.Symlink(target, linkName)
+	}
+
+	// Check if it points to the correct target
+	existingTarget, err := os.Readlink(linkName)
+	if err == nil && existingTarget == target {
+		// Symlink already points to the correct target, skip creation
+		return nil
+	}
+
+	// Otherwises, remove existing symlink or file
+	if err := os.Remove(linkName); err != nil {
+		return errors.WithMessage(err, "failed to remove old file")
+	}
+
+	// Create a new symlink
+	return os.Symlink(target, linkName)
 }
 
 // touchFile creates or updates the access and modification time of a file.
