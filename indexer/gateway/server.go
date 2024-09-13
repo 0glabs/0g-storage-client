@@ -49,6 +49,7 @@ func newRouter() *gin.Engine {
 
 	// handlers
 	router.GET("/file", downloadFile)
+	router.GET("/file/:cid/*filePath", downloadFileInFolder)
 
 	return router
 }

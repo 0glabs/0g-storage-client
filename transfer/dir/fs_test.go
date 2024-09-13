@@ -278,3 +278,94 @@ func TestTraverse(t *testing.T) {
 		assert.Equal(t, item.path, paths[i])
 	}
 }
+
+func TestLocate(t *testing.T) {
+	// Setup a sample directory structure
+	root := &dir.FsNode{
+		Name: "/",
+		Type: dir.FileTypeDirectory,
+		Entries: []*dir.FsNode{
+			{
+				Name: "file1.txt",
+				Type: dir.FileTypeFile,
+			},
+			{
+				Name: "subdir",
+				Type: dir.FileTypeDirectory,
+				Entries: []*dir.FsNode{
+					{
+						Name: "file2.txt",
+						Type: dir.FileTypeFile,
+					},
+					{
+						Name: "innerdir",
+						Type: dir.FileTypeDirectory,
+						Entries: []*dir.FsNode{
+							{
+								Name: "file3.txt",
+								Type: dir.FileTypeFile,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Test cases
+	tests := []struct {
+		name      string
+		path      string
+		expected  *dir.FsNode
+		expectErr bool
+	}{
+		{
+			name:      "locate file in root",
+			path:      "file1.txt",
+			expected:  root.Entries[0],
+			expectErr: false,
+		},
+		{
+			name:      "locate file in subdirectory",
+			path:      filepath.Join("subdir", "file2.txt"),
+			expected:  root.Entries[1].Entries[0],
+			expectErr: false,
+		},
+		{
+			name:      "locate file in nested subdirectory",
+			path:      filepath.Join("subdir", "innerdir", "file3.txt"),
+			expected:  root.Entries[1].Entries[1].Entries[0],
+			expectErr: false,
+		},
+		{
+			name:      "directory not found",
+			path:      "nonexistentdir/file.txt",
+			expected:  nil,
+			expectErr: true,
+		},
+		{
+			name:      "file not found",
+			path:      "subdir/nonexistentfile.txt",
+			expected:  nil,
+			expectErr: true,
+		},
+		{
+			name:      "locate root directory",
+			path:      "",
+			expected:  root,
+			expectErr: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := root.Locate(tc.path)
+			if tc.expectErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expected, result)
+			}
+		})
+	}
+}

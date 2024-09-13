@@ -1,6 +1,7 @@
 package dir
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -98,6 +99,52 @@ func (node *FsNode) Equal(rhs *FsNode) bool {
 	default:
 		return false
 	}
+}
+
+// Locate finds a sub-node within the FsNode tree based on the given path.
+// The path can be a file or directory, and it should be relative to the current node.
+func (node *FsNode) Locate(path string) (*FsNode, error) {
+	// Split the path into parts for recursive traversal
+	parts := strings.Split(filepath.Clean(path), string(os.PathSeparator))
+	// Filter out empty strings
+	var filteredParts []string
+	for _, part := range parts {
+		if len(part) > 0 {
+			filteredParts = append(filteredParts, part)
+		}
+	}
+
+	// Start locating the first part
+	return node.locate(filteredParts)
+}
+
+// locate is a helper function to recursively find the sub-node
+func (node *FsNode) locate(parts []string) (*FsNode, error) {
+	// Base case: if the path is empty or dot current, return the current node
+	if len(parts) == 0 || (len(parts) == 1 && parts[0] == ".") {
+		return node, nil
+	}
+
+	// The current part of the path we are looking for
+	currentPart := parts[0]
+
+	// If the current node is not a directory, we can't traverse further
+	if node.Type != FileTypeDirectory {
+		return nil, fmt.Errorf("cannot locate '%s': '%s' is not a directory", currentPart, node.Name)
+	}
+
+	// Use the binary search method (Search) to locate the current part
+	if entry, found := node.Search(currentPart); found {
+		// If this is the final part of the path, return the entry
+		if len(parts) == 1 {
+			return entry, nil
+		}
+		// Otherwise, recursively locate in the sub-directory
+		return entry.locate(parts[1:])
+	}
+
+	// If no entry is found, return an error
+	return nil, errors.Errorf("path not found: '%s'", currentPart)
 }
 
 // Flatten recursively flattens the FsNode tree into a slice of FsNode pointers and a slice of relative paths.
