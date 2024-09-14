@@ -1,6 +1,10 @@
 package dir
 
 import (
+	"fmt"
+	"strings"
+
+	"github.com/fatih/color"
 	"github.com/google/btree"
 	"github.com/pkg/errors"
 )
@@ -83,4 +87,74 @@ func diff(current, next *FsNode) *DiffNode {
 	}
 
 	return root
+}
+
+// PrettyPrint prints the DiffNode tree in a human-readable format with a tree skeleton structure.
+func PrettyPrint(root *DiffNode) {
+	prettyPrint(root, 0, false, nil)
+}
+
+func prettyPrint(node *DiffNode, depth int, isLast bool, prefixes []string) {
+	if depth == 0 { // Root directory case
+		fmt.Println(node.Node.Name)
+		printChildEntries(node, 1, nil)
+		return
+	}
+
+	// Create prefix and branch for current node
+	prefix := strings.Join(prefixes, "")
+	branch := "├─"
+	if isLast {
+		branch = "└─"
+	}
+
+	// Print node with optional status
+	coloredStatus := colorStringForDiffStatus(node.Status)
+	fmt.Printf("%s%s %s %s\n", prefix, branch, node.Node.Name, coloredStatus)
+
+	// Update prefixes for children
+	newPrefixes := append(prefixes, "│  ")
+	if isLast {
+		newPrefixes[len(newPrefixes)-1] = "    "
+	}
+
+	// Recursively print children if it's a directory
+	if node.Node.Type == FileTypeDirectory {
+		printChildEntries(node, depth+1, newPrefixes)
+	}
+}
+
+func printChildEntries(node *DiffNode, depth int, prefixes []string) {
+	if node.Entries == nil || node.Entries.Len() == 0 {
+		return
+	}
+
+	// Get the last node in a BTree efficiently by descending to the last element.
+	var last *DiffNode
+	node.Entries.Descend(func(item *DiffNode) bool {
+		last = item
+		return false // Stop the iteration as soon as we get the last node.
+	})
+
+	// Print all child entries of the current node
+	node.Entries.Ascend(func(item *DiffNode) bool {
+		// Check if this is the last entry in the directory
+		isLast := item == last
+		prettyPrint(item, depth, isLast, prefixes)
+		return true
+	})
+}
+
+// colorStringForDiffStatus returns a color string based on the diff status.
+func colorStringForDiffStatus(status DiffStatus) string {
+	switch status {
+	case DiffStatusAdded:
+		return color.GreenString("[+]")
+	case DiffStatusRemoved:
+		return color.RedString("[-]")
+	case DiffStatusModified:
+		return color.YellowString("[*]")
+	default:
+		return ""
+	}
 }

@@ -12,32 +12,70 @@ import (
 	"github.com/0glabs/0g-storage-client/node"
 	"github.com/0glabs/0g-storage-client/transfer"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/openweb3/web3go"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
+// L1 transaction relevant operations, including nonce, fee, and so on.
+type transactionArgument struct {
+	url string
+	key string
+
+	fee   float64
+	nonce uint
+}
+
+func bindTransactionFlags(cmd *cobra.Command, args *transactionArgument) {
+	cmd.Flags().StringVar(&args.url, "url", "", "Fullnode URL to interact with ZeroGStorage smart contract")
+	cmd.MarkFlagRequired("url")
+	cmd.Flags().StringVar(&args.key, "key", "", "Private key to interact with smart contract")
+	cmd.MarkFlagRequired("key")
+
+	cmd.Flags().Float64Var(&args.fee, "fee", 0, "fee paid in a0gi")
+	cmd.Flags().UintVar(&args.nonce, "nonce", 0, "nonce of upload transaction")
+}
+
+type uploadArgument struct {
+	transactionArgument
+
+	file string
+	tags string
+
+	node    []string
+	indexer string
+
+	expectedReplica uint
+
+	skipTx           bool
+	finalityRequired bool
+	taskSize         uint
+
+	timeout time.Duration
+}
+
+func bindUploadFlags(cmd *cobra.Command, args *uploadArgument) {
+	cmd.Flags().StringVar(&args.file, "file", "", "File name to upload")
+	cmd.MarkFlagRequired("file")
+	cmd.Flags().StringVar(&args.tags, "tags", "0x", "Tags of the file")
+
+	cmd.Flags().StringSliceVar(&args.node, "node", []string{}, "ZeroGStorage storage node URL")
+	cmd.Flags().StringVar(&args.indexer, "indexer", "", "ZeroGStorage indexer URL")
+	cmd.MarkFlagsOneRequired("indexer", "node")
+	cmd.MarkFlagsMutuallyExclusive("indexer", "node")
+
+	cmd.Flags().UintVar(&args.expectedReplica, "expected-replica", 1, "expected number of replications to upload")
+
+	cmd.Flags().BoolVar(&args.skipTx, "skip-tx", true, "Skip sending the transaction on chain if already exists")
+	cmd.Flags().BoolVar(&args.finalityRequired, "finality-required", false, "Wait for file finality on nodes to upload")
+	cmd.Flags().UintVar(&args.taskSize, "task-size", 10, "Number of segments to upload in single rpc request")
+
+	cmd.Flags().DurationVar(&args.timeout, "timeout", 0, "cli task timeout, 0 for no timeout")
+}
+
 var (
-	uploadArgs struct {
-		file string
-		tags string
-
-		url string
-		key string
-
-		node    []string
-		indexer string
-
-		expectedReplica uint
-
-		skipTx           bool
-		finalityRequired bool
-		taskSize         uint
-
-		fee   float64
-		nonce uint
-
-		timeout time.Duration
-	}
+	uploadArgs uploadArgument
 
 	uploadCmd = &cobra.Command{
 		Use:   "upload",
@@ -47,30 +85,8 @@ var (
 )
 
 func init() {
-	uploadCmd.Flags().StringVar(&uploadArgs.file, "file", "", "File name to upload")
-	uploadCmd.MarkFlagRequired("file")
-	uploadCmd.Flags().StringVar(&uploadArgs.tags, "tags", "0x", "Tags of the file")
-
-	uploadCmd.Flags().StringVar(&uploadArgs.url, "url", "", "Fullnode URL to interact with ZeroGStorage smart contract")
-	uploadCmd.MarkFlagRequired("url")
-	uploadCmd.Flags().StringVar(&uploadArgs.key, "key", "", "Private key to interact with smart contract")
-	uploadCmd.MarkFlagRequired("key")
-
-	uploadCmd.Flags().StringSliceVar(&uploadArgs.node, "node", []string{}, "ZeroGStorage storage node URL")
-	uploadCmd.Flags().StringVar(&uploadArgs.indexer, "indexer", "", "ZeroGStorage indexer URL")
-	uploadCmd.MarkFlagsOneRequired("indexer", "node")
-	uploadCmd.MarkFlagsMutuallyExclusive("indexer", "node")
-
-	uploadCmd.Flags().UintVar(&uploadArgs.expectedReplica, "expected-replica", 1, "expected number of replications to upload")
-
-	uploadCmd.Flags().BoolVar(&uploadArgs.skipTx, "skip-tx", true, "Skip sending the transaction on chain if already exists")
-	uploadCmd.Flags().BoolVar(&uploadArgs.finalityRequired, "finality-required", false, "Wait for file finality on nodes to upload")
-	uploadCmd.Flags().UintVar(&uploadArgs.taskSize, "task-size", 10, "Number of segments to upload in single rpc request")
-
-	uploadCmd.Flags().DurationVar(&uploadArgs.timeout, "timeout", 0, "cli task timeout, 0 for no timeout")
-
-	uploadCmd.Flags().Float64Var(&uploadArgs.fee, "fee", 0, "fee paid in a0gi")
-	uploadCmd.Flags().UintVar(&uploadArgs.nonce, "nonce", 0, "nonce of upload transaction")
+	bindUploadFlags(uploadCmd, &uploadArgs)
+	bindTransactionFlags(uploadCmd, &uploadArgs.transactionArgument)
 
 	rootCmd.AddCommand(uploadCmd)
 }
@@ -109,37 +125,53 @@ func upload(*cobra.Command, []string) {
 		Nonce:            nonce,
 	}
 
+	uploader, closer, err := newUploader(ctx, uploadArgs, w3client, opt)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to initialize uploader")
+	}
+	defer closer()
+
 	file, err := core.Open(uploadArgs.file)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to open file")
 	}
 	defer file.Close()
 
-	if uploadArgs.indexer != "" {
-		indexerClient, err := indexer.NewClient(uploadArgs.indexer, indexer.IndexerClientOption{
+	if _, err := uploader.Upload(ctx, file, opt); err != nil {
+		logrus.WithError(err).Fatal("Failed to upload file")
+	}
+}
+
+func newUploader(ctx context.Context, args uploadArgument, w3client *web3go.Client, opt transfer.UploadOption) (*transfer.Uploader, func(), error) {
+	if args.indexer != "" {
+		indexerClient, err := indexer.NewClient(args.indexer, indexer.IndexerClientOption{
 			ProviderOption: providerOption,
 			LogOption:      zg_common.LogOption{Logger: logrus.StandardLogger()},
 		})
 		if err != nil {
-			logrus.WithError(err).Fatal("Failed to initialize indexer client")
+			return nil, nil, errors.WithMessage(err, "failed to initialize indexer client")
 		}
-		if _, err := indexerClient.Upload(ctx, w3client, file, opt); err != nil {
-			logrus.WithError(err).Fatal("Failed to upload file")
+
+		up, err := indexerClient.NewUploaderFromIndexerNodes(ctx, w3client, opt.ExpectedReplica, nil)
+		if err != nil {
+			return nil, nil, err
 		}
-		return
+
+		return up, indexerClient.Close, nil
 	}
 
-	clients := node.MustNewZgsClients(uploadArgs.node, providerOption)
-	for _, client := range clients {
-		defer client.Close()
+	clients := node.MustNewZgsClients(args.node, providerOption)
+	closer := func() {
+		for _, client := range clients {
+			client.Close()
+		}
 	}
 
-	uploader, err := transfer.NewUploader(ctx, w3client, clients, zg_common.LogOption{Logger: logrus.StandardLogger()})
+	up, err := transfer.NewUploader(ctx, w3client, clients, zg_common.LogOption{Logger: logrus.StandardLogger()})
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to initialize uploader")
+		closer()
+		return nil, nil, err
 	}
 
-	if _, err := uploader.Upload(ctx, file, opt); err != nil {
-		logrus.WithError(err).Fatal("Failed to upload file")
-	}
+	return up, closer, nil
 }

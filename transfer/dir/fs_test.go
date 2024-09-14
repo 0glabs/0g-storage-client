@@ -1,6 +1,7 @@
 package dir_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -206,4 +207,165 @@ func TestBuildFileTree(t *testing.T) {
 		assert.Equal(t, dir.FileTypeSymbolic, node.Type)
 		assert.Equal(t, filePath, node.Link)
 	})
+}
+
+func TestTraverse(t *testing.T) {
+	// Create a mock directory structure
+	root := &dir.FsNode{
+		Name: "root",
+		Type: dir.FileTypeDirectory,
+		Entries: []*dir.FsNode{
+			{
+				Name: "file1.txt",
+				Type: dir.FileTypeFile,
+			},
+			{
+				Name: "subdir",
+				Type: dir.FileTypeDirectory,
+				Entries: []*dir.FsNode{
+					{
+						Name: "file2.txt",
+						Type: dir.FileTypeFile,
+					},
+				},
+			},
+		},
+	}
+
+	// Define the expected paths
+	expectedPaths := map[string]bool{
+		"root":                  false,
+		"root/file1.txt":        false,
+		"root/subdir":           false,
+		"root/subdir/file2.txt": false,
+	}
+
+	// Define the action function to check the paths
+	actionFunc := func(node *dir.FsNode, path string) error {
+		if _, ok := expectedPaths[path]; ok {
+			expectedPaths[path] = true
+			return nil
+		} else {
+			return fmt.Errorf("Unexpected path: %s", path)
+		}
+	}
+
+	// Perform the traversal
+	err := root.Traverse(actionFunc)
+	assert.NoError(t, err)
+
+	// Verify all expected paths were visited
+	for path, visited := range expectedPaths {
+		assert.True(t, visited, "Path not visited: %s", path)
+	}
+
+	// Define the expected flatten result
+	expectedFlattenResult := []struct {
+		node *dir.FsNode
+		path string
+	}{
+		{root.Entries[0], "root/file1.txt"},
+		{root.Entries[1].Entries[0], "root/subdir/file2.txt"},
+	}
+
+	// Test Flatten method
+	result, paths := root.Flatten(func(n *dir.FsNode) bool {
+		return n.Type == dir.FileTypeFile
+	})
+
+	for i, item := range expectedFlattenResult {
+		assert.Equal(t, item.node, result[i])
+		assert.Equal(t, item.path, paths[i])
+	}
+}
+
+func TestLocate(t *testing.T) {
+	// Setup a sample directory structure
+	root := &dir.FsNode{
+		Name: "/",
+		Type: dir.FileTypeDirectory,
+		Entries: []*dir.FsNode{
+			{
+				Name: "file1.txt",
+				Type: dir.FileTypeFile,
+			},
+			{
+				Name: "subdir",
+				Type: dir.FileTypeDirectory,
+				Entries: []*dir.FsNode{
+					{
+						Name: "file2.txt",
+						Type: dir.FileTypeFile,
+					},
+					{
+						Name: "innerdir",
+						Type: dir.FileTypeDirectory,
+						Entries: []*dir.FsNode{
+							{
+								Name: "file3.txt",
+								Type: dir.FileTypeFile,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Test cases
+	tests := []struct {
+		name      string
+		path      string
+		expected  *dir.FsNode
+		expectErr bool
+	}{
+		{
+			name:      "locate file in root",
+			path:      "file1.txt",
+			expected:  root.Entries[0],
+			expectErr: false,
+		},
+		{
+			name:      "locate file in subdirectory",
+			path:      filepath.Join("subdir", "file2.txt"),
+			expected:  root.Entries[1].Entries[0],
+			expectErr: false,
+		},
+		{
+			name:      "locate file in nested subdirectory",
+			path:      filepath.Join("subdir", "innerdir", "file3.txt"),
+			expected:  root.Entries[1].Entries[1].Entries[0],
+			expectErr: false,
+		},
+		{
+			name:      "directory not found",
+			path:      "nonexistentdir/file.txt",
+			expected:  nil,
+			expectErr: true,
+		},
+		{
+			name:      "file not found",
+			path:      "subdir/nonexistentfile.txt",
+			expected:  nil,
+			expectErr: true,
+		},
+		{
+			name:      "locate root directory",
+			path:      "",
+			expected:  root,
+			expectErr: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := root.Locate(tc.path)
+			if tc.expectErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expected, result)
+			}
+		})
+	}
 }

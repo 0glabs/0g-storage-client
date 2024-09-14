@@ -6,8 +6,8 @@ import (
 )
 
 type rpcClient struct {
-	url      string
-	provider interfaces.Provider
+	interfaces.Provider
+	url string
 }
 
 func newRpcClient(url string, option ...providers.Option) (*rpcClient, error) {
@@ -21,7 +21,7 @@ func newRpcClient(url string, option ...providers.Option) (*rpcClient, error) {
 		return nil, err
 	}
 
-	return &rpcClient{url, provider}, nil
+	return &rpcClient{provider, url}, nil
 }
 
 // URL Get the RPC server URL the client connected to.
@@ -38,9 +38,4 @@ func (c *rpcClient) wrapError(e error, method string) error {
 		Method:  method,
 		URL:     c.URL(),
 	}
-}
-
-// Close close the underlying RPC client.
-func (c *rpcClient) Close() {
-	c.provider.Close()
 }
