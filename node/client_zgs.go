@@ -52,6 +52,13 @@ func (c *ZgsClient) GetStatus(ctx context.Context) (status Status, err error) {
 	return
 }
 
+// CheckFileFinalized Call zgs_checkFileFinalized to check if specified file is finalized.
+// Returns nil if file not available on storage node.
+func (c *ZgsClient) CheckFileFinalized(ctx context.Context, txSeqOrRoot TxSeqOrRoot) (finalized *bool, err error) {
+	err = c.wrapError(c.CallContext(ctx, &finalized, "zgs_checkFileFinalized", txSeqOrRoot), "zgs_checkFileFinalized")
+	return
+}
+
 // GetFileInfo Call zgs_getFileInfo RPC to get the information of a file by file data root from the node.
 func (c *ZgsClient) GetFileInfo(ctx context.Context, root common.Hash) (file *FileInfo, err error) {
 	err = c.wrapError(c.CallContext(ctx, &file, "zgs_getFileInfo", root), "zgs_getFileInfo")
