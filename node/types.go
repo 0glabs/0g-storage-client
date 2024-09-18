@@ -1,6 +1,8 @@
 package node
 
 import (
+	"encoding/json"
+
 	"github.com/0glabs/0g-storage-client/common/shard"
 	"github.com/0glabs/0g-storage-client/core/merkle"
 	"github.com/ethereum/go-ethereum/common"
@@ -26,6 +28,7 @@ type Status struct {
 	ConnectedPeers  uint            `json:"connectedPeers"`
 	LogSyncHeight   uint64          `json:"logSyncHeight"`
 	LogSyncBlock    common.Hash     `json:"logSyncBlock"`
+	NextTxSeq       uint64          `json:"nextTxSeq"`
 	NetworkIdentity NetworkIdentity `json:"networkIdentity"`
 }
 
@@ -141,4 +144,19 @@ type PeerInfo struct {
 type LocationInfo struct {
 	Ip          string            `json:"ip"`
 	ShardConfig shard.ShardConfig `json:"shardConfig"`
+}
+
+// TxSeqOrRoot represents a tx seq or data root.
+type TxSeqOrRoot struct {
+	TxSeq uint64
+	Root  common.Hash
+}
+
+// MarshalJSON implements json.Marshaler interface.
+func (t TxSeqOrRoot) MarshalJSON() ([]byte, error) {
+	if t.Root.Cmp(common.Hash{}) == 0 {
+		return json.Marshal(t.TxSeq)
+	}
+
+	return json.Marshal(t.Root)
 }
