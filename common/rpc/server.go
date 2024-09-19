@@ -1,15 +1,15 @@
-package util
+package rpc
 
 import (
 	"net/http"
+	"net/rpc"
 
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/openweb3/go-rpc-provider"
 	"github.com/sirupsen/logrus"
 )
 
-// MustNewRPCHandler creates a http.Handler for the specified RPC apis.
-func MustNewRPCHandler(apis map[string]interface{}) http.Handler {
+// MustNewHandler creates a http.Handler for the specified RPC apis.
+func MustNewHandler(apis map[string]interface{}) http.Handler {
 	handler := rpc.NewServer()
 
 	for namespace, impl := range apis {
@@ -22,8 +22,8 @@ func MustNewRPCHandler(apis map[string]interface{}) http.Handler {
 	return node.NewHTTPHandlerStack(handler, []string{"*"}, []string{"*"}, []byte{})
 }
 
-// MustServe starts a HTTP service util shutdown.
-func MustServe(endpoint string, handler http.Handler) {
+// Start starts a HTTP service util shutdown.
+func Start(endpoint string, handler http.Handler) {
 	server := http.Server{
 		Addr:    endpoint,
 		Handler: handler,
@@ -32,8 +32,8 @@ func MustServe(endpoint string, handler http.Handler) {
 	server.ListenAndServe()
 }
 
-// MustServeRPC starts RPC service until shutdown.
-func MustServeRPC(endpoint string, apis map[string]interface{}) {
-	rpcHandler := MustNewRPCHandler(apis)
-	MustServe(endpoint, rpcHandler)
+// MustServe starts RPC service until shutdown.
+func MustServe(endpoint string, apis map[string]interface{}) {
+	rpcHandler := MustNewHandler(apis)
+	Start(endpoint, rpcHandler)
 }

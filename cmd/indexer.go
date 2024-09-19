@@ -3,7 +3,7 @@ package cmd
 import (
 	"time"
 
-	"github.com/0glabs/0g-storage-client/common/util"
+	"github.com/0glabs/0g-storage-client/common/rpc"
 	"github.com/0glabs/0g-storage-client/indexer"
 	"github.com/0glabs/0g-storage-client/indexer/gateway"
 	"github.com/sirupsen/logrus"
@@ -79,7 +79,7 @@ func startIndexer(*cobra.Command, []string) {
 		Endpoint:            indexerArgs.endpoint,
 		Nodes:               indexerArgs.nodes.TrustedNodes,
 		MaxDownloadFileSize: indexerArgs.maxDownloadFileSize,
-		RPCHandler: util.MustNewRPCHandler(map[string]interface{}{
+		RPCHandler: rpc.MustNewHandler(map[string]interface{}{
 			api.Namespace: api,
 		}),
 	})

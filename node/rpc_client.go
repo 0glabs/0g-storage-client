@@ -1,32 +1,26 @@
 package node
 
 import (
-	"github.com/openweb3/go-rpc-provider/interfaces"
+	"context"
+
+	"github.com/0glabs/0g-storage-client/common/rpc"
 	providers "github.com/openweb3/go-rpc-provider/provider_wrapper"
 )
 
 type rpcClient struct {
-	interfaces.Provider
-	url string
+	*rpc.Client
 }
 
 func newRpcClient(url string, option ...providers.Option) (*rpcClient, error) {
-	var opt providers.Option
-	if len(option) > 0 {
-		opt = option[0]
-	}
-
-	provider, err := providers.NewProviderWithOption(url, opt)
+	inner, err := rpc.NewClient(url, option...)
 	if err != nil {
 		return nil, err
 	}
 
-	return &rpcClient{provider, url}, nil
-}
+	client := rpcClient{inner}
+	client.HookCallContext(client.rpcErrorMiddleware)
 
-// URL Get the RPC server URL the client connected to.
-func (c *rpcClient) URL() string {
-	return c.url
+	return &client, nil
 }
 
 func (c *rpcClient) wrapError(e error, method string) error {
@@ -37,5 +31,12 @@ func (c *rpcClient) wrapError(e error, method string) error {
 		Message: e.Error(),
 		Method:  method,
 		URL:     c.URL(),
+	}
+}
+
+func (c *rpcClient) rpcErrorMiddleware(handler providers.CallContextFunc) providers.CallContextFunc {
+	return func(ctx context.Context, result interface{}, method string, args ...interface{}) error {
+		err := handler(ctx, result, method, args...)
+		return c.wrapError(err, method)
 	}
 }
