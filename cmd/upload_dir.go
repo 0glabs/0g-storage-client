@@ -53,7 +53,7 @@ func uploadDir(*cobra.Command, []string) {
 		SkipTx:           uploadDirArgs.skipTx,
 	}
 
-	uploader, closer, err := newUploader(ctx, uploadDirArgs, w3client, opt)
+	uploader, closer, err := newUploader(ctx, 0, uploadDirArgs, w3client, opt)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to initialize uploader")
 	}

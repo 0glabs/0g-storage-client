@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/0glabs/0g-storage-client/common/shard"
+	"github.com/0glabs/0g-storage-client/core"
 	"github.com/0glabs/0g-storage-client/node"
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/pkg/errors"
@@ -59,17 +60,19 @@ func (c *FileLocationCache) close() {
 
 func (c *FileLocationCache) GetFileLocations(ctx context.Context, txSeq uint64) ([]*shard.ShardedNode, error) {
 	if nodes, ok := c.cache.Get(txSeq); ok {
-		if _, covered := shard.Select(nodes, 1, false); covered {
-			return nodes, nil
-		}
+		return nodes, nil
 	}
 	var nodes []*shard.ShardedNode
 	// fetch from trusted
 	selected := make(map[string]struct{})
 	trusted := defaultNodeManager.TrustedClients()
+	var segNum uint64
 	for _, v := range trusted {
 		start := time.Now()
 		fileInfo, err := v.GetFileInfoByTxSeq(ctx, txSeq)
+		if fileInfo != nil {
+			segNum = core.NumSplits(int64(fileInfo.Tx.Size), core.DefaultSegmentSize)
+		}
 		if err != nil || fileInfo == nil || !fileInfo.Finalized {
 			continue
 		}
@@ -84,8 +87,12 @@ func (c *FileLocationCache) GetFileLocations(ctx context.Context, txSeq uint64) 
 		})
 		selected[v.URL()] = struct{}{}
 	}
+	if segNum == 0 {
+		return nil, fmt.Errorf("file info not found")
+	}
 	logrus.Debugf("find file #%v from trusted nodes, got %v nodes holding the file", txSeq, len(nodes))
-	if _, covered := shard.Select(nodes, 1, false); covered {
+	if _, covered := shard.Select(segNum, nodes, 1, false); covered {
+		c.cache.Add(txSeq, nodes)
 		return nodes, nil
 	}
 	// trusted nodes do not hold all shards of the file, try to find file
@@ -149,7 +156,8 @@ func (c *FileLocationCache) GetFileLocations(ctx context.Context, txSeq uint64) 
 				break
 			}
 		}
-		if _, covered := shard.Select(nodes, 1, false); covered {
+		if _, covered := shard.Select(segNum, nodes, 1, false); covered {
+			c.cache.Add(txSeq, nodes)
 			return nodes, nil
 		}
 		if val, ok := c.latestFindFile.Load(txSeq); ok {

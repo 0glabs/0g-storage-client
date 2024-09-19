@@ -537,7 +537,7 @@ func (uploader *Uploader) newSegmentUploader(ctx context.Context, data core.Iter
 	if err != nil {
 		return nil, err
 	}
-	if !shard.CheckReplica(shardConfigs, expectedReplica) {
+	if !shard.CheckReplica(numSegments, shardConfigs, expectedReplica) {
 		return nil, fmt.Errorf("selected nodes cannot cover all shards")
 	}
 	clientTasks := make([][]*uploadTask, 0)
