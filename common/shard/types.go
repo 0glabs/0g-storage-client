@@ -114,12 +114,19 @@ func Select(segNum uint64, nodes []*ShardedNode, expectedReplica uint, random bo
 			return selected, true
 		}
 		if segNum > 0 {
-			if node.Config.ShardId < segNum && occupied[node.Config.ShardId] < expectedReplica {
-				if _, ok := occupied[node.Config.ShardId]; !ok {
-					occupied[node.Config.ShardId] = 0
+			chosen := false
+			for id := node.Config.ShardId; id < segNum; id += node.Config.NumShard {
+				if occupied[id] < expectedReplica {
+					if _, ok := occupied[id]; !ok {
+						occupied[id] = 0
+					}
+					hit += 1
+					occupied[id] += 1
+					chosen = true
+
 				}
-				hit += 1
-				occupied[node.Config.ShardId] += 1
+			}
+			if chosen {
 				occupiedNodes = append(occupiedNodes, node)
 			}
 			if uint64(hit) == segNum*uint64(expectedReplica) {
