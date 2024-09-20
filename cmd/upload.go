@@ -125,24 +125,24 @@ func upload(*cobra.Command, []string) {
 		Nonce:            nonce,
 	}
 
-	uploader, closer, err := newUploader(ctx, uploadArgs, w3client, opt)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to initialize uploader")
-	}
-	defer closer()
-
 	file, err := core.Open(uploadArgs.file)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to open file")
 	}
 	defer file.Close()
 
+	uploader, closer, err := newUploader(ctx, file.NumSegments(), uploadArgs, w3client, opt)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to initialize uploader")
+	}
+	defer closer()
+
 	if _, err := uploader.Upload(ctx, file, opt); err != nil {
 		logrus.WithError(err).Fatal("Failed to upload file")
 	}
 }
 
-func newUploader(ctx context.Context, args uploadArgument, w3client *web3go.Client, opt transfer.UploadOption) (*transfer.Uploader, func(), error) {
+func newUploader(ctx context.Context, segNum uint64, args uploadArgument, w3client *web3go.Client, opt transfer.UploadOption) (*transfer.Uploader, func(), error) {
 	if args.indexer != "" {
 		indexerClient, err := indexer.NewClient(args.indexer, indexer.IndexerClientOption{
 			ProviderOption: providerOption,
@@ -152,7 +152,7 @@ func newUploader(ctx context.Context, args uploadArgument, w3client *web3go.Clie
 			return nil, nil, errors.WithMessage(err, "failed to initialize indexer client")
 		}
 
-		up, err := indexerClient.NewUploaderFromIndexerNodes(ctx, w3client, opt.ExpectedReplica, nil)
+		up, err := indexerClient.NewUploaderFromIndexerNodes(ctx, segNum, w3client, opt.ExpectedReplica, nil)
 		if err != nil {
 			return nil, nil, err
 		}

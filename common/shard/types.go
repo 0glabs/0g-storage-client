@@ -73,7 +73,7 @@ func (node *shardSegmentTreeNode) insert(numShard uint, shardId uint, expectedRe
 
 // select a set of given sharded node and make the data is replicated at least expctedReplica times
 // return the selected nodes and if selection is successful
-func Select(nodes []*ShardedNode, expectedReplica uint, random bool) ([]*ShardedNode, bool) {
+func Select(segNum uint64, nodes []*ShardedNode, expectedReplica uint, random bool) ([]*ShardedNode, bool) {
 	selected := make([]*ShardedNode, 0)
 	if expectedReplica == 0 {
 		return selected, true
@@ -95,12 +95,16 @@ func Select(nodes []*ShardedNode, expectedReplica uint, random bool) ([]*Sharded
 		})
 
 	}
-	// build segment tree to select proper nodes
+	// build segment tree to select proper nodes by shard configs
 	root := shardSegmentTreeNode{
 		numShard: 1,
 		replica:  0,
 		lazyTags: 0,
 	}
+	// occupied by shard id
+	occupied := make(map[uint64]uint)
+	occupiedNodes := make([]*ShardedNode, 0)
+	hit := 0
 
 	for _, node := range nodes {
 		if root.insert(uint(node.Config.NumShard), uint(node.Config.ShardId), expectedReplica) {
@@ -109,11 +113,31 @@ func Select(nodes []*ShardedNode, expectedReplica uint, random bool) ([]*Sharded
 		if root.replica >= expectedReplica {
 			return selected, true
 		}
+		if segNum > 0 {
+			chosen := false
+			for id := node.Config.ShardId; id < segNum; id += node.Config.NumShard {
+				if occupied[id] < expectedReplica {
+					if _, ok := occupied[id]; !ok {
+						occupied[id] = 0
+					}
+					hit += 1
+					occupied[id] += 1
+					chosen = true
+
+				}
+			}
+			if chosen {
+				occupiedNodes = append(occupiedNodes, node)
+			}
+			if uint64(hit) == segNum*uint64(expectedReplica) {
+				return occupiedNodes, true
+			}
+		}
 	}
 	return make([]*ShardedNode, 0), false
 }
 
-func CheckReplica(shardConfigs []*ShardConfig, expectedReplica uint) bool {
+func CheckReplica(segNum uint64, shardConfigs []*ShardConfig, expectedReplica uint) bool {
 	shardedNodes := make([]*ShardedNode, len(shardConfigs))
 	for i, shardConfig := range shardConfigs {
 		shardedNodes[i] = &ShardedNode{Config: ShardConfig{
@@ -121,6 +145,6 @@ func CheckReplica(shardConfigs []*ShardConfig, expectedReplica uint) bool {
 			ShardId:  uint64(shardConfig.ShardId),
 		}}
 	}
-	_, ok := Select(shardedNodes, expectedReplica, false)
+	_, ok := Select(segNum, shardedNodes, expectedReplica, false)
 	return ok
 }

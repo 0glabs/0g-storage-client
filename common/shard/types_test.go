@@ -40,7 +40,7 @@ func TestSelect(t *testing.T) {
 		makeShardNode(16, 14),
 		makeShardNode(16, 15),
 	}
-	selected, found := Select(shardedNodes, 2, false)
+	selected, found := Select(100, shardedNodes, 2, false)
 	assert.Equal(t, found, true)
 	fmt.Println(selected)
 	assert.Equal(t, len(selected), 5)
@@ -49,7 +49,7 @@ func TestSelect(t *testing.T) {
 	assert.DeepEqual(t, selected[2], makeShardNode(4, 3))
 	assert.DeepEqual(t, selected[3], makeShardNode(8, 1))
 	assert.DeepEqual(t, selected[4], makeShardNode(8, 5))
-	selected, found = Select(shardedNodes, 3, false)
+	selected, found = Select(100, shardedNodes, 3, false)
 	assert.Equal(t, found, true)
 	assert.Equal(t, len(selected), 15)
 	assert.DeepEqual(t, selected[0], makeShardNode(1, 0))
@@ -67,6 +67,14 @@ func TestSelect(t *testing.T) {
 	assert.DeepEqual(t, selected[12], makeShardNode(16, 11))
 	assert.DeepEqual(t, selected[13], makeShardNode(16, 13))
 	assert.DeepEqual(t, selected[14], makeShardNode(16, 15))
-	_, found = Select(shardedNodes, 4, false)
+	_, found = Select(100, shardedNodes, 4, false)
+	assert.Equal(t, found, false)
+	selected, found = Select(1, shardedNodes, 4, false)
+	assert.Equal(t, found, true)
+	assert.DeepEqual(t, selected[0], makeShardNode(1, 0))
+	assert.DeepEqual(t, selected[1], makeShardNode(2, 0))
+	assert.DeepEqual(t, selected[2], makeShardNode(4, 0))
+	assert.DeepEqual(t, selected[3], makeShardNode(16, 0))
+	_, found = Select(2, shardedNodes, 4, false)
 	assert.Equal(t, found, false)
 }

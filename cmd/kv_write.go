@@ -125,7 +125,7 @@ func kvWrite(*cobra.Command, []string) {
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to initialize indexer client")
 		}
-		if clients, err = indexerClient.SelectNodes(ctx, max(1, opt.ExpectedReplica), []string{}); err != nil {
+		if clients, err = indexerClient.SelectNodes(ctx, 0, max(1, opt.ExpectedReplica), []string{}); err != nil {
 			logrus.WithError(err).Fatal("failed to select nodes from indexer")
 		}
 	}
