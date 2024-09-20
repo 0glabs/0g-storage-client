@@ -2,9 +2,9 @@ package rpc
 
 import (
 	"net/http"
-	"net/rpc"
 
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/openweb3/go-rpc-provider"
 	"github.com/sirupsen/logrus"
 )
 
