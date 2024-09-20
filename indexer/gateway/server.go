@@ -3,7 +3,7 @@ package gateway
 import (
 	"net/http"
 
-	"github.com/0glabs/0g-storage-client/common/util"
+	"github.com/0glabs/0g-storage-client/common/rpc"
 	"github.com/0glabs/0g-storage-client/node"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -34,7 +34,7 @@ func MustServeWithRPC(config Config) {
 		router.POST("/", gin.WrapH(config.RPCHandler))
 	}
 
-	util.MustServe(config.Endpoint, router)
+	rpc.Start(config.Endpoint, router)
 }
 
 func newRouter() *gin.Engine {

@@ -7,12 +7,12 @@ import (
 	"time"
 
 	"github.com/0glabs/0g-storage-client/common"
+	"github.com/0glabs/0g-storage-client/common/rpc"
 	"github.com/0glabs/0g-storage-client/common/shard"
 	"github.com/0glabs/0g-storage-client/core"
 	"github.com/0glabs/0g-storage-client/node"
 	"github.com/0glabs/0g-storage-client/transfer"
 	eth_common "github.com/ethereum/go-ethereum/common"
-	"github.com/openweb3/go-rpc-provider/interfaces"
 	providers "github.com/openweb3/go-rpc-provider/provider_wrapper"
 	"github.com/openweb3/web3go"
 	"github.com/pkg/errors"
@@ -28,7 +28,7 @@ var (
 
 // Client indexer client
 type Client struct {
-	interfaces.Provider
+	*rpc.Client
 	option IndexerClientOption
 	logger *logrus.Logger
 }
@@ -46,34 +46,31 @@ func NewClient(url string, option ...IndexerClientOption) (*Client, error) {
 		opt = option[0]
 	}
 
-	provider, err := providers.NewProviderWithOption(url, opt.ProviderOption)
+	client, err := rpc.NewClient(url, opt.ProviderOption)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Client{
-		Provider: provider,
-		option:   opt,
-		logger:   common.NewLogger(opt.LogOption),
+		Client: client,
+		option: opt,
+		logger: common.NewLogger(opt.LogOption),
 	}, nil
 }
 
-// GetNodes get node list from indexer service
-func (c *Client) GetShardedNodes(ctx context.Context) (nodes ShardedNodes, err error) {
-	err = c.Provider.CallContext(ctx, &nodes, "indexer_getShardedNodes")
-	return
+// GetShardedNodes get node list from indexer service
+func (c *Client) GetShardedNodes(ctx context.Context) (ShardedNodes, error) {
+	return providers.CallContext[ShardedNodes](c, ctx, "indexer_getShardedNodes")
 }
 
-// GetNodes return storage nodes with IP location information.
-func (c *Client) GetNodeLocations(ctx context.Context) (locations map[string]*IPLocation, err error) {
-	err = c.Provider.CallContext(ctx, &locations, "indexer_getNodeLocations")
-	return
+// GetNodeLocations return storage nodes with IP location information.
+func (c *Client) GetNodeLocations(ctx context.Context) (map[string]*IPLocation, error) {
+	return providers.CallContext[map[string]*IPLocation](c, ctx, "indexer_getNodeLocations")
 }
 
 // GetFileLocations return locations info of given file.
-func (c *Client) GetFileLocations(ctx context.Context, root string) (locations []*shard.ShardedNode, err error) {
-	err = c.Provider.CallContext(ctx, &locations, "indexer_getFileLocations", root)
-	return
+func (c *Client) GetFileLocations(ctx context.Context, root string) ([]*shard.ShardedNode, error) {
+	return providers.CallContext[[]*shard.ShardedNode](c, ctx, "indexer_getFileLocations", root)
 }
 
 // SelectNodes get node list from indexer service and select a subset of it, which is sufficient to store expected number of replications.

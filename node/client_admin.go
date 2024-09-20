@@ -33,66 +33,55 @@ func NewAdminClient(url string, option ...providers.Option) (*AdminClient, error
 }
 
 // FindFile Call find_file to update file location cache
-func (c *AdminClient) FindFile(ctx context.Context, txSeq uint64) (ret int, err error) {
-	err = c.wrapError(c.CallContext(ctx, &ret, "admin_findFile", txSeq), "admin_findFile")
-	return
+func (c *AdminClient) FindFile(ctx context.Context, txSeq uint64) (int, error) {
+	return providers.CallContext[int](c, ctx, "admin_findFile", txSeq)
 }
 
 // Shutdown Call admin_shutdown to shutdown the node.
-func (c *AdminClient) Shutdown(ctx context.Context) (ret int, err error) {
-	err = c.wrapError(c.CallContext(ctx, &ret, "admin_shutdown"), "admin_shutdown")
-	return
+func (c *AdminClient) Shutdown(ctx context.Context) (int, error) {
+	return providers.CallContext[int](c, ctx, "admin_shutdown")
 }
 
 // StartSyncFile Call admin_startSyncFile to request synchronization of a file.
-func (c *AdminClient) StartSyncFile(ctx context.Context, txSeq uint64) (ret int, err error) {
-	err = c.wrapError(c.CallContext(ctx, &ret, "admin_startSyncFile", txSeq), "admin_startSyncFile")
-	return
+func (c *AdminClient) StartSyncFile(ctx context.Context, txSeq uint64) (int, error) {
+	return providers.CallContext[int](c, ctx, "admin_startSyncFile", txSeq)
 }
 
 // StartSyncChunks Call admin_startSyncChunks to request synchronization of specified chunks.
-func (c *AdminClient) StartSyncChunks(ctx context.Context, txSeq, startIndex, endIndex uint64) (ret int, err error) {
-	err = c.wrapError(c.CallContext(ctx, &ret, "admin_startSyncChunks", txSeq, startIndex, endIndex), "admin_startSyncChunks")
-	return
+func (c *AdminClient) StartSyncChunks(ctx context.Context, txSeq, startIndex, endIndex uint64) (int, error) {
+	return providers.CallContext[int](c, ctx, "admin_startSyncChunks", txSeq, startIndex, endIndex)
 }
 
 // TerminateSync Call admin_terminateSync to terminate a file sync.
-func (c *AdminClient) TerminateSync(ctx context.Context, txSeq uint64) (terminated bool, err error) {
-	err = c.wrapError(c.CallContext(ctx, &terminated, "admin_terminateSync", txSeq), "admin_terminateSync")
-	return
+func (c *AdminClient) TerminateSync(ctx context.Context, txSeq uint64) (bool, error) {
+	return providers.CallContext[bool](c, ctx, "admin_terminateSync", txSeq)
 }
 
 // GetSyncStatus Call admin_getSyncStatus to retrieve the sync status of specified file.
-func (c *AdminClient) GetSyncStatus(ctx context.Context, txSeq uint64) (status string, err error) {
-	err = c.wrapError(c.CallContext(ctx, &status, "admin_getSyncStatus", txSeq), "admin_getSyncStatus")
-	return
+func (c *AdminClient) GetSyncStatus(ctx context.Context, txSeq uint64) (string, error) {
+	return providers.CallContext[string](c, ctx, "admin_getSyncStatus", txSeq)
 }
 
 // GetSyncInfo Call admin_getSyncInfo to retrieve the sync status of specified file or all files.
-func (c *AdminClient) GetSyncInfo(ctx context.Context, tx_seq ...uint64) (files map[uint64]FileSyncInfo, err error) {
+func (c *AdminClient) GetSyncInfo(ctx context.Context, tx_seq ...uint64) (map[uint64]FileSyncInfo, error) {
 	if len(tx_seq) > 0 {
-		err = c.wrapError(c.CallContext(ctx, &files, "admin_getSyncInfo", tx_seq[0]), "admin_getSyncInfo")
-	} else {
-		err = c.wrapError(c.CallContext(ctx, &files, "admin_getSyncInfo"), "admin_getSyncInfo")
+		return providers.CallContext[map[uint64]FileSyncInfo](c, ctx, "admin_getSyncInfo", tx_seq[0])
 	}
 
-	return
+	return providers.CallContext[map[uint64]FileSyncInfo](c, ctx, "admin_getSyncInfo")
 }
 
 // GetNetworkInfo Call admin_getNetworkInfo to retrieve the network information.
-func (c *AdminClient) GetNetworkInfo(ctx context.Context) (info NetworkInfo, err error) {
-	err = c.wrapError(c.CallContext(ctx, &info, "admin_getNetworkInfo"), "admin_getNetworkInfo")
-	return
+func (c *AdminClient) GetNetworkInfo(ctx context.Context) (NetworkInfo, error) {
+	return providers.CallContext[NetworkInfo](c, ctx, "admin_getNetworkInfo")
 }
 
 // GetPeers Call admin_getPeers to retrieve all discovered network peers.
-func (c *AdminClient) GetPeers(ctx context.Context) (peers map[string]*PeerInfo, err error) {
-	err = c.wrapError(c.CallContext(ctx, &peers, "admin_getPeers"), "admin_getPeers")
-	return
+func (c *AdminClient) GetPeers(ctx context.Context) (map[string]*PeerInfo, error) {
+	return providers.CallContext[map[string]*PeerInfo](c, ctx, "admin_getPeers")
 }
 
-// getFileLocation Get file location
-func (c *AdminClient) GetFileLocation(ctx context.Context, txSeq uint64, allShards bool) (locations []LocationInfo, err error) {
-	err = c.wrapError(c.CallContext(ctx, &locations, "admin_getFileLocation", txSeq, allShards), "admin_getFileLocation")
-	return
+// GetFileLocation Get file location
+func (c *AdminClient) GetFileLocation(ctx context.Context, txSeq uint64, allShards bool) ([]LocationInfo, error) {
+	return providers.CallContext[[]LocationInfo](c, ctx, "admin_getFileLocation", txSeq, allShards)
 }

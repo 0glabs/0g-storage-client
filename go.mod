@@ -11,7 +11,7 @@ require (
 	github.com/google/btree v1.1.2
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/mcuadros/go-defaults v1.2.0
-	github.com/openweb3/go-rpc-provider v0.3.3
+	github.com/openweb3/go-rpc-provider v0.3.4
 	github.com/openweb3/web3go v0.2.9
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.9.3
