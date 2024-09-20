@@ -257,6 +257,8 @@ github.com/openweb3/go-ethereum-hdwallet v0.1.0 h1:q1W82vIw5QVrotnzgowu63AqcO/ER
 github.com/openweb3/go-ethereum-hdwallet v0.1.0/go.mod h1:ISDWwl+xpbvGbAfsZKfvW+LjHGjPzmdJQXbwi/ckzUE=
 github.com/openweb3/go-rpc-provider v0.3.3 h1:aNelA69cJ9pk9lo7Z8ukYz/qPyZUGNU3IF1600A8riI=
 github.com/openweb3/go-rpc-provider v0.3.3/go.mod h1:jUDuGZDP5eoN3iS7ZG3qg/aRAzL9ncUMkJ/R85X4s+w=
+github.com/openweb3/go-rpc-provider v0.3.4 h1:0ub6PJkTxKlgvU/yODLMTVbaSS4fMXtpXhcxDgBvwuQ=
+github.com/openweb3/go-rpc-provider v0.3.4/go.mod h1:jUDuGZDP5eoN3iS7ZG3qg/aRAzL9ncUMkJ/R85X4s+w=
 github.com/openweb3/go-sdk-common v0.0.0-20240627072707-f78f0155ab34 h1:qLelmviLGRleOB6A8ssljatvs6K6n1BMd3PNeozNq/E=
 github.com/openweb3/go-sdk-common v0.0.0-20240627072707-f78f0155ab34/go.mod h1:YMfzbYeq1G7s6nRjcFAgYSA/Uqy5+Aa1UvL0Rbnc290=
 github.com/openweb3/web3go v0.2.9 h1:RjCYVr3oBUeuPtX3Cwzz3pjg6qn91Ut3VuO/Li/XOeg=

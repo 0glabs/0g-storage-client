@@ -60,17 +60,17 @@ func NewClient(url string, option ...IndexerClientOption) (*Client, error) {
 
 // GetShardedNodes get node list from indexer service
 func (c *Client) GetShardedNodes(ctx context.Context) (ShardedNodes, error) {
-	return rpc.CallContext[ShardedNodes](c, ctx, "indexer_getShardedNodes")
+	return providers.CallContext[ShardedNodes](c, ctx, "indexer_getShardedNodes")
 }
 
 // GetNodeLocations return storage nodes with IP location information.
 func (c *Client) GetNodeLocations(ctx context.Context) (map[string]*IPLocation, error) {
-	return rpc.CallContext[map[string]*IPLocation](c, ctx, "indexer_getNodeLocations")
+	return providers.CallContext[map[string]*IPLocation](c, ctx, "indexer_getNodeLocations")
 }
 
 // GetFileLocations return locations info of given file.
 func (c *Client) GetFileLocations(ctx context.Context, root string) ([]*shard.ShardedNode, error) {
-	return rpc.CallContext[[]*shard.ShardedNode](c, ctx, "indexer_getFileLocations", root)
+	return providers.CallContext[[]*shard.ShardedNode](c, ctx, "indexer_getFileLocations", root)
 }
 
 // SelectNodes get node list from indexer service and select a subset of it, which is sufficient to store expected number of replications.

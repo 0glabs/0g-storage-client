@@ -1,9 +1,6 @@
 package rpc
 
 import (
-	"context"
-
-	"github.com/openweb3/go-rpc-provider/interfaces"
 	providers "github.com/openweb3/go-rpc-provider/provider_wrapper"
 )
 
@@ -25,21 +22,10 @@ func NewClient(url string, option ...providers.Option) (*Client, error) {
 		return nil, err
 	}
 
-	return &Client{providers.NewMiddlewarableProvider(provider), url}, nil
+	return &Client{provider, url}, nil
 }
 
 // URL Get the RPC server URL the client connected to.
 func (c *Client) URL() string {
 	return c.url
-}
-
-// Call is a generic method to call RPC.
-func Call[T any](provider interfaces.Provider, method string, args ...any) (result T, err error) {
-	return CallContext[T](provider, context.Background(), method, args...)
-}
-
-// CallContext is a generic method to call RPC with context.
-func CallContext[T any](provider interfaces.Provider, ctx context.Context, method string, args ...any) (result T, err error) {
-	err = provider.CallContext(ctx, &result, method, args...)
-	return
 }

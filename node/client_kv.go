@@ -3,7 +3,6 @@ package node
 import (
 	"context"
 
-	"github.com/0glabs/0g-storage-client/common/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	providers "github.com/openweb3/go-rpc-provider/provider_wrapper"
 	"github.com/sirupsen/logrus"
@@ -40,7 +39,7 @@ func (c *KvClient) GetValue(ctx context.Context, streamId common.Hash, key []byt
 	if len(version) > 0 {
 		args = append(args, version[0])
 	}
-	return rpc.CallContext[*Value](c, ctx, "kv_getValue", args...)
+	return providers.CallContext[*Value](c, ctx, "kv_getValue", args...)
 }
 
 // GetNext Call kv_getNext RPC to query the next key of a given key.
@@ -49,7 +48,7 @@ func (c *KvClient) GetNext(ctx context.Context, streamId common.Hash, key []byte
 	if len(version) > 0 {
 		args = append(args, version[0])
 	}
-	return rpc.CallContext[*KeyValue](c, ctx, "kv_getNext", args...)
+	return providers.CallContext[*KeyValue](c, ctx, "kv_getNext", args...)
 }
 
 // GetPrev Call kv_getNext RPC to query the prev key of a given key.
@@ -58,7 +57,7 @@ func (c *KvClient) GetPrev(ctx context.Context, streamId common.Hash, key []byte
 	if len(version) > 0 {
 		args = append(args, version[0])
 	}
-	return rpc.CallContext[*KeyValue](c, ctx, "kv_getPrev", args...)
+	return providers.CallContext[*KeyValue](c, ctx, "kv_getPrev", args...)
 }
 
 // GetFirst Call kv_getFirst RPC to query the first key.
@@ -67,7 +66,7 @@ func (c *KvClient) GetFirst(ctx context.Context, streamId common.Hash, startInde
 	if len(version) > 0 {
 		args = append(args, version[0])
 	}
-	return rpc.CallContext[*KeyValue](c, ctx, "kv_getFirst", args...)
+	return providers.CallContext[*KeyValue](c, ctx, "kv_getFirst", args...)
 }
 
 // GetLast Call kv_getLast RPC to query the last key.
@@ -76,17 +75,17 @@ func (c *KvClient) GetLast(ctx context.Context, streamId common.Hash, startIndex
 	if len(version) > 0 {
 		args = append(args, version[0])
 	}
-	return rpc.CallContext[*KeyValue](c, ctx, "kv_getLast", args...)
+	return providers.CallContext[*KeyValue](c, ctx, "kv_getLast", args...)
 }
 
 // GetTransactionResult Call kv_getTransactionResult RPC to query the kv replay status of a given file.
 func (c *KvClient) GetTransactionResult(ctx context.Context, txSeq uint64) (string, error) {
-	return rpc.CallContext[string](c, ctx, "kv_getTransactionResult", txSeq)
+	return providers.CallContext[string](c, ctx, "kv_getTransactionResult", txSeq)
 }
 
 // GetHoldingStreamIds Call kv_getHoldingStreamIds RPC to query the stream ids monitered by the kv node.
 func (c *KvClient) GetHoldingStreamIds(ctx context.Context) ([]common.Hash, error) {
-	return rpc.CallContext[[]common.Hash](c, ctx, "kv_getHoldingStreamIds")
+	return providers.CallContext[[]common.Hash](c, ctx, "kv_getHoldingStreamIds")
 }
 
 // HasWritePermission Call kv_hasWritePermission RPC to check if the account is able to write the stream.
@@ -95,7 +94,7 @@ func (c *KvClient) HasWritePermission(ctx context.Context, account common.Addres
 	if len(version) > 0 {
 		args = append(args, version[0])
 	}
-	return rpc.CallContext[bool](c, ctx, "kv_hasWritePermission", args...)
+	return providers.CallContext[bool](c, ctx, "kv_hasWritePermission", args...)
 }
 
 // IsAdmin Call kv_isAdmin RPC to check if the account is the admin of the stream.
@@ -104,7 +103,7 @@ func (c *KvClient) IsAdmin(ctx context.Context, account common.Address, streamId
 	if len(version) > 0 {
 		args = append(args, version[0])
 	}
-	return rpc.CallContext[bool](c, ctx, "kv_isAdmin", args...)
+	return providers.CallContext[bool](c, ctx, "kv_isAdmin", args...)
 }
 
 // IsSpecialKey Call kv_isSpecialKey RPC to check if the key has unique access control.
@@ -113,7 +112,7 @@ func (c *KvClient) IsSpecialKey(ctx context.Context, streamId common.Hash, key [
 	if len(version) > 0 {
 		args = append(args, version[0])
 	}
-	return rpc.CallContext[bool](c, ctx, "kv_isSpecialKey", args...)
+	return providers.CallContext[bool](c, ctx, "kv_isSpecialKey", args...)
 }
 
 // IsWriterOfKey Call kv_isWriterOfKey RPC to check if the account can write the special key.
@@ -122,7 +121,7 @@ func (c *KvClient) IsWriterOfKey(ctx context.Context, account common.Address, st
 	if len(version) > 0 {
 		args = append(args, version[0])
 	}
-	return rpc.CallContext[bool](c, ctx, "kv_isWriterOfKey", args...)
+	return providers.CallContext[bool](c, ctx, "kv_isWriterOfKey", args...)
 }
 
 // IsWriterOfStream Call kv_isWriterOfStream RPC to check if the account is the writer of the stream.
@@ -131,5 +130,5 @@ func (c *KvClient) IsWriterOfStream(ctx context.Context, account common.Address,
 	if len(version) > 0 {
 		args = append(args, version[0])
 	}
-	return rpc.CallContext[bool](c, ctx, "kv_isWriterOfStream", args...)
+	return providers.CallContext[bool](c, ctx, "kv_isWriterOfStream", args...)
 }
