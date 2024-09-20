@@ -36,9 +36,22 @@ const defaultTaskSize = uint(10)
 
 var dataAlreadyExistsError = "Invalid params: root; data: already uploaded and finalized"
 var segmentAlreadyExistsError = "segment has already been uploaded or is being uploaded"
+var tooManyDataError = "too many data writing"
+var tooManyDataRetries = 12
 
 func isDuplicateError(msg string) bool {
 	return strings.Contains(msg, dataAlreadyExistsError) || strings.Contains(msg, segmentAlreadyExistsError)
+}
+
+func isTooManyDataError(msg string) bool {
+	return strings.Contains(msg, tooManyDataError)
+}
+
+var submitLogEntryRetries = 12
+var specifiedBlockError = "Specified block header does not exist"
+
+func isRetriableSubmitLogEntryError(msg string) bool {
+	return strings.Contains(msg, specifiedBlockError)
 }
 
 type FinalityRequirement uint
@@ -450,7 +463,16 @@ func (uploader *Uploader) SubmitLogEntry(ctx context.Context, datas []core.Itera
 			opts.Value = submissions[0].Fee(pricePerSector)
 		}
 		uploader.logger.WithField("fee(neuron)", opts.Value).Info("submit with fee")
-		tx, err = uploader.flow.Submit(opts, submissions[0])
+		for attempt := 0; attempt < submitLogEntryRetries; attempt++ {
+			tx, err = uploader.flow.Submit(opts, submissions[0])
+			if err == nil || isRetriableSubmitLogEntryError(err.Error()) || attempt >= submitLogEntryRetries-1 {
+				break
+			}
+			uploader.logger.WithFields(logrus.Fields{
+				"error":   err,
+				"attempt": attempt,
+			}).Warn("Failed to submit, retrying...")
+		}
 	} else {
 		if fee != nil {
 			opts.Value = fee
@@ -461,7 +483,16 @@ func (uploader *Uploader) SubmitLogEntry(ctx context.Context, datas []core.Itera
 			}
 		}
 		uploader.logger.WithField("fee(neuron)", opts.Value).Info("batch submit with fee")
-		tx, err = uploader.flow.BatchSubmit(opts, submissions)
+		for attempt := 0; attempt < submitLogEntryRetries; attempt++ {
+			tx, err = uploader.flow.BatchSubmit(opts, submissions)
+			if err == nil || isRetriableSubmitLogEntryError(err.Error()) || attempt >= submitLogEntryRetries-1 {
+				break
+			}
+			uploader.logger.WithFields(logrus.Fields{
+				"error":   err,
+				"attempt": attempt,
+			}).Warn("Failed to submit, retrying...")
+		}
 	}
 	if err != nil {
 		return common.Hash{}, nil, errors.WithMessage(err, "Failed to send transaction to append log entry")
