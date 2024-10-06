@@ -140,10 +140,10 @@ func NewUploader(ctx context.Context, w3Client *web3go.Client, clients []*node.Z
 	return uploader, nil
 }
 
-func (uploader *Uploader) checkLogExistance(ctx context.Context, root common.Hash) (*node.FileInfo, error) {
+func checkLogExistance(ctx context.Context, clients []*node.ZgsClient, root common.Hash) (*node.FileInfo, error) {
 	var info *node.FileInfo
 	var err error
-	for _, client := range uploader.clients {
+	for _, client := range clients {
 		info, err = client.GetFileInfo(ctx, root)
 		if err != nil {
 			return nil, err
@@ -216,7 +216,7 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 			dataRoots[i] = trees[i].Root()
 
 			// Check existance
-			info, err := uploader.checkLogExistance(ctx, trees[i].Root())
+			info, err := checkLogExistance(ctx, uploader.clients, trees[i].Root())
 			if err != nil {
 				errs <- errors.WithMessage(err, "Failed to check if skipped log entry available on storage node")
 				return
@@ -324,7 +324,7 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 	uploader.logger.WithField("root", tree.Root()).Info("Data merkle root calculated")
 
 	// Check existance
-	info, err := uploader.checkLogExistance(ctx, tree.Root())
+	info, err := checkLogExistance(ctx, uploader.clients, tree.Root())
 	if err != nil {
 		return common.Hash{}, errors.WithMessage(err, "Failed to check if skipped log entry available on storage node")
 	}

@@ -59,7 +59,7 @@ func (downloader *Downloader) Download(ctx context.Context, root, filename strin
 	}
 
 	// Download segments
-	if err = downloader.downloadFile(ctx, filename, hash, int64(info.Tx.Size), withProof); err != nil {
+	if err = downloader.downloadFile(ctx, filename, hash, info, withProof); err != nil {
 		return errors.WithMessage(err, "Failed to download file")
 	}
 
@@ -113,8 +113,8 @@ func (downloader *Downloader) checkExistence(filename string, hash common.Hash) 
 	return errors.New("File already exists with different hash")
 }
 
-func (downloader *Downloader) downloadFile(ctx context.Context, filename string, root common.Hash, size int64, withProof bool) error {
-	file, err := download.CreateDownloadingFile(filename, root, size)
+func (downloader *Downloader) downloadFile(ctx context.Context, filename string, root common.Hash, info *node.FileInfo, withProof bool) error {
+	file, err := download.CreateDownloadingFile(filename, root, int64(info.Tx.Size))
 	if err != nil {
 		return errors.WithMessage(err, "Failed to create downloading file")
 	}
@@ -127,7 +127,7 @@ func (downloader *Downloader) downloadFile(ctx context.Context, filename string,
 		return err
 	}
 
-	sd, err := newSegmentDownloader(downloader.clients, shardConfigs, file, withProof, downloader.logger)
+	sd, err := newSegmentDownloader(downloader.clients, info, shardConfigs, file, withProof, downloader.logger)
 	if err != nil {
 		return errors.WithMessage(err, "Failed to create segment downloader")
 	}

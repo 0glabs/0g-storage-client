@@ -69,7 +69,6 @@ func (uploader *segmentUploader) getSegment(segIndex uint64) (bool, *node.Segmen
 
 // ParallelDo implements parallel.Interface.
 func (uploader *segmentUploader) ParallelDo(ctx context.Context, routine int, task int) (interface{}, error) {
-
 	numSegments := uploader.data.NumSegments()
 	uploadTask := uploader.tasks[task]
 	segIndex := uploadTask.segIndex
@@ -81,14 +80,18 @@ func (uploader *segmentUploader) ParallelDo(ctx context.Context, routine int, ta
 		if err != nil {
 			return nil, err
 		}
-		segments = append(segments, *segWithProof)
+		if segWithProof != nil {
+			segments = append(segments, *segWithProof)
+		}
 	}
 	for i := 0; i < int(uploader.taskSize); i++ {
-		allDataUploaded, segWithProof, err := uploader.getSegment(segIndex - 1)
+		allDataUploaded, segWithProof, err := uploader.getSegment(segIndex)
 		if err != nil {
 			return nil, err
 		}
-		segments = append(segments, *segWithProof)
+		if segWithProof != nil {
+			segments = append(segments, *segWithProof)
+		}
 		if allDataUploaded {
 			break
 		}
@@ -116,7 +119,7 @@ func (uploader *segmentUploader) ParallelDo(ctx context.Context, routine int, ta
 			"to_seg_index":   segIndex,
 			"step":           uploadTask.numShard,
 			"root":           core.SegmentRoot(segments[0].Data),
-			"to_node":        uploader.clients[uploadTask.clientIndex],
+			"to_node":        uploader.clients[uploadTask.clientIndex].URL(),
 		}).Debug("Segments uploaded")
 	}
 	return nil, nil

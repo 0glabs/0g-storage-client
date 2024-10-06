@@ -40,30 +40,24 @@ class FileUploadDownloadTest(TestFramework):
             1023,
             1024,
             1025,
+            256 * 960,
             256 * 1023,
             256 * 1024,
             256 * 1025,
             256 * 2048,
             256 * 16385,
             256 * 1024 * 64,
-            2,
-            255,
-            256,
-            257,
-            1023,
-            1024,
-            1025,
-            256 * 1023,
-            256 * 1024,
-            256 * 1025,
-            256 * 2048,
-            256 * 16385,
-            256 * 1024 * 64,
+            256 * 480,
+            256 * 1024 * 10,
+            1000,
+            256 * 960,
+            256 * 100,
+            256 * 960,
         ]
 
         for i, v in enumerate(data_size):
             self.__test_upload_download_file(
-                v, i + 1, False if v >= 256 * 1024 * 64 else True
+                v, i + 1, True
             )
 
     def __test_upload_download_file(self, size, submission_index, rand_data=True):

@@ -19,35 +19,45 @@ type segmentDownloader struct {
 	shardConfigs []*shard.ShardConfig
 	file         *download.DownloadingFile
 
+	startSegmentIndex  uint64
+	endSegmentIndex    uint64
+	firstSegmentOffset uint64
+
+	offset uint64
+
 	withProof bool
 
-	segmentOffset uint64
-	numChunks     uint64
-	numSegments   uint64
+	numChunks uint64
 
 	logger *logrus.Logger
 }
 
 var _ parallel.Interface = (*segmentDownloader)(nil)
 
-func newSegmentDownloader(clients []*node.ZgsClient, shardConfigs []*shard.ShardConfig, file *download.DownloadingFile, withProof bool, logger *logrus.Logger) (*segmentDownloader, error) {
-	offset := file.Metadata().Offset
-	if offset%core.DefaultSegmentSize > 0 {
-		return nil, errors.Errorf("Invalid data offset in downloading file %v", offset)
-	}
+func newSegmentDownloader(clients []*node.ZgsClient, info *node.FileInfo, shardConfigs []*shard.ShardConfig, file *download.DownloadingFile, withProof bool, logger *logrus.Logger) (*segmentDownloader, error) {
+	startSegmentIndex := info.Tx.StartEntryIndex / core.DefaultSegmentMaxChunks
+	endSegmentIndex := (info.Tx.StartEntryIndex + core.NumSplits(int64(info.Tx.Size), core.DefaultChunkSize) - 1) / core.DefaultSegmentMaxChunks
+	firstSegmentOffset := info.Tx.StartEntryIndex % core.DefaultSegmentMaxChunks
 
-	fileSize := file.Metadata().Size
+	offset := file.Metadata().Offset / core.DefaultSegmentSize
+	if offset > 0 {
+		offset -= 1
+	}
 
 	return &segmentDownloader{
 		clients:      clients,
 		shardConfigs: shardConfigs,
 		file:         file,
 
+		startSegmentIndex:  startSegmentIndex,
+		endSegmentIndex:    endSegmentIndex,
+		firstSegmentOffset: firstSegmentOffset,
+
+		offset: uint64(offset),
+
 		withProof: withProof,
 
-		segmentOffset: uint64(offset / core.DefaultSegmentSize),
-		numChunks:     core.NumSplits(fileSize, core.DefaultChunkSize),
-		numSegments:   core.NumSplits(fileSize, core.DefaultSegmentSize),
+		numChunks: core.NumSplits(int64(info.Tx.Size), core.DefaultChunkSize),
 
 		logger: logger,
 	}, nil
@@ -55,16 +65,21 @@ func newSegmentDownloader(clients []*node.ZgsClient, shardConfigs []*shard.Shard
 
 // Download downloads segments in parallel.
 func (downloader *segmentDownloader) Download(ctx context.Context) error {
-	numTasks := downloader.numSegments - downloader.segmentOffset
-
+	numTasks := downloader.endSegmentIndex - downloader.startSegmentIndex + 1 - downloader.offset
 	return parallel.Serial(ctx, downloader, int(numTasks))
 }
 
 // ParallelDo implements the parallel.Interface interface.
 func (downloader *segmentDownloader) ParallelDo(ctx context.Context, routine, task int) (interface{}, error) {
-	segmentIndex := downloader.segmentOffset + uint64(task)
+	segmentIndex := downloader.offset + uint64(task)
 	startIndex := segmentIndex * core.DefaultSegmentMaxChunks
+	if segmentIndex > 0 {
+		startIndex -= downloader.firstSegmentOffset
+	}
 	endIndex := startIndex + core.DefaultSegmentMaxChunks
+	if segmentIndex == 0 {
+		endIndex -= downloader.firstSegmentOffset
+	}
 	if endIndex > downloader.numChunks {
 		endIndex = downloader.numChunks
 	}
@@ -78,7 +93,7 @@ func (downloader *segmentDownloader) ParallelDo(ctx context.Context, routine, ta
 
 	for i := 0; i < len(downloader.shardConfigs); i += 1 {
 		nodeIndex := (routine + i) % len(downloader.shardConfigs)
-		if segmentIndex%downloader.shardConfigs[nodeIndex].NumShard != downloader.shardConfigs[nodeIndex].ShardId {
+		if (downloader.startSegmentIndex+segmentIndex)%downloader.shardConfigs[nodeIndex].NumShard != downloader.shardConfigs[nodeIndex].ShardId {
 			continue
 		}
 		// try download from current node
@@ -91,7 +106,7 @@ func (downloader *segmentDownloader) ParallelDo(ctx context.Context, routine, ta
 		if err != nil {
 			downloader.logger.WithError(err).WithFields(logrus.Fields{
 				"node index": nodeIndex,
-				"segment":    fmt.Sprintf("%v/%v", segmentIndex, downloader.numSegments),
+				"segment":    fmt.Sprintf("%v/(%v-%v)", downloader.startSegmentIndex+segmentIndex, downloader.startSegmentIndex, downloader.endSegmentIndex),
 				"chunks":     fmt.Sprintf("[%v, %v)", startIndex, endIndex),
 			}).Error("Failed to download segment")
 			continue
@@ -99,7 +114,7 @@ func (downloader *segmentDownloader) ParallelDo(ctx context.Context, routine, ta
 		if segment == nil {
 			downloader.logger.WithFields(logrus.Fields{
 				"node index": nodeIndex,
-				"segment":    fmt.Sprintf("%v/%v", segmentIndex, downloader.numSegments),
+				"segment":    fmt.Sprintf("%v/(%v-%v)", downloader.startSegmentIndex+segmentIndex, downloader.startSegmentIndex, downloader.endSegmentIndex),
 				"chunks":     fmt.Sprintf("[%v, %v)", startIndex, endIndex),
 			}).Warn("segment not found")
 			continue
@@ -107,21 +122,21 @@ func (downloader *segmentDownloader) ParallelDo(ctx context.Context, routine, ta
 		if len(segment)%core.DefaultChunkSize != 0 {
 			downloader.logger.WithFields(logrus.Fields{
 				"node index": nodeIndex,
-				"segment":    fmt.Sprintf("%v/%v", segmentIndex, downloader.numSegments),
+				"segment":    fmt.Sprintf("%v/(%v-%v)", downloader.startSegmentIndex+segmentIndex, downloader.startSegmentIndex, downloader.endSegmentIndex),
 				"chunks":     fmt.Sprintf("[%v, %v)", startIndex, endIndex),
 			}).Warn("invalid segment length")
 			continue
 		}
-		if downloader.logger.IsLevelEnabled(logrus.TraceLevel) {
+		if downloader.logger.IsLevelEnabled(logrus.DebugLevel) {
 			downloader.logger.WithFields(logrus.Fields{
 				"node index": nodeIndex,
-				"segment":    fmt.Sprintf("%v/%v", segmentIndex, downloader.numSegments),
+				"segment":    fmt.Sprintf("%v/(%v-%v)", downloader.startSegmentIndex+segmentIndex, downloader.startSegmentIndex, downloader.endSegmentIndex),
 				"chunks":     fmt.Sprintf("[%v, %v)", startIndex, endIndex),
-			}).Trace("Succeeded to download segment")
+			}).Debug("Succeeded to download segment")
 		}
 
 		// remove paddings for the last chunk
-		if segmentIndex == downloader.numSegments-1 {
+		if downloader.startSegmentIndex+segmentIndex == downloader.endSegmentIndex {
 			fileSize := downloader.file.Metadata().Size
 			if lastChunkSize := fileSize % core.DefaultChunkSize; lastChunkSize > 0 {
 				paddings := core.DefaultChunkSize - lastChunkSize
