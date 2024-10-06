@@ -24,6 +24,7 @@ type segmentUploader struct {
 	clients  []*node.ZgsClient
 	tasks    []*uploadTask
 	taskSize uint
+	aligned  bool
 	logger   *logrus.Logger
 }
 
@@ -34,43 +35,60 @@ func (uploader *segmentUploader) ParallelCollect(result *parallel.Result) error 
 	return nil
 }
 
+func (uploader *segmentUploader) getSegment(segIndex uint64) (bool, *node.SegmentWithProof, error) {
+	numChunks := uploader.data.NumChunks()
+	// check segment index
+	startIndex := segIndex * core.DefaultSegmentMaxChunks
+	allDataUploaded := false
+	if startIndex >= numChunks {
+		// file real data already uploaded
+		return true, nil, nil
+	}
+	// get segment
+	segment, err := core.ReadAt(uploader.data, core.DefaultSegmentSize, int64(segIndex*core.DefaultSegmentSize), uploader.data.PaddedSize())
+	if err != nil {
+		return false, nil, err
+	}
+	if startIndex+uint64(len(segment))/core.DefaultChunkSize >= numChunks {
+		// last segment has real data
+		expectedLen := core.DefaultChunkSize * int(numChunks-startIndex)
+		segment = segment[:expectedLen]
+		allDataUploaded = true
+	}
+	// fill proof
+	proof := uploader.tree.ProofAt(int(segIndex))
+	segWithProof := node.SegmentWithProof{
+		Root:     uploader.tree.Root(),
+		Data:     segment,
+		Index:    segIndex,
+		Proof:    proof,
+		FileSize: uint64(uploader.data.Size()),
+	}
+	return allDataUploaded, &segWithProof, nil
+}
+
 // ParallelDo implements parallel.Interface.
 func (uploader *segmentUploader) ParallelDo(ctx context.Context, routine int, task int) (interface{}, error) {
-	numChunks := uploader.data.NumChunks()
+
 	numSegments := uploader.data.NumSegments()
 	uploadTask := uploader.tasks[task]
 	segIndex := uploadTask.segIndex
 	startSegIndex := segIndex
 	segments := make([]node.SegmentWithProof, 0)
-	for i := 0; i < int(uploader.taskSize); i++ {
-		// check segment index
-		startIndex := segIndex * core.DefaultSegmentMaxChunks
-		allDataUploaded := false
-		if startIndex >= numChunks {
-			// file real data already uploaded
-			break
-		}
-		// get segment
-		segment, err := core.ReadAt(uploader.data, core.DefaultSegmentSize, int64(segIndex*core.DefaultSegmentSize), uploader.data.PaddedSize())
+	// upload segment (segIndex-1) in case the file start entry position is not aligned with SegmentSize in flow
+	if segIndex > 0 && !uploader.aligned {
+		_, segWithProof, err := uploader.getSegment(segIndex - 1)
 		if err != nil {
 			return nil, err
 		}
-		if startIndex+uint64(len(segment))/core.DefaultChunkSize >= numChunks {
-			// last segment has real data
-			expectedLen := core.DefaultChunkSize * int(numChunks-startIndex)
-			segment = segment[:expectedLen]
-			allDataUploaded = true
+		segments = append(segments, *segWithProof)
+	}
+	for i := 0; i < int(uploader.taskSize); i++ {
+		allDataUploaded, segWithProof, err := uploader.getSegment(segIndex - 1)
+		if err != nil {
+			return nil, err
 		}
-		// fill proof
-		proof := uploader.tree.ProofAt(int(segIndex))
-		segWithProof := node.SegmentWithProof{
-			Root:     uploader.tree.Root(),
-			Data:     segment,
-			Index:    segIndex,
-			Proof:    proof,
-			FileSize: uint64(uploader.data.Size()),
-		}
-		segments = append(segments, segWithProof)
+		segments = append(segments, *segWithProof)
 		if allDataUploaded {
 			break
 		}
@@ -98,6 +116,7 @@ func (uploader *segmentUploader) ParallelDo(ctx context.Context, routine int, ta
 			"to_seg_index":   segIndex,
 			"step":           uploadTask.numShard,
 			"root":           core.SegmentRoot(segments[0].Data),
+			"to_node":        uploader.clients[uploadTask.clientIndex],
 		}).Debug("Segments uploaded")
 	}
 	return nil, nil

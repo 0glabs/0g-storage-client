@@ -105,7 +105,7 @@ func (c *Client) SelectNodes(ctx context.Context, segNum uint64, expectedReplica
 		})
 	}
 	// randomly select proper subset
-	trusted, ok := shard.Select(segNum, nodes, expectedReplica, true)
+	trusted, ok := shard.Select(nodes, expectedReplica, true)
 	if !ok {
 		return nil, fmt.Errorf("cannot select a subset from the returned nodes that meets the replication requirement")
 	}

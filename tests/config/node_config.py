@@ -5,13 +5,41 @@ ZGS_CONFIG = {
     "confirmation_block_count": 1,
     "router": {
         "private_ip_enabled": True,
+    },
+    "sync": {
+        "heartbeat_interval": "1s",
+        "peer_connect_timeout": "3s",
+        "peer_disconnect_timeout": "3s",
+        "peer_find_timeout": "3s",
+        "peer_chunks_download_timeout": "3s",
+        "auto_sync_idle_interval": "1s",
+        "sequential_find_peer_timeout": "10s",
+        "random_find_peer_timeout": "10s",
     }
 }
 
-KV_CONFIG = {
-    "log_config_file": "log_config",
-    "confirmation_block_count": 1,
-}
+BSC_CONFIG = dict(
+    NetworkId=1000,
+    HTTPPort=8545,
+    HTTPHost="127.0.0.1",
+    Etherbase="0x7df9a875a174b3bc565e6424a0050ebc1b2d1d82",
+    DataDir="test/local_ethereum_blockchain/node1",
+    Port=30303,
+    Verbosity=5,
+)
+
+CONFLUX_CONFIG = dict(
+    mode="dev",
+    chain_id=10,
+    jsonrpc_http_eth_port=8545,
+    tcp_port=32323,
+    log_level="debug",
+    log_file="./conflux.log",
+    public_address="127.0.0.1",
+    poll_lifetime_in_seconds=60,
+    dev_allow_phase_change_without_peer="true",
+    dev_block_interval_ms=200,
+)
 
 BLOCK_SIZE_LIMIT = 200 * 1024
 # 0xfbe45681Ac6C53D5a40475F7526baC1FE7590fb8
@@ -35,3 +63,19 @@ TX_PARAMS1 = {
 
 NO_SEAL_FLAG = 0x1
 NO_MERKLE_PROOF_FLAG = 0x2
+
+KV_CONFIG = {
+    "log_config_file": "log_config",
+    "confirmation_block_count": 1,
+}
+
+
+def update_config(default: dict, custom: dict):
+    """
+    Supports to update configurations with dict value.
+    """
+    for (key, value) in custom.items():
+        if default.get(key) is None or type(value) != dict:
+            default[key] = value
+        else:
+            update_config(default[key], value)

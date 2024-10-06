@@ -146,6 +146,7 @@ class TestFramework:
                 updated_config,
                 self.contract.address(),
                 self.mine_contract.address(),
+                self.reward_contract.address(),
                 self.log,
             )
             self.nodes.append(node)
