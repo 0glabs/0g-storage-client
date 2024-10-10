@@ -18,10 +18,10 @@ type segmentDownloader struct {
 	clients      []*node.ZgsClient
 	shardConfigs []*shard.ShardConfig
 	file         *download.DownloadingFile
+	txSeq        uint64
 
-	startSegmentIndex  uint64
-	endSegmentIndex    uint64
-	firstSegmentOffset uint64
+	startSegmentIndex uint64
+	endSegmentIndex   uint64
 
 	offset uint64
 
@@ -37,21 +37,17 @@ var _ parallel.Interface = (*segmentDownloader)(nil)
 func newSegmentDownloader(clients []*node.ZgsClient, info *node.FileInfo, shardConfigs []*shard.ShardConfig, file *download.DownloadingFile, withProof bool, logger *logrus.Logger) (*segmentDownloader, error) {
 	startSegmentIndex := info.Tx.StartEntryIndex / core.DefaultSegmentMaxChunks
 	endSegmentIndex := (info.Tx.StartEntryIndex + core.NumSplits(int64(info.Tx.Size), core.DefaultChunkSize) - 1) / core.DefaultSegmentMaxChunks
-	firstSegmentOffset := info.Tx.StartEntryIndex % core.DefaultSegmentMaxChunks
 
 	offset := file.Metadata().Offset / core.DefaultSegmentSize
-	if offset > 0 {
-		offset -= 1
-	}
 
 	return &segmentDownloader{
 		clients:      clients,
 		shardConfigs: shardConfigs,
 		file:         file,
+		txSeq:        info.Tx.Seq,
 
-		startSegmentIndex:  startSegmentIndex,
-		endSegmentIndex:    endSegmentIndex,
-		firstSegmentOffset: firstSegmentOffset,
+		startSegmentIndex: startSegmentIndex,
+		endSegmentIndex:   endSegmentIndex,
 
 		offset: uint64(offset),
 
@@ -72,14 +68,9 @@ func (downloader *segmentDownloader) Download(ctx context.Context) error {
 // ParallelDo implements the parallel.Interface interface.
 func (downloader *segmentDownloader) ParallelDo(ctx context.Context, routine, task int) (interface{}, error) {
 	segmentIndex := downloader.offset + uint64(task)
+	// there is no not-aligned & segment-crossed file
 	startIndex := segmentIndex * core.DefaultSegmentMaxChunks
-	if segmentIndex > 0 {
-		startIndex -= downloader.firstSegmentOffset
-	}
 	endIndex := startIndex + core.DefaultSegmentMaxChunks
-	if segmentIndex == 0 {
-		endIndex -= downloader.firstSegmentOffset
-	}
 	if endIndex > downloader.numChunks {
 		endIndex = downloader.numChunks
 	}
@@ -98,9 +89,9 @@ func (downloader *segmentDownloader) ParallelDo(ctx context.Context, routine, ta
 		}
 		// try download from current node
 		if downloader.withProof {
-			segment, err = downloader.downloadWithProof(ctx, downloader.clients[nodeIndex], root, startIndex, endIndex)
+			segment, err = downloader.downloadWithProof(ctx, downloader.clients[nodeIndex], downloader.txSeq, root, startIndex, endIndex)
 		} else {
-			segment, err = downloader.clients[nodeIndex].DownloadSegment(ctx, root, startIndex, endIndex)
+			segment, err = downloader.clients[nodeIndex].DownloadSegmentByTxSeq(ctx, downloader.txSeq, startIndex, endIndex)
 		}
 
 		if err != nil {
@@ -153,10 +144,10 @@ func (downloader *segmentDownloader) ParallelCollect(result *parallel.Result) er
 	return downloader.file.Write(result.Value.([]byte))
 }
 
-func (downloader *segmentDownloader) downloadWithProof(ctx context.Context, client *node.ZgsClient, root common.Hash, startIndex, endIndex uint64) ([]byte, error) {
+func (downloader *segmentDownloader) downloadWithProof(ctx context.Context, client *node.ZgsClient, txSeq uint64, root common.Hash, startIndex, endIndex uint64) ([]byte, error) {
 	segmentIndex := startIndex / core.DefaultSegmentMaxChunks
 
-	segment, err := client.DownloadSegmentWithProof(ctx, root, segmentIndex)
+	segment, err := client.DownloadSegmentWithProofByTxSeq(ctx, txSeq, segmentIndex)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to download segment with proof from storage node")
 	}

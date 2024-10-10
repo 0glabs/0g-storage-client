@@ -606,10 +606,10 @@ func (uploader *Uploader) newSegmentUploader(ctx context.Context, info *node.Fil
 	return &segmentUploader{
 		data:     data,
 		tree:     tree,
+		txSeq:    info.Tx.Seq,
 		clients:  uploader.clients,
 		tasks:    tasks,
 		taskSize: taskSize,
-		aligned:  info.Tx.StartEntryIndex%core.DefaultSegmentMaxChunks == 0,
 		logger:   uploader.logger,
 	}, nil
 }

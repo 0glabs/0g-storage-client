@@ -21,10 +21,10 @@ type uploadTask struct {
 type segmentUploader struct {
 	data     core.IterableData
 	tree     *merkle.Tree
+	txSeq    uint64
 	clients  []*node.ZgsClient
 	tasks    []*uploadTask
 	taskSize uint
-	aligned  bool
 	logger   *logrus.Logger
 }
 
@@ -74,16 +74,6 @@ func (uploader *segmentUploader) ParallelDo(ctx context.Context, routine int, ta
 	segIndex := uploadTask.segIndex
 	startSegIndex := segIndex
 	segments := make([]node.SegmentWithProof, 0)
-	// upload segment (segIndex-1) in case the file start entry position is not aligned with SegmentSize in flow
-	if segIndex > 0 && !uploader.aligned {
-		_, segWithProof, err := uploader.getSegment(segIndex - 1)
-		if err != nil {
-			return nil, err
-		}
-		if segWithProof != nil {
-			segments = append(segments, *segWithProof)
-		}
-	}
 	for i := 0; i < int(uploader.taskSize); i++ {
 		allDataUploaded, segWithProof, err := uploader.getSegment(segIndex)
 		if err != nil {
@@ -99,7 +89,7 @@ func (uploader *segmentUploader) ParallelDo(ctx context.Context, routine int, ta
 	}
 
 	for i := 0; i < tooManyDataRetries; i++ {
-		_, err := uploader.clients[uploadTask.clientIndex].UploadSegments(ctx, segments)
+		_, err := uploader.clients[uploadTask.clientIndex].UploadSegmentsByTxSeq(ctx, segments, uploader.txSeq)
 		if err == nil || isDuplicateError(err.Error()) {
 			break
 		}
