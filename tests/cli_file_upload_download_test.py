@@ -85,7 +85,8 @@ class FileUploadDownloadTest(TestFramework):
             wait_until(lambda: client.zgs_get_file_info(root) is not None)
             wait_until(lambda: client.zgs_get_file_info(root)["finalized"])
         
-        self._download_file_use_cli(','.join([x.rpc_url for x in self.nodes]), None, root)
+        self._download_file_use_cli(','.join([x.rpc_url for x in self.nodes]), None, root, with_proof=True)
+        self._download_file_use_cli(','.join([x.rpc_url for x in self.nodes]), None, root, with_proof=False)
 
 if __name__ == "__main__":
     FileUploadDownloadTest().main()
