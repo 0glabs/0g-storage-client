@@ -72,9 +72,19 @@ func (c *ZgsClient) UploadSegment(ctx context.Context, segment SegmentWithProof)
 	return providers.CallContext[int](c, ctx, "zgs_uploadSegment", segment)
 }
 
+// UploadSegmentByTxSeq Call zgs_uploadSegmentByTxSeq RPC to upload a segment to the node.
+func (c *ZgsClient) UploadSegmentByTxSeq(ctx context.Context, segment SegmentWithProof, txSeq uint64) (int, error) {
+	return providers.CallContext[int](c, ctx, "zgs_uploadSegmentByTxSeq", segment, txSeq)
+}
+
 // UploadSegments Call zgs_uploadSegments RPC to upload a slice of segments to the node.
 func (c *ZgsClient) UploadSegments(ctx context.Context, segments []SegmentWithProof) (int, error) {
 	return providers.CallContext[int](c, ctx, "zgs_uploadSegments", segments)
+}
+
+// UploadSegmentsByTxSeq Call zgs_uploadSegmentsByTxSeq RPC to upload a slice of segments to the node.
+func (c *ZgsClient) UploadSegmentsByTxSeq(ctx context.Context, segments []SegmentWithProof, txSeq uint64) (int, error) {
+	return providers.CallContext[int](c, ctx, "zgs_uploadSegmentsByTxSeq", segments, txSeq)
 }
 
 // DownloadSegment Call zgs_downloadSegment RPC to download a segment from the node.
@@ -87,12 +97,32 @@ func (c *ZgsClient) DownloadSegment(ctx context.Context, root common.Hash, start
 	return data, err
 }
 
+// DownloadSegmentByTxSeq Call zgs_downloadSegmentByTxSeq RPC to download a segment from the node.
+func (c *ZgsClient) DownloadSegmentByTxSeq(ctx context.Context, txSeq uint64, startIndex, endIndex uint64) ([]byte, error) {
+	data, err := providers.CallContext[[]byte](c, ctx, "zgs_downloadSegmentByTxSeq", txSeq, startIndex, endIndex)
+	if len(data) == 0 {
+		return nil, err
+	}
+
+	return data, err
+}
+
 // DownloadSegmentWithProof Call zgs_downloadSegmentWithProof RPC to download a segment along with its merkle proof from the node.
 func (c *ZgsClient) DownloadSegmentWithProof(ctx context.Context, root common.Hash, index uint64) (*SegmentWithProof, error) {
 	return providers.CallContext[*SegmentWithProof](c, ctx, "zgs_downloadSegmentWithProof", root, index)
 }
 
+// DownloadSegmentWithProofByTxSeq Call zgs_downloadSegmentWithProofByTxSeq RPC to download a segment along with its merkle proof from the node.
+func (c *ZgsClient) DownloadSegmentWithProofByTxSeq(ctx context.Context, txSeq uint64, index uint64) (*SegmentWithProof, error) {
+	return providers.CallContext[*SegmentWithProof](c, ctx, "zgs_downloadSegmentWithProofByTxSeq", txSeq, index)
+}
+
 // GetShardConfig Call zgs_getShardConfig RPC to get the current shard configuration of the node.
 func (c *ZgsClient) GetShardConfig(ctx context.Context) (shard.ShardConfig, error) {
 	return providers.CallContext[shard.ShardConfig](c, ctx, "zgs_getShardConfig")
+}
+
+// GetSectorProof Call zgs_getSectorProof RPC to get the proof of a sector.
+func (c *ZgsClient) GetSectorProof(ctx context.Context, sectorIndex uint64, root *common.Hash) (FlowProof, error) {
+	return providers.CallContext[FlowProof](c, ctx, "zgs_getSectorProof", sectorIndex, root)
 }

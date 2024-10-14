@@ -59,6 +59,12 @@ type SegmentWithProof struct {
 	FileSize uint64       `json:"fileSize"` // file size
 }
 
+// FlowProof proof of a sector in flow
+type FlowProof struct {
+	Lemma []common.Hash `json:"lemma"`
+	Path  []bool        `json:"path"`
+}
+
 // Value KV value
 type Value struct {
 	Version uint64 `json:"version"` // key version

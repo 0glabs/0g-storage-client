@@ -28,9 +28,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// smallFileSizeThreshold is the maximum file size to upload without log entry available on storage node.
-const smallFileSizeThreshold = int64(256 * 1024)
-
 // defaultTaskSize is the default number of data segments to upload in a single upload RPC request
 const defaultTaskSize = uint(10)
 
@@ -58,8 +55,7 @@ type FinalityRequirement uint
 
 const (
 	FileFinalized     FinalityRequirement = iota // wait for file finalization
-	TransactionPacked                            // wait for transaction receipt, but don't wait for file finalization
-	WaitNothing                                  // wait nothing
+	TransactionPacked                            // wait for transaction packed
 )
 
 // UploadOption upload option for a file
@@ -144,18 +140,20 @@ func NewUploader(ctx context.Context, w3Client *web3go.Client, clients []*node.Z
 	return uploader, nil
 }
 
-func (uploader *Uploader) checkLogExistance(ctx context.Context, root common.Hash) (bool, error) {
-	for _, client := range uploader.clients {
-		info, err := client.GetFileInfo(ctx, root)
+func checkLogExistance(ctx context.Context, clients []*node.ZgsClient, root common.Hash) (*node.FileInfo, error) {
+	var info *node.FileInfo
+	var err error
+	for _, client := range clients {
+		info, err = client.GetFileInfo(ctx, root)
 		if err != nil {
-			return false, err
+			return nil, err
 		}
 		// log entry available
 		if info != nil {
-			return true, nil
+			return info, nil
 		}
 	}
-	return false, nil
+	return info, nil
 }
 
 // BatchUpload submit multiple data to 0g storage contract batchly in single on-chain transaction, then transfer the data to the storage nodes.
@@ -190,11 +188,11 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 	toSubmitDatas := make([]core.IterableData, 0)
 	toSubmitTags := make([][]byte, 0)
 	dataRoots := make([]common.Hash, n)
-	exists := make([]bool, n)
 	var lastTreeToSubmit *merkle.Tree
 
 	var wg sync.WaitGroup
 	errs := make(chan error, opts.TaskSize)
+	fileInfos := make([]*node.FileInfo, n)
 	for i := 0; i < n; i++ {
 		wg.Add(1)
 		go func(i int) {
@@ -218,12 +216,12 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 			dataRoots[i] = trees[i].Root()
 
 			// Check existance
-			exist, err := uploader.checkLogExistance(ctx, trees[i].Root())
+			info, err := checkLogExistance(ctx, uploader.clients, trees[i].Root())
 			if err != nil {
 				errs <- errors.WithMessage(err, "Failed to check if skipped log entry available on storage node")
 				return
 			}
-			exists[i] = exist
+			fileInfos[i] = info
 		}(i)
 		if (i+1)%int(opts.TaskSize) == 0 || i == n-1 {
 			wg.Wait()
@@ -238,7 +236,7 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 	}
 	for i := 0; i < n; i += 1 {
 		opt := opts.DataOptions[i]
-		if !opt.SkipTx || !exists[i] {
+		if !opt.SkipTx || fileInfos[i] == nil {
 			toSubmitDatas = append(toSubmitDatas, datas[i])
 			toSubmitTags = append(toSubmitTags, opt.Tags)
 			lastTreeToSubmit = trees[i]
@@ -253,11 +251,9 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 		if txHash, receipt, err = uploader.SubmitLogEntry(ctx, toSubmitDatas, toSubmitTags, waitForLogEntry, opts.Nonce, opts.Fee); err != nil {
 			return txHash, nil, errors.WithMessage(err, "Failed to submit log entry")
 		}
-		if waitForLogEntry {
-			// Wait for storage node to retrieve log entry from blockchain
-			if err := uploader.waitForLogEntry(ctx, lastTreeToSubmit.Root(), TransactionPacked, receipt); err != nil {
-				return txHash, nil, errors.WithMessage(err, "Failed to check if log entry available on storage node")
-			}
+		// Wait for storage node to retrieve log entry from blockchain
+		if _, err := uploader.waitForLogEntry(ctx, lastTreeToSubmit.Root(), TransactionPacked, receipt); err != nil {
+			return txHash, nil, errors.WithMessage(err, "Failed to check if log entry available on storage node")
 		}
 	}
 
@@ -265,18 +261,25 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
+			info := fileInfos[i]
+			if info == nil {
+				var err error
+				info, err = uploader.waitForLogEntry(ctx, trees[i].Root(), TransactionPacked, receipt)
+				if err != nil {
+					errs <- errors.WithMessage(err, "Failed to get file info from storage node")
+					return
+				}
+			}
 			// Upload file to storage node
-			if err := uploader.uploadFile(ctx, datas[i], trees[i], opts.DataOptions[i].ExpectedReplica, opts.DataOptions[i].TaskSize); err != nil {
+			if err := uploader.uploadFile(ctx, info, datas[i], trees[i], opts.DataOptions[i].ExpectedReplica, opts.DataOptions[i].TaskSize); err != nil {
 				errs <- errors.WithMessage(err, "Failed to upload file")
 				return
 			}
 
-			if waitForLogEntry {
-				// Wait for transaction finality
-				if err := uploader.waitForLogEntry(ctx, trees[i].Root(), opts.DataOptions[i].FinalityRequired, receipt); err != nil {
-					errs <- errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
-					return
-				}
+			// Wait for transaction finality
+			if _, err := uploader.waitForLogEntry(ctx, trees[i].Root(), opts.DataOptions[i].FinalityRequired, receipt); err != nil {
+				errs <- errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
+				return
 			}
 			errs <- nil
 		}(i)
@@ -321,13 +324,13 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 	uploader.logger.WithField("root", tree.Root()).Info("Data merkle root calculated")
 
 	// Check existance
-	exist, err := uploader.checkLogExistance(ctx, tree.Root())
+	info, err := checkLogExistance(ctx, uploader.clients, tree.Root())
 	if err != nil {
 		return common.Hash{}, errors.WithMessage(err, "Failed to check if skipped log entry available on storage node")
 	}
 	txHash := common.Hash{}
 	// Append log on blockchain
-	if !opt.SkipTx || !exist {
+	if !opt.SkipTx || info == nil {
 		var receipt *types.Receipt
 
 		txHash, receipt, err = uploader.SubmitLogEntry(ctx, []core.IterableData{data}, [][]byte{opt.Tags}, opt.FinalityRequired <= TransactionPacked, opt.Nonce, opt.Fee)
@@ -335,26 +338,19 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 			return txHash, errors.WithMessage(err, "Failed to submit log entry")
 		}
 
-		// For small data, could upload file to storage node immediately.
-		// Otherwise, need to wait for log entry available on storage node,
-		// which requires transaction confirmed on blockchain.
-		if data.Size() <= smallFileSizeThreshold {
-			uploader.logger.Info("Upload small data immediately")
-		} else if opt.FinalityRequired <= TransactionPacked {
-			// Wait for storage node to retrieve log entry from blockchain
-			if err = uploader.waitForLogEntry(ctx, tree.Root(), TransactionPacked, receipt); err != nil {
-				return txHash, errors.WithMessage(err, "Failed to check if log entry available on storage node")
-			}
+		// Wait for storage node to retrieve log entry from blockchain
+		info, err = uploader.waitForLogEntry(ctx, tree.Root(), TransactionPacked, receipt)
+		if err != nil {
+			return txHash, errors.WithMessage(err, "Failed to check if log entry available on storage node")
 		}
 	}
-
 	// Upload file to storage node
-	if err := uploader.uploadFile(ctx, data, tree, opt.ExpectedReplica, opt.TaskSize); err != nil {
+	if err := uploader.uploadFile(ctx, info, data, tree, opt.ExpectedReplica, opt.TaskSize); err != nil {
 		return txHash, errors.WithMessage(err, "Failed to upload file")
 	}
 
 	// Wait for transaction finality
-	if err = uploader.waitForLogEntry(ctx, tree.Root(), opt.FinalityRequired, nil); err != nil {
+	if _, err = uploader.waitForLogEntry(ctx, tree.Root(), opt.FinalityRequired, nil); err != nil {
 		return txHash, errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
 	}
 
@@ -511,10 +507,7 @@ func (uploader *Uploader) SubmitLogEntry(ctx context.Context, datas []core.Itera
 }
 
 // Wait for log entry ready on storage node.
-func (uploader *Uploader) waitForLogEntry(ctx context.Context, root common.Hash, finalityRequired FinalityRequirement, receipt *types.Receipt) error {
-	if finalityRequired == WaitNothing {
-		return nil
-	}
+func (uploader *Uploader) waitForLogEntry(ctx context.Context, root common.Hash, finalityRequired FinalityRequirement, receipt *types.Receipt) (*node.FileInfo, error) {
 	uploader.logger.WithFields(logrus.Fields{
 		"root":     root,
 		"finality": finalityRequired,
@@ -522,14 +515,17 @@ func (uploader *Uploader) waitForLogEntry(ctx context.Context, root common.Hash,
 
 	reminder := util.NewReminder(uploader.logger, time.Minute)
 
+	var info *node.FileInfo
+	var err error
+
 	for {
 		time.Sleep(time.Second)
 
 		ok := true
 		for _, client := range uploader.clients {
-			info, err := client.GetFileInfo(ctx, root)
+			info, err = client.GetFileInfo(ctx, root)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			// log entry unavailable yet
 			if info == nil {
@@ -561,18 +557,20 @@ func (uploader *Uploader) waitForLogEntry(ctx context.Context, root common.Hash,
 		}
 	}
 
-	return nil
+	return info, nil
 }
 
-func (uploader *Uploader) newSegmentUploader(ctx context.Context, data core.IterableData, tree *merkle.Tree, expectedReplica uint, taskSize uint) (*segmentUploader, error) {
-	numSegments := data.NumSegments()
+func (uploader *Uploader) newSegmentUploader(ctx context.Context, info *node.FileInfo, data core.IterableData, tree *merkle.Tree, expectedReplica uint, taskSize uint) (*segmentUploader, error) {
 	shardConfigs, err := getShardConfigs(ctx, uploader.clients)
 	if err != nil {
 		return nil, err
 	}
-	if !shard.CheckReplica(numSegments, shardConfigs, expectedReplica) {
+	if !shard.CheckReplica(shardConfigs, expectedReplica) {
 		return nil, fmt.Errorf("selected nodes cannot cover all shards")
 	}
+	// compute index in flow
+	startSegmentIndex := info.Tx.StartEntryIndex / core.DefaultSegmentMaxChunks
+	endSegmentIndex := (info.Tx.StartEntryIndex + core.NumSplits(int64(info.Tx.Size), core.DefaultChunkSize) - 1) / core.DefaultSegmentMaxChunks
 	clientTasks := make([][]*uploadTask, 0)
 	for clientIndex, shardConfig := range shardConfigs {
 		// skip finalized nodes
@@ -581,12 +579,13 @@ func (uploader *Uploader) newSegmentUploader(ctx context.Context, data core.Iter
 			continue
 		}
 		// create upload tasks
-		segIndex := shardConfig.ShardId
+		// segIndex % NumShard = shardId (in flow)
+		segIndex := (startSegmentIndex+shardConfig.NumShard-1-shardConfig.ShardId)/shardConfig.NumShard*shardConfig.NumShard + shardConfig.ShardId
 		tasks := make([]*uploadTask, 0)
-		for ; segIndex < numSegments; segIndex += shardConfig.NumShard * uint64(taskSize) {
+		for ; segIndex <= endSegmentIndex; segIndex += shardConfig.NumShard * uint64(taskSize) {
 			tasks = append(tasks, &uploadTask{
 				clientIndex: clientIndex,
-				segIndex:    segIndex,
+				segIndex:    segIndex - startSegmentIndex,
 				numShard:    shardConfig.NumShard,
 			})
 		}
@@ -607,6 +606,7 @@ func (uploader *Uploader) newSegmentUploader(ctx context.Context, data core.Iter
 	return &segmentUploader{
 		data:     data,
 		tree:     tree,
+		txSeq:    info.Tx.Seq,
 		clients:  uploader.clients,
 		tasks:    tasks,
 		taskSize: taskSize,
@@ -614,7 +614,7 @@ func (uploader *Uploader) newSegmentUploader(ctx context.Context, data core.Iter
 	}, nil
 }
 
-func (uploader *Uploader) uploadFile(ctx context.Context, data core.IterableData, tree *merkle.Tree, expectedReplica uint, taskSize uint) error {
+func (uploader *Uploader) uploadFile(ctx context.Context, info *node.FileInfo, data core.IterableData, tree *merkle.Tree, expectedReplica uint, taskSize uint) error {
 	stageTimer := time.Now()
 
 	if taskSize == 0 {
@@ -626,7 +626,7 @@ func (uploader *Uploader) uploadFile(ctx context.Context, data core.IterableData
 		"nodeNum": len(uploader.clients),
 	}).Info("Begin to upload file")
 
-	segmentUploader, err := uploader.newSegmentUploader(ctx, data, tree, expectedReplica, taskSize)
+	segmentUploader, err := uploader.newSegmentUploader(ctx, info, data, tree, expectedReplica, taskSize)
 	if err != nil {
 		return err
 	}

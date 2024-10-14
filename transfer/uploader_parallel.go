@@ -21,6 +21,7 @@ type uploadTask struct {
 type segmentUploader struct {
 	data     core.IterableData
 	tree     *merkle.Tree
+	txSeq    uint64
 	clients  []*node.ZgsClient
 	tasks    []*uploadTask
 	taskSize uint
@@ -34,43 +35,53 @@ func (uploader *segmentUploader) ParallelCollect(result *parallel.Result) error 
 	return nil
 }
 
+func (uploader *segmentUploader) getSegment(segIndex uint64) (bool, *node.SegmentWithProof, error) {
+	numChunks := uploader.data.NumChunks()
+	// check segment index
+	startIndex := segIndex * core.DefaultSegmentMaxChunks
+	allDataUploaded := false
+	if startIndex >= numChunks {
+		// file real data already uploaded
+		return true, nil, nil
+	}
+	// get segment
+	segment, err := core.ReadAt(uploader.data, core.DefaultSegmentSize, int64(segIndex*core.DefaultSegmentSize), uploader.data.PaddedSize())
+	if err != nil {
+		return false, nil, err
+	}
+	if startIndex+uint64(len(segment))/core.DefaultChunkSize >= numChunks {
+		// last segment has real data
+		expectedLen := core.DefaultChunkSize * int(numChunks-startIndex)
+		segment = segment[:expectedLen]
+		allDataUploaded = true
+	}
+	// fill proof
+	proof := uploader.tree.ProofAt(int(segIndex))
+	segWithProof := node.SegmentWithProof{
+		Root:     uploader.tree.Root(),
+		Data:     segment,
+		Index:    segIndex,
+		Proof:    proof,
+		FileSize: uint64(uploader.data.Size()),
+	}
+	return allDataUploaded, &segWithProof, nil
+}
+
 // ParallelDo implements parallel.Interface.
 func (uploader *segmentUploader) ParallelDo(ctx context.Context, routine int, task int) (interface{}, error) {
-	numChunks := uploader.data.NumChunks()
 	numSegments := uploader.data.NumSegments()
 	uploadTask := uploader.tasks[task]
 	segIndex := uploadTask.segIndex
 	startSegIndex := segIndex
 	segments := make([]node.SegmentWithProof, 0)
 	for i := 0; i < int(uploader.taskSize); i++ {
-		// check segment index
-		startIndex := segIndex * core.DefaultSegmentMaxChunks
-		allDataUploaded := false
-		if startIndex >= numChunks {
-			// file real data already uploaded
-			break
-		}
-		// get segment
-		segment, err := core.ReadAt(uploader.data, core.DefaultSegmentSize, int64(segIndex*core.DefaultSegmentSize), uploader.data.PaddedSize())
+		allDataUploaded, segWithProof, err := uploader.getSegment(segIndex)
 		if err != nil {
 			return nil, err
 		}
-		if startIndex+uint64(len(segment))/core.DefaultChunkSize >= numChunks {
-			// last segment has real data
-			expectedLen := core.DefaultChunkSize * int(numChunks-startIndex)
-			segment = segment[:expectedLen]
-			allDataUploaded = true
+		if segWithProof != nil {
+			segments = append(segments, *segWithProof)
 		}
-		// fill proof
-		proof := uploader.tree.ProofAt(int(segIndex))
-		segWithProof := node.SegmentWithProof{
-			Root:     uploader.tree.Root(),
-			Data:     segment,
-			Index:    segIndex,
-			Proof:    proof,
-			FileSize: uint64(uploader.data.Size()),
-		}
-		segments = append(segments, segWithProof)
 		if allDataUploaded {
 			break
 		}
@@ -78,7 +89,7 @@ func (uploader *segmentUploader) ParallelDo(ctx context.Context, routine int, ta
 	}
 
 	for i := 0; i < tooManyDataRetries; i++ {
-		_, err := uploader.clients[uploadTask.clientIndex].UploadSegments(ctx, segments)
+		_, err := uploader.clients[uploadTask.clientIndex].UploadSegmentsByTxSeq(ctx, segments, uploader.txSeq)
 		if err == nil || isDuplicateError(err.Error()) {
 			break
 		}
@@ -98,6 +109,7 @@ func (uploader *segmentUploader) ParallelDo(ctx context.Context, routine int, ta
 			"to_seg_index":   segIndex,
 			"step":           uploadTask.numShard,
 			"root":           core.SegmentRoot(segments[0].Data),
+			"to_node":        uploader.clients[uploadTask.clientIndex].URL(),
 		}).Debug("Segments uploaded")
 	}
 	return nil, nil

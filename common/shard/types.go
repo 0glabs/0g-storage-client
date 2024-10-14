@@ -12,10 +12,6 @@ type ShardConfig struct {
 	NumShard uint64 `json:"numShard"`
 }
 
-func (config *ShardConfig) HasSegment(segmentIndex uint64) bool {
-	return config.NumShard < 2 || segmentIndex%config.NumShard == config.ShardId
-}
-
 func (config *ShardConfig) IsValid() bool {
 	// NumShard should be larger than zero and be power of 2
 	return config.NumShard > 0 && (config.NumShard&(config.NumShard-1) == 0) && config.ShardId < config.NumShard
@@ -73,7 +69,7 @@ func (node *shardSegmentTreeNode) insert(numShard uint, shardId uint, expectedRe
 
 // select a set of given sharded node and make the data is replicated at least expctedReplica times
 // return the selected nodes and if selection is successful
-func Select(segNum uint64, nodes []*ShardedNode, expectedReplica uint, random bool) ([]*ShardedNode, bool) {
+func Select(nodes []*ShardedNode, expectedReplica uint, random bool) ([]*ShardedNode, bool) {
 	selected := make([]*ShardedNode, 0)
 	if expectedReplica == 0 {
 		return selected, true
@@ -101,10 +97,6 @@ func Select(segNum uint64, nodes []*ShardedNode, expectedReplica uint, random bo
 		replica:  0,
 		lazyTags: 0,
 	}
-	// occupied by shard id
-	occupied := make(map[uint64]uint)
-	occupiedNodes := make([]*ShardedNode, 0)
-	hit := 0
 
 	for _, node := range nodes {
 		if root.insert(uint(node.Config.NumShard), uint(node.Config.ShardId), expectedReplica) {
@@ -113,31 +105,11 @@ func Select(segNum uint64, nodes []*ShardedNode, expectedReplica uint, random bo
 		if root.replica >= expectedReplica {
 			return selected, true
 		}
-		if segNum > 0 {
-			chosen := false
-			for id := node.Config.ShardId; id < segNum; id += node.Config.NumShard {
-				if occupied[id] < expectedReplica {
-					if _, ok := occupied[id]; !ok {
-						occupied[id] = 0
-					}
-					hit += 1
-					occupied[id] += 1
-					chosen = true
-
-				}
-			}
-			if chosen {
-				occupiedNodes = append(occupiedNodes, node)
-			}
-			if uint64(hit) == segNum*uint64(expectedReplica) {
-				return occupiedNodes, true
-			}
-		}
 	}
 	return make([]*ShardedNode, 0), false
 }
 
-func CheckReplica(segNum uint64, shardConfigs []*ShardConfig, expectedReplica uint) bool {
+func CheckReplica(shardConfigs []*ShardConfig, expectedReplica uint) bool {
 	shardedNodes := make([]*ShardedNode, len(shardConfigs))
 	for i, shardConfig := range shardConfigs {
 		shardedNodes[i] = &ShardedNode{Config: ShardConfig{
@@ -145,6 +117,6 @@ func CheckReplica(segNum uint64, shardConfigs []*ShardConfig, expectedReplica ui
 			ShardId:  uint64(shardConfig.ShardId),
 		}}
 	}
-	_, ok := Select(segNum, shardedNodes, expectedReplica, false)
+	_, ok := Select(shardedNodes, expectedReplica, false)
 	return ok
 }
