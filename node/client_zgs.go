@@ -123,6 +123,6 @@ func (c *ZgsClient) GetShardConfig(ctx context.Context) (shard.ShardConfig, erro
 }
 
 // GetSectorProof Call zgs_getSectorProof RPC to get the proof of a sector.
-func (c *ZgsClient) GetSectorProof(ctx context.Context, sectorIndex uint64, root *common.Hash) (*FlowProof, error) {
-	return providers.CallContext[*FlowProof](c, ctx, "zgs_getSectorProof", sectorIndex, root)
+func (c *ZgsClient) GetSectorProof(ctx context.Context, sectorIndex uint64, root *common.Hash) (FlowProof, error) {
+	return providers.CallContext[FlowProof](c, ctx, "zgs_getSectorProof", sectorIndex, root)
 }
