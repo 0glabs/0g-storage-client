@@ -7,10 +7,10 @@ from config.node_config import GENESIS_ACCOUNT
 from utility.utils import (
     wait_until,
 )
-from test_framework.test_framework import TestFramework
+from client_test_framework.test_framework import ClientTestFramework
 
 
-class FileUploadDownloadTest(TestFramework):
+class FileUploadDownloadTest(ClientTestFramework):
     def setup_params(self):
         self.num_blockchain_nodes = 1
         self.num_nodes = 4

@@ -1,14 +1,9 @@
 import base64
 import inspect
-import os
 import platform
 import rtoml
 import time
 import sha3
-
-from config.node_config import ZGS_CONFIG
-from eth_utils import encode_hex
-
 
 class PortMin:
     # Must be initialized with a unique integer for each process
@@ -37,12 +32,6 @@ def blockchain_rpc_port(n):
 
 def blockchain_rpc_port_core(n):
     return PortMin.n + 4 * MAX_NODES + n
-
-def kv_rpc_port(n):
-    return PortMin.n + 5 * MAX_NODES + n
-
-def indexer_port(n):
-    return PortMin.n + 6 * MAX_NODES + n
 
 def arrange_port(category: int, node_index: int) -> int:
     return PortMin.n + (100 + category) * MAX_NODES + node_index

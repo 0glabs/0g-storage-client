@@ -64,12 +64,6 @@ TX_PARAMS1 = {
 NO_SEAL_FLAG = 0x1
 NO_MERKLE_PROOF_FLAG = 0x2
 
-KV_CONFIG = {
-    "log_config_file": "log_config",
-    "confirmation_block_count": 1,
-}
-
-
 def update_config(default: dict, custom: dict):
     """
     Supports to update configurations with dict value.

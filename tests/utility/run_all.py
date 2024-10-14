@@ -6,7 +6,7 @@ import sys
 
 from concurrent.futures import ProcessPoolExecutor
 
-from utility.build_binary import build_zg, build_zgs, build_kv
+from utility.build_binary import build_conflux, build_bsc, build_zg, build_cli
 
 DEFAULT_PORT_MIN = 11000
 DEFAULT_PORT_MAX = 65535
@@ -50,19 +50,24 @@ def run_single_test(py, script, test_dir, index, port_min, port_max):
         )
     except subprocess.CalledProcessError as err:
         print_testcase_result(RED, CROSS, script, start_time)
-        print("Output of " + script + "\n" + err.output.decode("utf-8"), flush=True)
+        try:
+            print("Output of " + script + "\n" + err.output.decode("utf-8"), flush=True)
+        except UnicodeDecodeError:
+            print("Output of " + script + "\n", flush=True)
+            print(err.output)
         raise err
     print_testcase_result(BLUE, TICK, script, start_time)
 
-def run_all(test_dir: str, test_subdirs: list[str]=[], slow_tests: set[str]={}, long_manual_tests: set[str]={}):
+def run_all(test_dir: str, test_subdirs: list[str]=[], slow_tests: set[str]={}, long_manual_tests: set[str]={}, single_run_tests: set[str]={}):
     tmp_dir = os.path.join(test_dir, "tmp")
     if not os.path.exists(tmp_dir):
         os.makedirs(tmp_dir, exist_ok=True)
 
-    # Build binaries if absent
+    # Build blockchain binaries if absent
+    # build_conflux(tmp_dir)
+    # build_bsc(tmp_dir)
     build_zg(tmp_dir)
-    build_zgs(tmp_dir)
-    build_kv(tmp_dir)
+    # build_cli(tmp_dir)
 
     start_time = time.time()
 
@@ -97,13 +102,13 @@ def run_all(test_dir: str, test_subdirs: list[str]=[], slow_tests: set[str]={}, 
         for file in os.listdir(subdir_path):
             if file.endswith("_test.py"):
                 rel_path = os.path.join(subdir, file)
-                if rel_path not in slow_tests and rel_path not in long_manual_tests:
+                if rel_path not in slow_tests and rel_path not in long_manual_tests and rel_path not in single_run_tests:
                     TEST_SCRIPTS.append(rel_path)
 
     executor = ProcessPoolExecutor(max_workers=options.max_workers)
     test_results = []
 
-    py = "python3"
+    py = "python"
     if hasattr(sys, "getwindowsversion"):
         py = "python"
 
@@ -129,6 +134,18 @@ def run_all(test_dir: str, test_subdirs: list[str]=[], slow_tests: set[str]={}, 
         except subprocess.CalledProcessError as err:
             print("CalledProcessError " + repr(err))
             failed.add(script)
+
+    # Run single tests one by one
+    for script in single_run_tests:
+        f = executor.submit(
+            run_single_test, py, script, test_dir, i, options.port_min, options.port_max
+        )
+        try:
+            f.result()
+        except subprocess.CalledProcessError as err:
+            print("CalledProcessError " + repr(err))
+            failed.add(script)
+        i += 1
 
     print("Elapsed: " + str(int(time.time() - start_time)) + " seconds", flush=True)
 

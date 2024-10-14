@@ -1,6 +1,6 @@
 import base64
 
-from eth_utils import encode_hex, decode_hex
+from eth_utils import decode_hex
 from math import log2
 from utility.merkle_tree import add_0x_prefix, Leaf, MerkleTree
 from utility.spec import ENTRY_SIZE, PORA_CHUNK_SIZE
@@ -194,9 +194,17 @@ def generate_merkle_tree_by_batch(data):
 
 
 def submit_data(client, data):
+    # NOTE: we assume the data is unique in this function, otherwise zgs_getFileInfo will only get the information of the first data with same root
+    shard_config = client.rpc.zgs_getShardConfig()
+    shard_id = int(shard_config["shardId"])
+    num_shard = int(shard_config["numShard"])
+
     segments = data_to_segments(data)
-    for segment in segments:
-        client.zgs_upload_segment(segment)
+    file_info = client.zgs_get_file_info(segments[0]["root"])
+    start_seg_index = file_info["tx"]["startEntryIndex"] // 1024
+    for index, segment in enumerate(segments):
+        if (start_seg_index + index) % num_shard == shard_id:
+            client.zgs_upload_segment(segment)
     return segments
 
 
