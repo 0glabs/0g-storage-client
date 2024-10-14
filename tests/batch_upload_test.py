@@ -1,11 +1,10 @@
 import os
-import time
 
-from test_framework.test_framework import TestFramework
+from client_test_framework.test_framework import ClientTestFramework
 from config.node_config import GENESIS_PRIV_KEY
-from utility.run_go_test import run_go_test
+from client_utility.run_go_test import run_go_test
 
-class BatchUploadTest(TestFramework):
+class BatchUploadTest(ClientTestFramework):
     def setup_params(self):
         self.num_blockchain_nodes = 1
         self.num_nodes = 1

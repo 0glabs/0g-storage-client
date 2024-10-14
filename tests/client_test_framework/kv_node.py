@@ -1,17 +1,19 @@
 import base64
 import os
 
-from config.node_config import KV_CONFIG
-from test_framework.blockchain_node import NodeType, TestNode
+from client_config.node_config import KV_CONFIG
+from test_framework.blockchain_node import TestNode
 from utility.utils import (
     initialize_config,
     rpc_port,
-    kv_rpc_port,
     blockchain_rpc_port,
     assert_equal,
 )
+from client_utility.utils import kv_rpc_port
 
 bytes_per_query = 1024 * 256
+
+KV_NODE_TYPE = 2
 
 
 class KVNode(TestNode):
@@ -45,7 +47,7 @@ class KVNode(TestNode):
         data_dir = os.path.join(root_dir, "zgs_kv" + str(index))
         rpc_url = "http://" + local_conf["rpc_listen_address"]
         super().__init__(
-            NodeType.KV,
+            KV_NODE_TYPE,
             index,
             data_dir,
             rpc_url,

@@ -5,11 +5,11 @@ from utility.utils import (
     assert_equal,
     wait_until,
 )
-from utility.kv import to_stream_id
-from test_framework.test_framework import TestFramework
+from client_utility.kv import to_stream_id
+from client_test_framework.test_framework import ClientTestFramework
 
 
-class KVTest(TestFramework):
+class KVTest(ClientTestFramework):
     def setup_params(self):
         self.num_blockchain_nodes = 1
         self.num_nodes = 1

@@ -2,9 +2,7 @@ import os
 import subprocess
 import tempfile
 import time
-import rlp
 
-from eth_utils import decode_hex, keccak
 from web3 import Web3, HTTPProvider
 from web3.middleware import construct_sign_and_send_raw_middleware
 from enum import Enum, unique
@@ -12,7 +10,6 @@ from config.node_config import (
     GENESIS_PRIV_KEY,
     GENESIS_PRIV_KEY1,
     TX_PARAMS,
-    MINER_ID,
 )
 from utility.simple_rpc_proxy import SimpleRpcProxy
 from utility.utils import (
@@ -25,17 +22,24 @@ from test_framework.contracts import load_contract_metadata
 
 @unique
 class BlockChainNodeType(Enum):
-    ZG = 0
+    Conflux = 0
+    BSC = 1
+    ZG = 2
 
     def block_time(self):
-        return 3.0
+        if self == BlockChainNodeType.Conflux:
+            return 0.5
+        elif self == BlockChainNodeType.BSC:
+            return 32 / estimate_st_performance()
+        elif self == BlockChainNodeType.ZG:
+            return 0.5
+        else:
+            raise AssertionError("Unsupported blockchain type")
 
 @unique
 class NodeType(Enum):
     BlockChain = 0
     Zgs = 1
-    KV = 2
-    Indexer = 3
 
 
 class FailedToStartError(Exception):
@@ -248,7 +252,7 @@ class BlockchainNode(TestNode):
     def wait_for_transaction_receipt(self, w3, tx_hash, timeout=120, parent_hash=None):
         return w3.eth.wait_for_transaction_receipt(tx_hash, timeout)
 
-    def setup_contract(self, enable_market, mine_period):
+    def setup_contract(self, enable_market, mine_period, lifetime_seconds):
         w3 = Web3(HTTPProvider(self.rpc_url))
 
         account1 = w3.eth.account.from_key(GENESIS_PRIV_KEY)
@@ -309,9 +313,7 @@ class BlockchainNode(TestNode):
 
             return flow_contract, flow_initialize_hash, mine_contract, dummy_reward_contract
         
-        def deploy_with_market():
-            LIFETIME_MONTH = 1
-
+        def deploy_with_market(lifetime_seconds):
             self.log.debug("Start deploy contracts")
             
             mine_contract, _ = deploy_contract("PoraMineTest", [0])
@@ -320,7 +322,7 @@ class BlockchainNode(TestNode):
             market_contract, _ = deploy_contract("FixedPrice", [])
             self.log.debug("Market deployed")
             
-            reward_contract, _ =deploy_contract("ChunkLinearReward", [LIFETIME_MONTH * 31 * 86400])
+            reward_contract, _ = deploy_contract("ChunkLinearReward", [lifetime_seconds])
             self.log.debug("Reward deployed")
             
             flow_contract, _ = deploy_contract("FixedPriceFlow", [mine_period, 0])
@@ -331,8 +333,9 @@ class BlockchainNode(TestNode):
             mine_contract.functions.setTargetSubmissions(2).transact(TX_PARAMS)
             self.log.debug("Mine Initialized")
             
-            price_per_sector = int(LIFETIME_MONTH * 256 * 10 * 1_000_000_000_000_000_000 / 1024 / 1024 / 1024 / 12)
-            market_contract.functions.initialize(price_per_sector, flow_contract.address, reward_contract.address).transact(TX_PARAMS)
+            market_contract.functions.initialize(int(lifetime_seconds * 256 * 10 * 10 ** 18 /
+                                                     2 ** 30 / 12 / 31 / 86400),
+                                                 flow_contract.address, reward_contract.address).transact(TX_PARAMS)
             self.log.debug("Market Initialized")
             
             reward_contract.functions.initialize(market_contract.address, mine_contract.address).transact(TX_PARAMS)
@@ -348,7 +351,7 @@ class BlockchainNode(TestNode):
             return flow_contract, flow_initialize_hash, mine_contract, reward_contract
         
         if enable_market:
-            return deploy_with_market()
+            return deploy_with_market(lifetime_seconds)
         else:
             return deploy_no_market()
 
@@ -369,4 +372,4 @@ class BlockchainNode(TestNode):
         w3.eth.wait_for_transaction_receipt(tx_hash)
 
     def start(self):
-        super().start(self.blockchain_node_type == BlockChainNodeType.ZG)
+        super().start(self.blockchain_node_type == BlockChainNodeType.BSC or self.blockchain_node_type == BlockChainNodeType.ZG)
