@@ -87,6 +87,36 @@ func SegmentRoot(chunks []byte, emptyChunksPadded ...uint64) common.Hash {
 	return common.Hash{}
 }
 
+// PaddedSegmentRoot calculates the Merkle root for a given segment based on its index, the chunk data,
+// and the file size. It handles the logic of padding empty chunks if the segment is the last one
+// and doesn't have enough data to form a complete segment.
+func PaddedSegmentRoot(segmentIndex uint64, chunks []byte, fileSize int64) (common.Hash, uint64) {
+	numChunks := NumSplits(fileSize, DefaultChunkSize)
+	numChunksFlowPadded, _ := ComputePaddedSize(numChunks)
+	numSegmentsFlowPadded := (numChunksFlowPadded-1)/DefaultSegmentMaxChunks + 1
+
+	// determine the start and end chunk indices of the current segment
+	startIndex := segmentIndex * DefaultSegmentMaxChunks
+	endIndex := min(startIndex+DefaultSegmentMaxChunks, numChunks)
+
+	// pad empty chunks for the last segment to validate merkle proof
+	var emptyChunksPadded uint64
+
+	// calculate the number of chunks in the current segment and handle padding logic for the last segment
+	if numSegChunks := endIndex - startIndex; numSegChunks < DefaultSegmentMaxChunks {
+		if segmentIndex < numSegmentsFlowPadded-1 || numChunksFlowPadded%DefaultSegmentMaxChunks == 0 {
+			// for non-last segments or fully padded chunks, pad empty chunks to form a full segment
+			emptyChunksPadded = DefaultSegmentMaxChunks - numSegChunks
+		} else if lastSegmentChunks := numChunksFlowPadded % DefaultSegmentMaxChunks; numSegChunks < lastSegmentChunks {
+			// if this is the last segment and has fewer chunks than expected, pad it to match the flow-padded size
+			emptyChunksPadded = lastSegmentChunks - numSegChunks
+		}
+	}
+
+	// compute and return the Merkle root for the segment, considering any padding
+	return SegmentRoot(chunks, emptyChunksPadded), numSegmentsFlowPadded
+}
+
 func paddingZeros(buf []byte, startOffset int, length int) {
 	for i := 0; i < length; i++ {
 		buf[startOffset+i] = 0
@@ -120,4 +150,17 @@ func ReadAt(data IterableData, readSize int, offset int64, paddedSize uint64) ([
 	}
 
 	return buf, nil
+}
+
+// SegmentRange calculates the start and end flow segment index for a file based on the file's start chunk index and file size.
+func SegmentRange(startChunkIndex, fileSize uint64) (startSegmentIndex, endSegmentIndex uint64) {
+	totalChunks := NumSplits(int64(fileSize), DefaultChunkSize)
+	startSegmentIndex = startChunkIndex / DefaultSegmentMaxChunks
+
+	// calculate the end segment index
+	// adding totalChunks and subtracting 1 ensures we get the correct segment index
+	endChunkIndex := startChunkIndex + totalChunks - 1
+	endSegmentIndex = endChunkIndex / DefaultSegmentMaxChunks
+
+	return startSegmentIndex, endSegmentIndex
 }

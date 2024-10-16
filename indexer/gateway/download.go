@@ -141,15 +141,28 @@ func downloadFileInFolder(c *gin.Context) {
 }
 
 // getFileInfo retrieves file info based on root or transaction sequence.
-func getFileInfo(ctx context.Context, root string, txSeq uint64) (*node.FileInfo, error) {
+func getFileInfo(ctx context.Context, root string, txSeq uint64) (info *node.FileInfo, err error) {
 	if len(clients) == 0 {
 		return nil, errors.New("no clients available")
 	}
 
-	if root != "" {
-		return clients[0].GetFileInfo(ctx, common.HexToHash(root))
+	for _, client := range clients {
+		if root != "" {
+			info, err = client.GetFileInfo(ctx, common.HexToHash(root))
+		} else {
+			info, err = client.GetFileInfoByTxSeq(ctx, txSeq)
+		}
+
+		if err != nil {
+			return nil, err
+		}
+
+		if info != nil {
+			return info, nil
+		}
 	}
-	return clients[0].GetFileInfoByTxSeq(ctx, txSeq)
+
+	return nil, nil
 }
 
 // downloadAndServeFile downloads the file and serves it as an attachment.

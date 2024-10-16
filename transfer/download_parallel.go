@@ -159,23 +159,7 @@ func (downloader *segmentDownloader) downloadWithProof(ctx context.Context, clie
 		return nil, errors.Errorf("Downloaded data length mismatch, expected = %v, actual = %v", expectedDataLen, len(segment.Data))
 	}
 
-	numChunksFlowPadded, _ := core.ComputePaddedSize(downloader.numChunks)
-	numSegmentsFlowPadded := (numChunksFlowPadded-1)/core.DefaultSegmentMaxChunks + 1
-
-	// pad empty chunks for the last segment to validate merkle proof
-	var emptyChunksPadded uint64
-	if numChunks := endIndex - startIndex; numChunks < core.DefaultSegmentMaxChunks {
-		if segmentIndex < numSegmentsFlowPadded-1 || numChunksFlowPadded%core.DefaultSegmentMaxChunks == 0 {
-			// pad empty chunks to a full segment
-			emptyChunksPadded = core.DefaultSegmentMaxChunks - numChunks
-		} else if lastSegmentChunks := numChunksFlowPadded % core.DefaultSegmentMaxChunks; numChunks < lastSegmentChunks {
-			// pad for the last segment with flow padded empty chunks
-			emptyChunksPadded = lastSegmentChunks - numChunks
-		}
-	}
-
-	segmentRootHash := core.SegmentRoot(segment.Data, emptyChunksPadded)
-
+	segmentRootHash, numSegmentsFlowPadded := core.PaddedSegmentRoot(segmentIndex, segment.Data, downloader.file.Metadata().Size)
 	if err := segment.Proof.ValidateHash(root, segmentRootHash, segmentIndex, numSegmentsFlowPadded); err != nil {
 		return nil, errors.WithMessage(err, "Failed to validate proof")
 	}
