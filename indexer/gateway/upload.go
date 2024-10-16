@@ -3,7 +3,6 @@ package gateway
 import (
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -25,12 +24,23 @@ type UploadSegmentRequest struct {
 	Proof json.RawMessage `form:"proof" json:"proof" binding:"required"` // Merkle proof (encoded as JSON string)
 }
 
+// decode base64 data for JSON requests
+func (req *UploadSegmentRequest) decodeBase64Data() error {
+	decodedData, err := base64.StdEncoding.DecodeString(string(req.Data))
+	if err != nil {
+		return err
+	}
+
+	req.Data = decodedData
+	return nil
+}
+
 func uploadSegment(c *gin.Context) {
 	var input UploadSegmentRequest
 
 	// bind the request (supports both form and JSON)
 	if err := c.ShouldBind(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Failed to bind input parameters: %v", err)})
+		c.JSON(http.StatusBadRequest, gin.H{"error": errors.WithMessagef(err, "Failed to bind input parameters")})
 		return
 	}
 
@@ -42,8 +52,9 @@ func uploadSegment(c *gin.Context) {
 
 	// handle base64 decoding for JSON content type
 	if isJSON(c) {
-		if err := decodeBase64Data(&input); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if err := input.decodeBase64Data(); err != nil {
+			err = errors.WithMessage(err, "Failed to decode base64 data for json request")
+			c.JSON(http.StatusBadRequest, gin.H{"error": err})
 			return
 		}
 	}
@@ -57,11 +68,11 @@ func uploadSegment(c *gin.Context) {
 	// retrieve and validate file info
 	fileInfo, err := getFileInfo(c, input.Root, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to retrieve file info for root %v: %v", input.Root, err)})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": errors.WithMessage(err, "Failed to retrieve file info")})
 		return
 	}
 	if fileInfo == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("File not found for root %v", input.Root)})
+		c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
 		return
 	}
 
@@ -72,7 +83,7 @@ func uploadSegment(c *gin.Context) {
 		return
 	}
 	if err := validateMerkleProof(input, proof, fileInfo); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": errors.WithMessagef(err, "Failed to validate merkle proof")})
 		return
 	}
 
@@ -85,12 +96,12 @@ func uploadSegment(c *gin.Context) {
 		FileSize: fileInfo.Tx.Size,
 	}
 	if err := uploadSegmentWithProof(c, segment); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		err = errors.WithMessage(err, "Failed to upload segment with proof")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err})
 		return
 	}
 
-	// respond with success
-	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Segment %v for root %v uploaded", input.Index, input.Root)})
+	c.JSON(http.StatusOK, gin.H{"message": "Segment upload ok"})
 }
 
 // isJSON is a helper function to determine if the request is JSON
@@ -98,28 +109,12 @@ func isJSON(c *gin.Context) bool {
 	return strings.Contains(c.ContentType(), "application/json")
 }
 
-// decodeBase64Data is a helper function to decode base64 data for JSON requests
-func decodeBase64Data(input *UploadSegmentRequest) error {
-	decodedData, err := base64.StdEncoding.DecodeString(string(input.Data))
-	if err != nil {
-		return errors.WithMessage(err, "Failed to decode base64 data")
-	}
-
-	input.Data = decodedData
-	return nil
-}
-
-// validateMerkleProof is a helper function to validate the merkle proof
-func validateMerkleProof(input UploadSegmentRequest, proof merkle.Proof, fileInfo *node.FileInfo) error {
+// validateMerkleProof is a helper function to validate merkle proof for the input request
+func validateMerkleProof(req UploadSegmentRequest, proof merkle.Proof, fileInfo *node.FileInfo) error {
 	fileSize := int64(fileInfo.Tx.Size)
-	merkleRoot := common.HexToHash(input.Root)
-	segmentRootHash, numSegmentsFlowPadded := core.PaddedSegmentRoot(input.Index, input.Data, fileSize)
-
-	if err := proof.ValidateHash(merkleRoot, segmentRootHash, input.Index, numSegmentsFlowPadded); err != nil {
-		return errors.WithMessagef(err, "Failed to validate merkle proof for segment %v with root %v", input.Index, input.Root)
-	}
-
-	return nil
+	merkleRoot := common.HexToHash(req.Root)
+	segmentRootHash, numSegmentsFlowPadded := core.PaddedSegmentRoot(req.Index, req.Data, fileSize)
+	return proof.ValidateHash(merkleRoot, segmentRootHash, req.Index, numSegmentsFlowPadded)
 }
 
 // uploadSegmentWithProof is a helper function to upload the segment with proof
