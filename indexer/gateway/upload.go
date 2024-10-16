@@ -1,10 +1,8 @@
 package gateway
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"net/http"
-	"strings"
 
 	"github.com/0glabs/0g-storage-client/core"
 	"github.com/0glabs/0g-storage-client/core/merkle"
@@ -19,20 +17,9 @@ var expectedReplica uint
 
 type UploadSegmentRequest struct {
 	Root  string          `form:"root" json:"root" binding:"required"`   // File merkle root
-	Data  []byte          `form:"data" json:"data" binding:"required"`   // Segment data (base64 encoded in JSON or raw bytes in form-data)
+	Data  []byte          `form:"data" json:"data" binding:"required"`   // Segment data
 	Index uint64          `form:"index" json:"index" binding:"required"` // Segment index
 	Proof json.RawMessage `form:"proof" json:"proof" binding:"required"` // Merkle proof (encoded as JSON string)
-}
-
-// decode base64 data for JSON requests
-func (req *UploadSegmentRequest) decodeBase64Data() error {
-	decodedData, err := base64.StdEncoding.DecodeString(string(req.Data))
-	if err != nil {
-		return err
-	}
-
-	req.Data = decodedData
-	return nil
 }
 
 func uploadSegment(c *gin.Context) {
@@ -48,15 +35,6 @@ func uploadSegment(c *gin.Context) {
 	if len(input.Root) != 66 || common.HexToHash(input.Root) == (common.Hash{}) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid root hash"})
 		return
-	}
-
-	// handle base64 decoding for JSON content type
-	if isJSON(c) {
-		if err := input.decodeBase64Data(); err != nil {
-			err = errors.WithMessage(err, "Failed to decode base64 data for json request")
-			c.JSON(http.StatusBadRequest, gin.H{"error": err})
-			return
-		}
 	}
 
 	// validate segment data length
@@ -102,11 +80,6 @@ func uploadSegment(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Segment upload ok"})
-}
-
-// isJSON is a helper function to determine if the request is JSON
-func isJSON(c *gin.Context) bool {
-	return strings.Contains(c.ContentType(), "application/json")
 }
 
 // validateMerkleProof is a helper function to validate merkle proof for the input request
