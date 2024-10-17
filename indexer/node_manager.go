@@ -287,7 +287,7 @@ func queryShardConfigs(nodes []string) map[string]*parallel.RpcResult[shard.Shar
 	// update IP if absent
 	for _, v := range nodes {
 		ip := parseIP(v)
-		if _, err := defaultIPLocationManager.Query(v); err != nil {
+		if _, err := defaultIPLocationManager.Query(ip); err != nil {
 			logrus.WithError(err).WithField("ip", ip).Warn("Failed to query IP location")
 		}
 	}
