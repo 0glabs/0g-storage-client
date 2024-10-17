@@ -37,7 +37,25 @@ func (api *IndexerApi) GetShardedNodes(ctx context.Context) (ShardedNodes, error
 
 // GetNodeLocations return IP locations of all nodes.
 func (api *IndexerApi) GetNodeLocations(ctx context.Context) (map[string]*IPLocation, error) {
-	return defaultIPLocationManager.All(), nil
+	result := make(map[string]*IPLocation)
+
+	// trusted nodes
+	for _, v := range defaultNodeManager.TrustedClients() {
+		ip := parseIP(v.URL())
+		if loc, ok := defaultIPLocationManager.Get(ip); ok {
+			result[ip] = loc
+		}
+	}
+
+	// discovered nodes
+	for _, v := range defaultNodeManager.Discovered() {
+		ip := parseIP(v.URL)
+		if loc, ok := defaultIPLocationManager.Get(ip); ok {
+			result[ip] = loc
+		}
+	}
+
+	return result, nil
 }
 
 // GetFileLocations return locations info of given file.
