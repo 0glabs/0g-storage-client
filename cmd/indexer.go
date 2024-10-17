@@ -45,7 +45,7 @@ func init() {
 	indexerCmd.Flags().IntVar(&indexerArgs.locationCache.CacheSize, "file-location-cache-size", 100000, "size of file location cache")
 
 	indexerCmd.Flags().Uint64Var(&indexerArgs.maxDownloadFileSize, "max-download-file-size", 100*1024*1024, "Maximum file size in bytes to download")
-	indexerCmd.Flags().UintVar(&indexerArgs.ExpectedReplica, "expected-replica", 2, "Expected number of replications to upload")
+	indexerCmd.Flags().UintVar(&indexerArgs.ExpectedReplica, "expected-replica", 1, "Expected number of replications to upload")
 
 	indexerCmd.MarkFlagsOneRequired("trusted", "node")
 

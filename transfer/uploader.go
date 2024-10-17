@@ -646,20 +646,27 @@ func (uploader *Uploader) uploadFile(ctx context.Context, info *node.FileInfo, d
 	return nil
 }
 
-// SegmentProofUploader uploads segments with proof to the storage nodes parallelly.
-type SegmentProofUploader struct {
+// FileSegmentsWithProof wraps segments with proof and file info
+type FileSegmentsWithProof struct {
+	*node.FileInfo
+	Segments []node.SegmentWithProof
+}
+
+type FileSegmentUploader struct {
 	clients []*node.ZgsClient // 0g storage clients
 	logger  *logrus.Logger    // logger
 }
 
-func NewSegmentProofUploader(clients []*node.ZgsClient, opts ...zg_common.LogOption) *SegmentProofUploader {
-	return &SegmentProofUploader{
+func NewFileSegementUploader(clients []*node.ZgsClient, opts ...zg_common.LogOption) *FileSegmentUploader {
+	return &FileSegmentUploader{
 		clients: clients,
 		logger:  zg_common.NewLogger(opts...),
 	}
 }
 
-func (uploader *SegmentProofUploader) UploadSegments(ctx context.Context, segments []node.SegmentWithProof, option ...UploadOption) error {
+// Upload uploads file segments with proof to the storage nodes parallelly.
+// Note: only `ExpectedReplica` and `TaskSize` are used from UploadOption.
+func (uploader *FileSegmentUploader) Upload(ctx context.Context, fileSeg FileSegmentsWithProof, option ...UploadOption) error {
 	var opt UploadOption
 	if len(option) > 0 {
 		opt = option[0]
@@ -673,11 +680,11 @@ func (uploader *SegmentProofUploader) UploadSegments(ctx context.Context, segmen
 	if uploader.logger.IsLevelEnabled(logrus.DebugLevel) {
 		uploader.logger.WithFields(logrus.Fields{
 			"uploadOption": opt,
-			"segments":     segments,
-		}).Debug("Begin to upload segments with proof")
+			"fileSegments": fileSeg,
+		}).Debug("Begin to upload file segments with proof")
 	}
 
-	suploader, err := uploader.newSegmentProofUploader(ctx, segments, opt.ExpectedReplica, opt.TaskSize)
+	fsUploader, err := uploader.newFileSegmentUploader(ctx, fileSeg, opt.ExpectedReplica, opt.TaskSize)
 	if err != nil {
 		return err
 	}
@@ -685,31 +692,23 @@ func (uploader *SegmentProofUploader) UploadSegments(ctx context.Context, segmen
 	sopt := parallel.SerialOption{
 		Routines: min(runtime.GOMAXPROCS(0), len(uploader.clients)*5),
 	}
-	err = parallel.Serial(ctx, suploader, len(suploader.tasks), sopt)
+	err = parallel.Serial(ctx, fsUploader, len(fsUploader.tasks), sopt)
 	if err != nil {
 		return err
 	}
 
 	if uploader.logger.IsLevelEnabled(logrus.DebugLevel) {
-		var segs []node.SegmentWithProof
-		for i := range segments {
-			segs = append(segs, node.SegmentWithProof{
-				Root:  segments[i].Root,
-				Index: segments[i].Index,
-			})
-		}
 		uploader.logger.WithFields(logrus.Fields{
-			"total":    len(segments),
-			"segments": segs,
+			"total":    len(fileSeg.Segments),
 			"duration": time.Since(stageTimer),
-		}).Debug("Completed to upload segments with proof")
+		}).Debug("Completed to upload file segments with proof")
 	}
 
 	return nil
 }
 
-func (uploader *SegmentProofUploader) newSegmentProofUploader(
-	ctx context.Context, segments []node.SegmentWithProof, expectedReplica uint, taskSize uint) (*segmentProofUploader, error) {
+func (uploader *FileSegmentUploader) newFileSegmentUploader(
+	ctx context.Context, fileSeg FileSegmentsWithProof, expectedReplica uint, taskSize uint) (*fileSegmentUploader, error) {
 
 	//  get shard configurations
 	shardConfigs, err := getShardConfigs(ctx, uploader.clients)
@@ -722,32 +721,10 @@ func (uploader *SegmentProofUploader) newSegmentProofUploader(
 		return nil, fmt.Errorf("selected nodes cannot cover all shards")
 	}
 
-	// prepare file info and cache
-	fileInfos := make([]*node.FileInfo, len(segments))
-	fileInfoCache := make(map[common.Hash]*node.FileInfo)
-	for i, segment := range segments {
-		if info, ok := fileInfoCache[segment.Root]; ok { // cache hit
-			fileInfos[i] = info
-			continue
-		}
-
-		info, err := checkLogExistance(ctx, uploader.clients, segment.Root)
-		if err != nil {
-			return nil, errors.WithMessage(err, "failed to get file info")
-		}
-		if info == nil {
-			return nil, errors.Errorf("file not found for root %v", segment.Root)
-		}
-
-		fileInfoCache[segment.Root] = info // cache store
-		fileInfos[i] = info
-	}
-
 	// create upload tasks for each segment
-	clientTasks := make(map[int][]*uploadTask)
-	for i, segment := range segments {
-		info := fileInfos[i]
-		startSegmentIndex, endSegmentIndex := core.SegmentRange(info.Tx.StartEntryIndex, info.Tx.Size)
+	clientTasks := make([][]*uploadTask, len(uploader.clients))
+	for i, segment := range fileSeg.Segments {
+		startSegmentIndex, endSegmentIndex := core.SegmentRange(fileSeg.Tx.StartEntryIndex, fileSeg.Tx.Size)
 		segmentIndex := startSegmentIndex + segment.Index
 
 		if segmentIndex > endSegmentIndex {
@@ -774,15 +751,13 @@ func (uploader *SegmentProofUploader) newSegmentProofUploader(
 			})
 		}
 	}
+	sort.SliceStable(clientTasks, func(i, j int) bool {
+		return len(clientTasks[i]) > len(clientTasks[j])
+	})
 
 	// group tasks by task size
-	uploadTasks := make([][]*uploadTask, 0, len(uploader.clients))
+	uploadTasks := make([][]*uploadTask, 0, len(clientTasks))
 	for _, tasks := range clientTasks {
-		sort.SliceStable(tasks, func(i, j int) bool {
-			segment0, segment1 := segments[tasks[i].segIndex], segments[tasks[j].segIndex]
-			return segment0.Root == segment1.Root && segment0.Index < segment1.Index
-		})
-
 		// split tasks into batches of taskSize
 		for len(tasks) > int(taskSize) {
 			uploadTasks = append(uploadTasks, tasks[:taskSize])
@@ -794,11 +769,10 @@ func (uploader *SegmentProofUploader) newSegmentProofUploader(
 		}
 	}
 
-	return &segmentProofUploader{
-		segments:  segments,
-		fileInfos: fileInfos,
-		clients:   uploader.clients,
-		tasks:     uploadTasks,
-		logger:    uploader.logger,
+	return &fileSegmentUploader{
+		FileSegmentsWithProof: fileSeg,
+		clients:               uploader.clients,
+		tasks:                 uploadTasks,
+		logger:                uploader.logger,
 	}, nil
 }
