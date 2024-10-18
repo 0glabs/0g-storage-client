@@ -11,10 +11,11 @@ import (
 )
 
 type Config struct {
-	Endpoint string
+	Endpoint string // http endpoint
 
-	Nodes               []string // storage nodes to download files
-	MaxDownloadFileSize uint64
+	Nodes               []string // storage nodes for file upload or download
+	MaxDownloadFileSize uint64   // max download file size
+	ExpectedReplica     uint     // expected upload replica number
 
 	RPCHandler http.Handler // enable to provide both RPC and REST API service
 }
@@ -27,6 +28,7 @@ func MustServeWithRPC(config Config) {
 	// init global variables
 	clients = node.MustNewZgsClients(config.Nodes)
 	maxDownloadFileSize = config.MaxDownloadFileSize
+	expectedReplica = config.ExpectedReplica
 
 	// init router
 	router := newRouter()
@@ -50,6 +52,7 @@ func newRouter() *gin.Engine {
 	// handlers
 	router.GET("/file", downloadFile)
 	router.GET("/file/:cid/*filePath", downloadFileInFolder)
+	router.POST("/file/segment", uploadSegment)
 
 	return router
 }

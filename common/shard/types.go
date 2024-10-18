@@ -12,9 +12,24 @@ type ShardConfig struct {
 	NumShard uint64 `json:"numShard"`
 }
 
+func (config *ShardConfig) HasSegment(segmentIndex uint64) bool {
+	return config.NumShard < 2 || segmentIndex%config.NumShard == config.ShardId
+}
+
 func (config *ShardConfig) IsValid() bool {
 	// NumShard should be larger than zero and be power of 2
 	return config.NumShard > 0 && (config.NumShard&(config.NumShard-1) == 0) && config.ShardId < config.NumShard
+}
+
+// NextSegmentIndex calculates the next segment index for the shard, starting from the given startSegmentIndex.
+// If the startSegmentIndex is already covered by the shard (i.e., the shard is responsible for this segment),
+// it will be included in the result and returned directly. Otherwise, the function will calculate and return
+// the next segment index that this shard is responsible for.
+func (config *ShardConfig) NextSegmentIndex(startSegmentIndex uint64) uint64 {
+	if config.NumShard < 2 {
+		return startSegmentIndex
+	}
+	return (startSegmentIndex+config.NumShard-1-config.ShardId)/config.NumShard*config.NumShard + config.ShardId
 }
 
 type ShardedNode struct {
@@ -24,6 +39,16 @@ type ShardedNode struct {
 	Latency int64 `json:"latency"`
 	// Since last updated timestamp.
 	Since int64 `json:"since"`
+}
+
+func NewShardNodesFromConfig(configs []*ShardConfig) []*ShardedNode {
+	nodes := make([]*ShardedNode, len(configs))
+	for i, config := range configs {
+		nodes[i] = &ShardedNode{
+			Config: *config,
+		}
+	}
+	return nodes
 }
 
 type shardSegmentTreeNode struct {
@@ -74,23 +99,10 @@ func Select(nodes []*ShardedNode, expectedReplica uint, random bool) ([]*Sharded
 	if expectedReplica == 0 {
 		return selected, true
 	}
-	if random {
-		// shuffle
-		rng := rand.New(rand.NewSource(uint64(time.Now().UnixNano())))
-		for i := range nodes {
-			j := rng.Intn(i + 1)
-			nodes[i], nodes[j] = nodes[j], nodes[i]
-		}
-	} else {
-		// sort by shard size from large to small
-		sort.Slice(nodes, func(i, j int) bool {
-			if nodes[i].Config.NumShard == nodes[j].Config.NumShard {
-				return nodes[i].Config.ShardId < nodes[j].Config.ShardId
-			}
-			return nodes[i].Config.NumShard < nodes[j].Config.NumShard
-		})
 
-	}
+	// shuffle or sort nodes before selection
+	nodes = prepareSelectionNodes(nodes, random)
+
 	// build segment tree to select proper nodes by shard configs
 	root := shardSegmentTreeNode{
 		numShard: 1,
@@ -110,13 +122,29 @@ func Select(nodes []*ShardedNode, expectedReplica uint, random bool) ([]*Sharded
 }
 
 func CheckReplica(shardConfigs []*ShardConfig, expectedReplica uint) bool {
-	shardedNodes := make([]*ShardedNode, len(shardConfigs))
-	for i, shardConfig := range shardConfigs {
-		shardedNodes[i] = &ShardedNode{Config: ShardConfig{
-			NumShard: uint64(shardConfig.NumShard),
-			ShardId:  uint64(shardConfig.ShardId),
-		}}
-	}
+	shardedNodes := NewShardNodesFromConfig(shardConfigs)
 	_, ok := Select(shardedNodes, expectedReplica, false)
 	return ok
+}
+
+// Helper function to pre-process (sort or shuffle) the nodes before selection
+func prepareSelectionNodes(nodes []*ShardedNode, random bool) []*ShardedNode {
+	if random {
+		// Shuffle the nodes randomly if needed
+		rng := rand.New(rand.NewSource(uint64(time.Now().UnixNano())))
+		for i := range nodes {
+			j := rng.Intn(i + 1)
+			nodes[i], nodes[j] = nodes[j], nodes[i]
+		}
+	} else {
+		// Sort nodes based on NumShard and ShardId
+		sort.Slice(nodes, func(i, j int) bool {
+			if nodes[i].Config.NumShard == nodes[j].Config.NumShard {
+				return nodes[i].Config.ShardId < nodes[j].Config.ShardId
+			}
+			return nodes[i].Config.NumShard < nodes[j].Config.NumShard
+		})
+	}
+
+	return nodes
 }

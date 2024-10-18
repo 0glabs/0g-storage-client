@@ -70,3 +70,56 @@ func TestSelect(t *testing.T) {
 	_, found = Select(shardedNodes, 4, false)
 	assert.Equal(t, found, false)
 }
+
+func TestNextSegmentIndex(t *testing.T) {
+	tests := []struct {
+		name              string
+		shardConfig       ShardConfig
+		startSegmentIndex uint64
+		expectedResult    uint64
+	}{
+		{
+			name:              "Single shard case (NumShard = 1)",
+			shardConfig:       ShardConfig{NumShard: 1, ShardId: 0},
+			startSegmentIndex: 5,
+			expectedResult:    5, // Since it's the only shard, startSegmentIndex is returned as-is
+		},
+		{
+			name:              "Multiple shards, ShardId 0",
+			shardConfig:       ShardConfig{NumShard: 4, ShardId: 0},
+			startSegmentIndex: 5,
+			expectedResult:    8,
+		},
+		{
+			name:              "Multiple shards, ShardId 1",
+			shardConfig:       ShardConfig{NumShard: 4, ShardId: 1},
+			startSegmentIndex: 5,
+			expectedResult:    5,
+		},
+		{
+			name:              "Multiple shards, ShardId 3",
+			shardConfig:       ShardConfig{NumShard: 4, ShardId: 3},
+			startSegmentIndex: 8,
+			expectedResult:    11,
+		},
+		{
+			name:              "Multiple shards, ShardId 2 with startSegmentIndex already covered",
+			shardConfig:       ShardConfig{NumShard: 4, ShardId: 2},
+			startSegmentIndex: 6,
+			expectedResult:    6,
+		},
+		{
+			name:              "Multiple shards, ShardId 0, already aligned",
+			shardConfig:       ShardConfig{NumShard: 4, ShardId: 0},
+			startSegmentIndex: 8,
+			expectedResult:    8,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := test.shardConfig.NextSegmentIndex(test.startSegmentIndex)
+			assert.Equal(t, test.expectedResult, result)
+		})
+	}
+}

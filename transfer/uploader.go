@@ -569,8 +569,7 @@ func (uploader *Uploader) newSegmentUploader(ctx context.Context, info *node.Fil
 		return nil, fmt.Errorf("selected nodes cannot cover all shards")
 	}
 	// compute index in flow
-	startSegmentIndex := info.Tx.StartEntryIndex / core.DefaultSegmentMaxChunks
-	endSegmentIndex := (info.Tx.StartEntryIndex + core.NumSplits(int64(info.Tx.Size), core.DefaultChunkSize) - 1) / core.DefaultSegmentMaxChunks
+	startSegmentIndex, endSegmentIndex := core.SegmentRange(info.Tx.StartEntryIndex, info.Tx.Size)
 	clientTasks := make([][]*uploadTask, 0)
 	for clientIndex, shardConfig := range shardConfigs {
 		// skip finalized nodes
@@ -580,7 +579,7 @@ func (uploader *Uploader) newSegmentUploader(ctx context.Context, info *node.Fil
 		}
 		// create upload tasks
 		// segIndex % NumShard = shardId (in flow)
-		segIndex := (startSegmentIndex+shardConfig.NumShard-1-shardConfig.ShardId)/shardConfig.NumShard*shardConfig.NumShard + shardConfig.ShardId
+		segIndex := shardConfig.NextSegmentIndex(startSegmentIndex)
 		tasks := make([]*uploadTask, 0)
 		for ; segIndex <= endSegmentIndex; segIndex += shardConfig.NumShard * uint64(taskSize) {
 			tasks = append(tasks, &uploadTask{
@@ -645,4 +644,135 @@ func (uploader *Uploader) uploadFile(ctx context.Context, info *node.FileInfo, d
 	}).Info("Completed to upload file")
 
 	return nil
+}
+
+// FileSegmentsWithProof wraps segments with proof and file info
+type FileSegmentsWithProof struct {
+	*node.FileInfo
+	Segments []node.SegmentWithProof
+}
+
+type FileSegmentUploader struct {
+	clients []*node.ZgsClient // 0g storage clients
+	logger  *logrus.Logger    // logger
+}
+
+func NewFileSegementUploader(clients []*node.ZgsClient, opts ...zg_common.LogOption) *FileSegmentUploader {
+	return &FileSegmentUploader{
+		clients: clients,
+		logger:  zg_common.NewLogger(opts...),
+	}
+}
+
+// Upload uploads file segments with proof to the storage nodes parallelly.
+// Note: only `ExpectedReplica` and `TaskSize` are used from UploadOption.
+func (uploader *FileSegmentUploader) Upload(ctx context.Context, fileSeg FileSegmentsWithProof, option ...UploadOption) error {
+	var opt UploadOption
+	if len(option) > 0 {
+		opt = option[0]
+	}
+
+	if opt.TaskSize == 0 {
+		opt.TaskSize = defaultTaskSize
+	}
+
+	stageTimer := time.Now()
+	if uploader.logger.IsLevelEnabled(logrus.DebugLevel) {
+		uploader.logger.WithFields(logrus.Fields{
+			"uploadOption": opt,
+			"fileSegments": fileSeg,
+		}).Debug("Begin to upload file segments with proof")
+	}
+
+	fsUploader, err := uploader.newFileSegmentUploader(ctx, fileSeg, opt.ExpectedReplica, opt.TaskSize)
+	if err != nil {
+		return err
+	}
+
+	sopt := parallel.SerialOption{
+		Routines: min(runtime.GOMAXPROCS(0), len(uploader.clients)*5),
+	}
+	err = parallel.Serial(ctx, fsUploader, len(fsUploader.tasks), sopt)
+	if err != nil {
+		return err
+	}
+
+	if uploader.logger.IsLevelEnabled(logrus.DebugLevel) {
+		uploader.logger.WithFields(logrus.Fields{
+			"total":    len(fileSeg.Segments),
+			"duration": time.Since(stageTimer),
+		}).Debug("Completed to upload file segments with proof")
+	}
+
+	return nil
+}
+
+func (uploader *FileSegmentUploader) newFileSegmentUploader(
+	ctx context.Context, fileSeg FileSegmentsWithProof, expectedReplica uint, taskSize uint) (*fileSegmentUploader, error) {
+
+	//  get shard configurations
+	shardConfigs, err := getShardConfigs(ctx, uploader.clients)
+	if err != nil {
+		return nil, err
+	}
+
+	// validate replica requirements
+	if !shard.CheckReplica(shardConfigs, expectedReplica) {
+		return nil, fmt.Errorf("selected nodes cannot cover all shards")
+	}
+
+	// create upload tasks for each segment
+	clientTasks := make([][]*uploadTask, len(uploader.clients))
+	for i, segment := range fileSeg.Segments {
+		startSegmentIndex, endSegmentIndex := core.SegmentRange(fileSeg.Tx.StartEntryIndex, fileSeg.Tx.Size)
+		segmentIndex := startSegmentIndex + segment.Index
+
+		if segmentIndex > endSegmentIndex {
+			return nil, errors.New("segment index out of range")
+		}
+
+		// assign segment to shard configurations
+		for clientIndex, shardConfig := range shardConfigs {
+			// skip nodes that do not cover the segment
+			if !shardConfig.HasSegment(segmentIndex) {
+				continue
+			}
+
+			// skip finalized nodes
+			nodeInfo, _ := uploader.clients[clientIndex].GetFileInfo(ctx, segment.Root)
+			if nodeInfo != nil && nodeInfo.Finalized {
+				continue
+			}
+
+			// add task for the client to upload the segment
+			clientTasks[clientIndex] = append(clientTasks[clientIndex], &uploadTask{
+				clientIndex: clientIndex,
+				segIndex:    uint64(i),
+			})
+		}
+	}
+	sort.SliceStable(clientTasks, func(i, j int) bool {
+		return len(clientTasks[i]) > len(clientTasks[j])
+	})
+
+	// group tasks by task size
+	uploadTasks := make([][]*uploadTask, 0, len(clientTasks))
+	for _, tasks := range clientTasks {
+		// split tasks into batches of taskSize
+		for len(tasks) > int(taskSize) {
+			uploadTasks = append(uploadTasks, tasks[:taskSize])
+			tasks = tasks[taskSize:]
+		}
+
+		if len(tasks) > 0 {
+			uploadTasks = append(uploadTasks, tasks)
+		}
+	}
+
+	return &fileSegmentUploader{
+		FileSegmentsWithProof: fileSeg,
+		clients:               uploader.clients,
+		tasks:                 uploadTasks,
+		logger:                uploader.logger,
+	}, nil
 }
