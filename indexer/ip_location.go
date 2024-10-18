@@ -33,7 +33,7 @@ type IPLocationConfig struct {
 // IPLocationManager manages IP locations.
 type IPLocationManager struct {
 	config IPLocationConfig
-	items  sync.Map
+	items  sync.Map // ip -> *IPLocation
 }
 
 // InitDefaultIPLocationManager initializes the default `IPLocationManager`.
@@ -61,6 +61,15 @@ func (manager *IPLocationManager) All() map[string]*IPLocation {
 	})
 
 	return all
+}
+
+func (manager *IPLocationManager) Get(ip string) (*IPLocation, bool) {
+	val, ok := manager.items.Load(ip)
+	if !ok {
+		return nil, false
+	}
+
+	return val.(*IPLocation), true
 }
 
 // Query returns the cached IP location if any. Otherwise, retrieve from web API.
