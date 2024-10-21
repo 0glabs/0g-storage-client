@@ -2,6 +2,8 @@ package gateway
 
 import (
 	"encoding/json"
+	"io"
+	"mime/multipart"
 	"net/http"
 
 	"github.com/0glabs/0g-storage-client/core"
@@ -16,58 +18,93 @@ import (
 var expectedReplica uint
 
 type UploadSegmentRequest struct {
-	Root  string          `form:"root" json:"root"`                      // Merkle root
-	TxSeq *uint64         `form:"txSeq" json:"txSeq"`                    // Transaction sequence
-	Data  []byte          `form:"data" json:"data" binding:"required"`   // Segment data
-	Index uint64          `form:"index" json:"index" binding:"required"` // Segment index
-	Proof json.RawMessage `form:"proof" json:"proof" binding:"required"` // Merkle proof (encoded as JSON string)
+	Root  string  `form:"root" json:"root"`   // Merkle root
+	TxSeq *uint64 `form:"txSeq" json:"txSeq"` // Transaction sequence
+	Index uint64  `form:"index" json:"index"` // Segment index
+	Proof string  `form:"proof" json:"proof"` // Merkle proof (encoded as JSON string)
+
+	// Data can be either byte array or nil depending on request type
+	Data []byte `json:"data,omitempty"` // for `application/json` request
+	// OR (mutually exclusive with Data)
+	File *multipart.FileHeader `form:"data,omitempty"` // for `multipart/form-data` request
+}
+
+// GetData reads segment data from the request
+func (req *UploadSegmentRequest) GetData() ([]byte, error) {
+	if req.Data != nil {
+		return req.Data, nil
+	}
+	if req.File == nil {
+		return nil, errors.New("either `data` or `file` is required")
+	}
+	data, err := req.readFileData()
+	if err != nil {
+		return nil, errors.WithMessage(err, "failed to load file data")
+	}
+	req.Data = data
+	return data, nil
+}
+
+// readFileData reads data from the uploaded file
+func (req *UploadSegmentRequest) readFileData() ([]byte, error) {
+	file, err := req.File.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	fileBytes, err := io.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
+	return fileBytes, nil
 }
 
 func uploadSegment(c *gin.Context) {
 	var input UploadSegmentRequest
 
-	// bind the request (supports both form and JSON)
+	// bind the request (supports both `application/json` and `multipart/form-data`)
 	if err := c.ShouldBind(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": errors.WithMessagef(err, "Failed to bind input parameters").Error(),
-		})
+		c.JSON(http.StatusBadRequest, errors.WithMessagef(err, "Failed to bind input parameters").Error())
 		return
 	}
 
+	// validate root and transaction sequence
 	if input.TxSeq == nil && len(input.Root) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Either 'root' or 'txSeq' must be provided"})
+		c.JSON(http.StatusBadRequest, "Either 'root' or 'txSeq' must be provided")
 		return
 	}
 
-	// validate segment data length
+	// validate segment data
+	if _, err := input.GetData(); err != nil {
+		c.JSON(http.StatusBadRequest, errors.WithMessagef(err, "Failed to extract data").Error())
+		return
+	}
+
 	if len(input.Data) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Segment data is empty"})
+		c.JSON(http.StatusBadRequest, "Segment data is empty")
 		return
 	}
 
 	// retrieve and validate file info
 	fileInfo, err := getFileInfo(c, common.HexToHash(input.Root), input.TxSeq)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": errors.WithMessage(err, "Failed to retrieve file info").Error(),
-		})
+		c.JSON(http.StatusInternalServerError, errors.WithMessage(err, "Failed to retrieve file info").Error())
 		return
 	}
 	if fileInfo == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
+		c.JSON(http.StatusNotFound, "File not found")
 		return
 	}
 
 	// validate merkle proof
 	var proof merkle.Proof
-	if err := json.Unmarshal(input.Proof, &proof); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to json unmarshal merkle proof"})
+	if err := json.Unmarshal([]byte(input.Proof), &proof); err != nil {
+		c.JSON(http.StatusBadRequest, "Failed to json unmarshal merkle proof")
 		return
 	}
 	if err := validateMerkleProof(input, proof, fileInfo); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": errors.WithMessagef(err, "Failed to validate merkle proof").Error(),
-		})
+		c.JSON(http.StatusBadRequest, errors.WithMessagef(err, "Failed to validate merkle proof").Error())
 		return
 	}
 
@@ -80,16 +117,14 @@ func uploadSegment(c *gin.Context) {
 		FileSize: fileInfo.Tx.Size,
 	}
 	if err := uploadSegmentWithProof(c, segment, fileInfo); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": errors.WithMessage(err, "Failed to upload segment with proof").Error(),
-		})
+		c.JSON(http.StatusInternalServerError, errors.WithMessage(err, "Failed to upload segment with proof").Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Segment upload ok"})
+	c.JSON(http.StatusOK, "Segment upload ok")
 }
 
-// validateMerkleProof is a helper function to validate merkle proof for the input request
+// validateMerkleProof is a helper function to validate merkle proof for the upload request
 func validateMerkleProof(req UploadSegmentRequest, proof merkle.Proof, fileInfo *node.FileInfo) error {
 	fileSize := int64(fileInfo.Tx.Size)
 	merkleRoot := fileInfo.Tx.DataMerkleRoot
@@ -106,6 +141,5 @@ func uploadSegmentWithProof(c *gin.Context, segment node.SegmentWithProof, fileI
 		Segments: []node.SegmentWithProof{segment},
 		FileInfo: fileInfo,
 	}
-
 	return transfer.NewFileSegementUploader(clients).Upload(c, fileSegements, opt)
 }
