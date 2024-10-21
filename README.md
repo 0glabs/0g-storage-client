@@ -86,12 +86,77 @@ Indexer service provides RPC to index storages nodes in two ways:
 
 Please refer to the [RPC API](https://docs.0g.ai/0g-doc/docs/0g-storage/rpc/indexer-api) documentation for more details.
 
-Besides, indexer supports to download files via HTTP GET request:
+Besides, the Indexer provides a RESTful API gateway for file downloads and uploads.
+
+### File Download
+
+Files can be downloaded via HTTP GET requests in two ways:
+
+- By transaction sequence number:
 
 ```
-/file?txSeq=7
-or
-/file?root=0x0376e0d95e483b62d5100968ed17fe1b1d84f0bc5d9bda8000cdfd3f39a59927
+GET /file?txSeq=7
 ```
 
-Note, user could specify `name=foo.log` parameter in GET URL to rename the downloaded file.
+- By file Merkle root:
+
+```
+GET /file?root=0x0376e0d95e483b62d5100968ed17fe1b1d84f0bc5d9bda8000cdfd3f39a59927
+```
+
+You can also specify the `name` parameter to rename the downloaded file:
+
+```
+GET /file?txSeq=7&name=foo.log
+```
+
+### File Download Within a Folder
+
+Files within a folder can also be downloaded via HTTP GET requests:
+
+- By transaction sequence number:
+
+```
+GET /file/{txSeq}/path/to/file
+```
+
+- By file Merkle root:
+
+```
+GET /file/{merkleRoot}/path/to/file
+```
+
+This allows users to retrieve specific files from within a structured folder stored in the network.
+
+### File Upload
+
+File segments can be uploaded via HTTP POST requests in JSON format:
+
+```
+POST /file/segment
+```
+
+There are two options for uploading:
+
+- By transaction sequence:
+
+    ```json
+    {
+        "txSeq": /* Transaction sequence number */,
+        "index": /* Segment index (decimal) */,
+        "data": "/* Base64-encoded segment data */",
+        "proof": {/* Merkle proof object for validation */}
+    }
+    ```
+- By file Merkle root:
+
+    ```json
+    {
+        "root": "/* Merkle root of the file (in 0x-prefixed hexadecimal) */",
+        "index": /* Segment index (decimal) */,
+        "data": "/* Base64-encoded segment data */",
+        "proof": {/* Merkle proof object for validation */}
+    }
+    ```
+
+> **Note:** The `proof` field should contain a [`merkle.Proof`](https://github.com/0glabs/0g-storage-client/blob/8780c5020928a79fb60ed7dea26a42d9876ecfae/core/merkle/proof.go#L20) object, which is used to verify the integrity of each segment.
