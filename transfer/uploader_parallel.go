@@ -114,3 +114,81 @@ func (uploader *segmentUploader) ParallelDo(ctx context.Context, routine int, ta
 	}
 	return nil, nil
 }
+
+type fileSegmentUploader struct {
+	FileSegmentsWithProof
+	clients []*node.ZgsClient
+	tasks   [][]*uploadTask
+	logger  *logrus.Logger
+}
+
+var _ parallel.Interface = (*fileSegmentUploader)(nil)
+
+// ParallelCollect implements parallel.Interface.
+func (uploader *fileSegmentUploader) ParallelCollect(result *parallel.Result) error {
+	return nil
+}
+
+// ParallelDo implements parallel.Interface.
+func (uploader *fileSegmentUploader) ParallelDo(ctx context.Context, routine int, task int) (interface{}, error) {
+	clientTasks := uploader.tasks[task]
+	if len(clientTasks) == 0 {
+		return nil, nil
+	}
+
+	stageTimer := time.Now()
+	if uploader.logger.IsLevelEnabled(logrus.DebugLevel) {
+		uploader.logger.WithFields(logrus.Fields{
+			"taskId":      task,
+			"uploadTasks": clientTasks,
+		}).Debug("Begin task to upload file segments with proof")
+	}
+
+	clientIdx := clientTasks[0].clientIndex
+	if clientIdx >= len(uploader.clients) {
+		return nil, errors.Errorf("client index out of range: %d", clientIdx)
+	}
+
+	// collect the segments to be uploaded based on the upload tasks
+	segments := make([]node.SegmentWithProof, 0, len(clientTasks))
+	for _, task := range clientTasks {
+		if int(task.segIndex) >= len(uploader.Segments) {
+			return nil, errors.Errorf("segment index out of range: %d", task.segIndex)
+		}
+		segments = append(segments, uploader.Segments[task.segIndex])
+	}
+
+	// retry logic for segment uploads
+	for i := 0; i < tooManyDataRetries; i++ {
+		_, err := uploader.clients[clientIdx].UploadSegmentsByTxSeq(ctx, segments, uploader.Tx.Seq)
+		if err == nil || isDuplicateError(err.Error()) {
+			break
+		}
+
+		if isTooManyDataError(err.Error()) && i < tooManyDataRetries-1 {
+			time.Sleep(10 * time.Second)
+			continue
+		}
+
+		return nil, errors.WithMessage(err, "Failed to upload segment")
+	}
+
+	if uploader.logger.IsLevelEnabled(logrus.DebugLevel) {
+		segs := make([]node.SegmentWithProof, 0, len(segments))
+		for i := range segments {
+			segs = append(segs, node.SegmentWithProof{
+				Root:  segments[i].Root,
+				Index: segments[i].Index,
+			})
+		}
+		uploader.logger.WithFields(logrus.Fields{
+			"clientIndex": clientIdx,
+			"taskId":      task,
+			"totalSegs":   len(segments),
+			"segments":    segs,
+			"duration":    time.Since(stageTimer),
+		}).Debug("Completed task to upload file segments with proof")
+	}
+
+	return nil, nil
+}

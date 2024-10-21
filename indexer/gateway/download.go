@@ -22,9 +22,9 @@ var maxDownloadFileSize uint64
 // downloadFile handles file downloads by root hash or transaction sequence.
 func downloadFile(c *gin.Context) {
 	var input struct {
-		Name  string `form:"name" json:"name"`
-		Root  string `form:"root" json:"root"`
-		TxSeq uint64 `form:"txSeq" json:"txSeq"`
+		Name  string  `form:"name" json:"name"`
+		Root  string  `form:"root" json:"root"`
+		TxSeq *uint64 `form:"txSeq" json:"txSeq"`
 	}
 
 	if err := c.ShouldBind(&input); err != nil {
@@ -32,7 +32,12 @@ func downloadFile(c *gin.Context) {
 		return
 	}
 
-	fileInfo, err := getFileInfo(c, input.Root, input.TxSeq)
+	if input.TxSeq == nil && len(input.Root) == 0 {
+		c.JSON(http.StatusBadRequest, "Either 'root' or 'txSeq' must be provided")
+		return
+	}
+
+	fileInfo, err := getFileInfo(c, common.HexToHash(input.Root), input.TxSeq)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, fmt.Sprintf("Failed to retrieve file info: %v", err))
 		return
@@ -70,13 +75,13 @@ func downloadFileInFolder(c *gin.Context) {
 	cid := c.Param("cid")
 	filePath := filepath.Clean(c.Param("filePath"))
 
-	var root string
-	var txSeq uint64
+	var root common.Hash
+	var txSeq *uint64
 
 	if v, err := strconv.ParseUint(cid, 10, 64); err == nil { // TxnSeq is used as cid
-		txSeq = v
+		txSeq = &v
 	} else {
-		root = cid
+		root = common.HexToHash(cid)
 	}
 
 	fileInfo, err := getFileInfo(c, root, txSeq)
@@ -101,9 +106,9 @@ func downloadFileInFolder(c *gin.Context) {
 		return
 	}
 
-	root = fileInfo.Tx.DataMerkleRoot.Hex()
+	root = fileInfo.Tx.DataMerkleRoot
 
-	ftree, err := transfer.BuildFileTree(c, downloader, root, true)
+	ftree, err := transfer.BuildFileTree(c, downloader, root.Hex(), true)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, fmt.Sprintf("Failed to build file tree, %v", err.Error()))
 		return
@@ -141,15 +146,28 @@ func downloadFileInFolder(c *gin.Context) {
 }
 
 // getFileInfo retrieves file info based on root or transaction sequence.
-func getFileInfo(ctx context.Context, root string, txSeq uint64) (*node.FileInfo, error) {
+func getFileInfo(ctx context.Context, root common.Hash, txSeq *uint64) (info *node.FileInfo, err error) {
 	if len(clients) == 0 {
 		return nil, errors.New("no clients available")
 	}
 
-	if root != "" {
-		return clients[0].GetFileInfo(ctx, common.HexToHash(root))
+	for _, client := range clients {
+		if txSeq != nil {
+			info, err = client.GetFileInfoByTxSeq(ctx, *txSeq)
+		} else {
+			info, err = client.GetFileInfo(ctx, root)
+		}
+
+		if err != nil {
+			return nil, err
+		}
+
+		if info != nil {
+			return info, nil
+		}
 	}
-	return clients[0].GetFileInfoByTxSeq(ctx, txSeq)
+
+	return nil, nil
 }
 
 // downloadAndServeFile downloads the file and serves it as an attachment.
