@@ -86,12 +86,72 @@ Indexer service provides RPC to index storages nodes in two ways:
 
 Please refer to the [RPC API](https://docs.0g.ai/0g-doc/docs/0g-storage/rpc/indexer-api) documentation for more details.
 
-Besides, indexer supports to download files via HTTP GET request:
+Besides, the Indexer provides a RESTful API gateway for file downloads and uploads.
+
+### File Download
+
+Files can be downloaded via HTTP GET requests in two ways:
+
+- By transaction sequence number:
 
 ```
 /file?txSeq=7
-or
+```
+
+- By file Merkle root:
+
+```
 /file?root=0x0376e0d95e483b62d5100968ed17fe1b1d84f0bc5d9bda8000cdfd3f39a59927
 ```
 
-Note, user could specify `name=foo.log` parameter in GET URL to rename the downloaded file.
+You can also specify the `name` parameter to rename the downloaded file:
+
+```
+/file?txSeq=7&name=foo.log
+```
+
+### File Download Within a Folder
+
+Files within a folder can also be downloaded via HTTP GET requests:
+
+- By transaction sequence number:
+
+```
+/file/{txSeq}/path/to/file
+```
+
+- By file Merkle root:
+
+```
+/file/{merkleRoot}/path/to/file
+```
+
+This allows users to retrieve specific files from within a structured folder stored in the network.
+
+### File Upload
+
+File segments can be uploaded via HTTP POST requests in JSON format. There are two options for uploading:
+
+- By transaction sequence:
+
+```json
+{
+"txSeq": "/* transaction sequence */",
+"index": "/* segment index */",
+"proof": "/* JSON marshalled Merkle proof string */",
+"data": "/* base64 encoded segment data */"
+}
+```
+
+- By file Merkle root:
+
+```json
+{
+"root": "/* file Merkle root */",
+"index": "/* segment index */",
+"proof": "/* JSON marshalled Merkle proof string */",
+"data": "/* base64 encoded segment data */"
+}
+```
+
+Each uploaded segment is verified against the provided Merkle proof to ensure data integrity.
