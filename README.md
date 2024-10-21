@@ -95,19 +95,19 @@ Files can be downloaded via HTTP GET requests in two ways:
 - By transaction sequence number:
 
 ```
-/file?txSeq=7
+GET /file?txSeq=7
 ```
 
 - By file Merkle root:
 
 ```
-/file?root=0x0376e0d95e483b62d5100968ed17fe1b1d84f0bc5d9bda8000cdfd3f39a59927
+GET /file?root=0x0376e0d95e483b62d5100968ed17fe1b1d84f0bc5d9bda8000cdfd3f39a59927
 ```
 
 You can also specify the `name` parameter to rename the downloaded file:
 
 ```
-/file?txSeq=7&name=foo.log
+GET /file?txSeq=7&name=foo.log
 ```
 
 ### File Download Within a Folder
@@ -117,41 +117,46 @@ Files within a folder can also be downloaded via HTTP GET requests:
 - By transaction sequence number:
 
 ```
-/file/{txSeq}/path/to/file
+GET /file/{txSeq}/path/to/file
 ```
 
 - By file Merkle root:
 
 ```
-/file/{merkleRoot}/path/to/file
+GET /file/{merkleRoot}/path/to/file
 ```
 
 This allows users to retrieve specific files from within a structured folder stored in the network.
 
 ### File Upload
 
-File segments can be uploaded via HTTP POST requests in JSON format. There are two options for uploading:
+File segments can be uploaded via HTTP POST requests in JSON format:
+
+```
+POST /file/segment
+```
+
+There are two options for uploading:
 
 - By transaction sequence:
 
-```json
-{
-"txSeq": "/* transaction sequence */",
-"index": "/* segment index */",
-"proof": "/* JSON marshalled Merkle proof string */",
-"data": "/* base64 encoded segment data */"
-}
-```
-
+    ```json
+    {
+        "txSeq": /* Transaction sequence number */,
+        "index": /* Segment index (decimal) */,
+        "data": "/* Base64-encoded segment data */",
+        "proof": {/* Merkle proof object for validation */}
+    }
+    ```
 - By file Merkle root:
 
-```json
-{
-"root": "/* file Merkle root */",
-"index": "/* segment index */",
-"proof": "/* JSON marshalled Merkle proof string */",
-"data": "/* base64 encoded segment data */"
-}
-```
+    ```json
+    {
+        "root": "/* Merkle root of the file (in 0x-prefixed hexadecimal) */",
+        "index": /* Segment index (decimal) */,
+        "data": "/* Base64-encoded segment data */",
+        "proof": {/* Merkle proof object for validation */}
+    }
+    ```
 
-Each uploaded segment is verified against the provided Merkle proof to ensure data integrity.
+> **Note:** The `proof` field should contain a [`merkle.Proof`](https://github.com/0glabs/0g-storage-client/blob/8780c5020928a79fb60ed7dea26a42d9876ecfae/core/merkle/proof.go#L20) object, which is used to verify the integrity of each segment.
