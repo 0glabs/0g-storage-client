@@ -170,6 +170,7 @@ func (uploader *Uploader) SplitableUpload(ctx context.Context, data core.Iterabl
 	}
 	// align size of fragment to 2 power
 	fragmentSize = int64(core.NextPow2(uint64(fragmentSize)))
+	uploader.logger.Infof("fragment size: %v", fragmentSize)
 
 	txHashes := make([]common.Hash, 0)
 	rootHashes := make([]common.Hash, 0)

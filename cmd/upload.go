@@ -76,7 +76,7 @@ func bindUploadFlags(cmd *cobra.Command, args *uploadArgument) {
 	cmd.Flags().BoolVar(&args.finalityRequired, "finality-required", false, "Wait for file finality on nodes to upload")
 	cmd.Flags().UintVar(&args.taskSize, "task-size", 10, "Number of segments to upload in single rpc request")
 
-	cmd.Flags().Int64Var(&args.fragmentSize, "fragment-size", 1024*1024*1024*5, "the size of fragment to split into when file is too large")
+	cmd.Flags().Int64Var(&args.fragmentSize, "fragment-size", 1024*1024*1024*4, "the size of fragment to split into when file is too large")
 
 	cmd.Flags().IntVar(&args.routines, "routines", runtime.GOMAXPROCS(0), "number of go routines for uploading simutanously")
 

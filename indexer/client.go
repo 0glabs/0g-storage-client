@@ -3,6 +3,8 @@ package indexer
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"slices"
 	"time"
 
@@ -185,11 +187,10 @@ func (c *Client) BatchUpload(ctx context.Context, w3Client *web3go.Client, datas
 	}
 }
 
-// Download download file by given data root
-func (c *Client) Download(ctx context.Context, root, filename string, withProof bool) error {
+func (c *Client) NewDownloaderFromIndexerNodes(ctx context.Context, root string) (*transfer.Downloader, error) {
 	locations, err := c.GetFileLocations(ctx, root)
 	if err != nil {
-		return errors.WithMessage(err, "failed to get file locations")
+		return nil, errors.WithMessage(err, "failed to get file locations")
 	}
 	clients := make([]*node.ZgsClient, 0)
 	for _, location := range locations {
@@ -206,12 +207,57 @@ func (c *Client) Download(ctx context.Context, root, filename string, withProof 
 		clients = append(clients, client)
 	}
 	if len(clients) == 0 {
-		return fmt.Errorf("no node holding the file found, FindFile triggered, try again later")
+		return nil, fmt.Errorf("no node holding the file found, FindFile triggered, try again later")
 	}
 	downloader, err := transfer.NewDownloader(clients, c.option.LogOption)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
+	return downloader, nil
+}
+
+func (c *Client) DownloadFragments(ctx context.Context, roots []string, filename string, withProof bool) error {
+	outFile, err := os.Create(filename)
+	if err != nil {
+		return errors.WithMessage(err, "failed to create output file")
+	}
+	defer outFile.Close()
+
+	for _, root := range roots {
+		tempFile := fmt.Sprintf("%v.temp", root)
+		downloader, err := c.NewDownloaderFromIndexerNodes(ctx, root)
+		if err != nil {
+			return err
+		}
+		err = downloader.Download(ctx, root, tempFile, withProof)
+		if err != nil {
+			return errors.WithMessage(err, "Failed to download file")
+		}
+		inFile, err := os.Open(tempFile)
+		if err != nil {
+			return errors.WithMessage(err, fmt.Sprintf("failed to open file %s", tempFile))
+		}
+		_, err = io.Copy(outFile, inFile)
+		inFile.Close()
+		if err != nil {
+			return errors.WithMessage(err, fmt.Sprintf("failed to copy content from temp file %s", tempFile))
+		}
+
+		err = os.Remove(tempFile)
+		if err != nil {
+			return errors.WithMessage(err, fmt.Sprintf("failed to delete temp file %s:", tempFile))
+		}
+	}
+
+	return nil
+}
+
+// Download download file by given data root
+func (c *Client) Download(ctx context.Context, root, filename string, withProof bool) error {
+	downloader, err := c.NewDownloaderFromIndexerNodes(ctx, root)
+	if err != nil {
+		return err
+	}
 	return downloader.Download(ctx, root, filename, withProof)
 }
