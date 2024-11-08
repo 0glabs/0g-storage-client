@@ -131,7 +131,7 @@ func uploadLocalFile(c *gin.Context) (interface{}, error) {
 	}
 	defer file.Close()
 
-	if _, err := uploader.Upload(context.Background(), file); err != nil {
+	if _, _, err := uploader.Upload(context.Background(), file); err != nil {
 		return nil, err
 	}
 

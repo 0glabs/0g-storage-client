@@ -145,7 +145,7 @@ func (c *Client) Upload(ctx context.Context, w3Client *web3go.Client, data core.
 		if err != nil {
 			return eth_common.Hash{}, err
 		}
-		txHash, err := uploader.Upload(ctx, data, option...)
+		txHash, _, err := uploader.Upload(ctx, data, option...)
 		var rpcError *node.RPCError
 		if errors.As(err, &rpcError) {
 			dropped = append(dropped, rpcError.URL)
@@ -157,7 +157,7 @@ func (c *Client) Upload(ctx context.Context, w3Client *web3go.Client, data core.
 }
 
 // BatchUpload submit multiple data to 0g storage contract batchly in single on-chain transaction, then transfer the data to the storage nodes selected from indexer service.
-func (c *Client) BatchUpload(ctx context.Context, w3Client *web3go.Client, datas []core.IterableData, waitForLogEntry bool, option ...transfer.BatchUploadOption) (eth_common.Hash, []eth_common.Hash, error) {
+func (c *Client) BatchUpload(ctx context.Context, w3Client *web3go.Client, datas []core.IterableData, option ...transfer.BatchUploadOption) (eth_common.Hash, []eth_common.Hash, error) {
 	expectedReplica := uint(1)
 	if len(option) > 0 {
 		for _, opt := range option[0].DataOptions {
@@ -174,7 +174,7 @@ func (c *Client) BatchUpload(ctx context.Context, w3Client *web3go.Client, datas
 		if err != nil {
 			return eth_common.Hash{}, nil, err
 		}
-		hash, roots, err := uploader.BatchUpload(ctx, datas, waitForLogEntry, option...)
+		hash, roots, err := uploader.BatchUpload(ctx, datas, option...)
 		var rpcError *node.RPCError
 		if errors.As(err, &rpcError) {
 			dropped = append(dropped, rpcError.URL)

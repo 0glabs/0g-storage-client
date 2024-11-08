@@ -30,10 +30,11 @@ var (
 type IterableData interface {
 	NumChunks() uint64
 	NumSegments() uint64
+	Offset() int64
 	Size() int64
 	PaddedSize() uint64
-	Iterate(offset int64, batch int64, flowPadding bool) Iterator
 	Read(buf []byte, offset int64) (int, error)
+	Split(fragmentSize int64) []IterableData
 }
 
 // MerkleTree create merkle tree of the data.

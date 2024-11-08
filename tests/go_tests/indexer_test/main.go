@@ -75,7 +75,7 @@ func runTest() error {
 		return errors.WithMessage(err, "failed to initialize uploader")
 	}
 
-	if _, err := uploader.Upload(context.Background(), data, transfer.UploadOption{
+	if _, _, err := uploader.Upload(context.Background(), data, transfer.UploadOption{
 		FinalityRequired: transfer.FileFinalized,
 	}); err != nil {
 		return errors.WithMessage(err, "failed to upload file")

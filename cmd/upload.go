@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"math/big"
+	"strings"
 	"time"
 
 	zg_common "github.com/0glabs/0g-storage-client/common"
@@ -52,6 +53,8 @@ type uploadArgument struct {
 	finalityRequired bool
 	taskSize         uint
 
+	fragmentSize int64
+
 	timeout time.Duration
 }
 
@@ -70,6 +73,8 @@ func bindUploadFlags(cmd *cobra.Command, args *uploadArgument) {
 	cmd.Flags().BoolVar(&args.skipTx, "skip-tx", true, "Skip sending the transaction on chain if already exists")
 	cmd.Flags().BoolVar(&args.finalityRequired, "finality-required", false, "Wait for file finality on nodes to upload")
 	cmd.Flags().UintVar(&args.taskSize, "task-size", 10, "Number of segments to upload in single rpc request")
+
+	cmd.Flags().Int64Var(&args.fragmentSize, "fragment-size", 1024*1024*1024*5, "the size of fragment to split into when file is too large")
 
 	cmd.Flags().DurationVar(&args.timeout, "timeout", 0, "cli task timeout, 0 for no timeout")
 }
@@ -137,8 +142,18 @@ func upload(*cobra.Command, []string) {
 	}
 	defer closer()
 
-	if _, err := uploader.Upload(ctx, file, opt); err != nil {
+	_, roots, err := uploader.SplitableUpload(ctx, file, uploadArgs.fragmentSize, opt)
+	if err != nil {
 		logrus.WithError(err).Fatal("Failed to upload file")
+	}
+	if len(roots) == 1 {
+		logrus.Infof("file uploaded, root = %v", roots[0])
+	} else {
+		s := make([]string, len(roots))
+		for i, root := range roots {
+			s[i] = root.String()
+		}
+		logrus.Infof("file uploaded in %v fragments, roots = %v", len(roots), strings.Join(s, ","))
 	}
 }
 

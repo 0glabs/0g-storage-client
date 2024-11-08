@@ -21,12 +21,14 @@ type File struct {
 	os.FileInfo
 	underlying *os.File
 	paddedSize uint64
+	offset     int64
+	size       int64
 }
 
 var _ IterableData = (*File)(nil)
 
 func (file *File) Read(buf []byte, offset int64) (int, error) {
-	n, err := file.underlying.ReadAt(buf, offset)
+	n, err := file.underlying.ReadAt(buf, file.offset+offset)
 	// unexpected IO error
 	if !errors.Is(err, io.EOF) {
 		return 0, err
@@ -72,6 +74,8 @@ func Open(name string) (*File, error) {
 	return &File{
 		FileInfo:   info,
 		underlying: file,
+		offset:     0,
+		size:       info.Size(),
 		paddedSize: IteratorPaddedSize(info.Size(), true),
 	}, nil
 }
@@ -110,86 +114,26 @@ func (file *File) PaddedSize() uint64 {
 	return file.paddedSize
 }
 
-func (file *File) Iterate(offset int64, batch int64, flowPadding bool) Iterator {
-	if batch%DefaultChunkSize > 0 {
-		panic("batch size should align with chunk size")
-	}
-	dataSize := file.Size()
-	return &FileIterator{
-		file:       file.underlying,
-		buf:        make([]byte, batch),
-		offset:     offset,
-		fileSize:   dataSize,
-		paddedSize: IteratorPaddedSize(dataSize, flowPadding),
-	}
+func (file *File) Size() int64 {
+	return file.size
 }
 
-type FileIterator struct {
-	file       *os.File
-	buf        []byte // buffer to read data from file
-	bufSize    int    // actual data size in buffer
-	fileSize   int64
-	paddedSize uint64
-	offset     int64 // offset to read data
+func (file *File) Offset() int64 {
+	return file.offset
 }
 
-var _ Iterator = (*FileIterator)(nil)
-
-func (it *FileIterator) Next() (bool, error) {
-	// Reject invalid offset
-	if it.offset < 0 || uint64(it.offset) >= it.paddedSize {
-		return false, nil
+func (file *File) Split(fragmentSize int64) []IterableData {
+	fragments := make([]IterableData, 0)
+	for offset := file.offset; offset < file.offset+file.size; offset += fragmentSize {
+		size := min(file.size-offset, fragmentSize)
+		fragment := &File{
+			FileInfo:   file.FileInfo,
+			underlying: file.underlying,
+			offset:     offset,
+			size:       size,
+			paddedSize: IteratorPaddedSize(size, true),
+		}
+		fragments = append(fragments, fragment)
 	}
-
-	var expectedBufSize int
-	maxAvailableLength := it.paddedSize - uint64(it.offset)
-	if maxAvailableLength >= uint64(len(it.buf)) {
-		expectedBufSize = len(it.buf)
-	} else {
-		expectedBufSize = int(maxAvailableLength)
-	}
-
-	it.clearBuffer()
-
-	if it.offset >= it.fileSize {
-		it.paddingZeros(expectedBufSize)
-		return true, nil
-	}
-
-	n, err := it.file.ReadAt(it.buf, it.offset)
-	it.bufSize = n
-	it.offset += int64(n)
-
-	// not reach EOF
-	if n == expectedBufSize {
-		return true, nil
-	}
-
-	// unexpected IO error
-	if !errors.Is(err, io.EOF) {
-		return false, err
-	}
-
-	if n > expectedBufSize {
-		// should never happen
-		panic("load more data from file than expected")
-	}
-
-	it.paddingZeros(expectedBufSize - n)
-
-	return true, nil
-}
-
-func (it *FileIterator) clearBuffer() {
-	it.bufSize = 0
-}
-
-func (it *FileIterator) paddingZeros(length int) {
-	paddingZeros(it.buf, it.bufSize, length)
-	it.bufSize += length
-	it.offset += int64(length)
-}
-
-func (it *FileIterator) Current() []byte {
-	return it.buf[:it.bufSize]
+	return fragments
 }

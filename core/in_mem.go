@@ -5,6 +5,8 @@ import "errors"
 // DataInMemory implement of IterableData, the underlying is memory data
 type DataInMemory struct {
 	underlying []byte
+	offset     int64
+	size       int64
 	paddedSize uint64
 }
 
@@ -17,12 +19,14 @@ func NewDataInMemory(data []byte) (*DataInMemory, error) {
 	}
 	return &DataInMemory{
 		underlying: data,
+		offset:     0,
+		size:       int64(len(data)),
 		paddedSize: IteratorPaddedSize(int64(len(data)), true),
 	}, nil
 }
 
 func (data *DataInMemory) Read(buf []byte, offset int64) (int, error) {
-	n := copy(buf, data.underlying[offset:])
+	n := copy(buf, data.underlying[data.offset+offset:])
 	return n, nil
 }
 
@@ -35,78 +39,28 @@ func (data *DataInMemory) NumSegments() uint64 {
 }
 
 func (data *DataInMemory) Size() int64 {
-	return int64(len(data.underlying))
+	return data.size
+}
+
+func (data *DataInMemory) Offset() int64 {
+	return data.offset
 }
 
 func (data *DataInMemory) PaddedSize() uint64 {
 	return data.paddedSize
 }
 
-func (data *DataInMemory) Iterate(offset int64, batch int64, flowPadding bool) Iterator {
-	if batch%DefaultChunkSize > 0 {
-		panic("batch size should align with chunk size")
+func (data *DataInMemory) Split(fragmentSize int64) []IterableData {
+	fragments := make([]IterableData, 0)
+	for offset := data.offset; offset < data.offset+data.size; offset += fragmentSize {
+		size := min(data.size-offset, fragmentSize)
+		fragment := &DataInMemory{
+			underlying: data.underlying,
+			offset:     offset,
+			size:       size,
+			paddedSize: IteratorPaddedSize(size, true),
+		}
+		fragments = append(fragments, fragment)
 	}
-	dataSize := int64(len(data.underlying))
-	return &MemoryDataIterator{
-		data:       data,
-		buf:        make([]byte, batch),
-		offset:     int(offset),
-		dataSize:   int(dataSize),
-		paddedSize: uint(IteratorPaddedSize(dataSize, flowPadding)),
-	}
-}
-
-type MemoryDataIterator struct {
-	data       *DataInMemory
-	buf        []byte // buffer to read data from file
-	bufSize    int    // actual data size in buffer
-	dataSize   int
-	paddedSize uint
-	offset     int // offset to read data
-}
-
-var _ Iterator = (*MemoryDataIterator)(nil)
-
-func (it *MemoryDataIterator) Next() (bool, error) {
-	// Reject invalid offset
-	if it.offset < 0 || uint(it.offset) >= it.paddedSize {
-		return false, nil
-	}
-
-	var expectedBufSize int
-	maxAvailableLength := it.paddedSize - uint(it.offset)
-	if maxAvailableLength >= uint(len(it.buf)) {
-		expectedBufSize = len(it.buf)
-	} else {
-		expectedBufSize = int(maxAvailableLength)
-	}
-
-	it.bufSize = 0
-
-	if it.offset >= it.dataSize {
-		it.paddingZeros(expectedBufSize)
-		return true, nil
-	}
-
-	n := copy(it.buf, it.data.underlying[it.offset:])
-	it.offset += int(n)
-	it.bufSize = n
-
-	if n == expectedBufSize {
-		return true, nil
-	}
-
-	it.paddingZeros(expectedBufSize - n)
-
-	return true, nil
-}
-
-func (it *MemoryDataIterator) paddingZeros(length int) {
-	paddingZeros(it.buf, it.bufSize, length)
-	it.bufSize += length
-	it.offset += length
-}
-
-func (it *MemoryDataIterator) Current() []byte {
-	return it.buf[:it.bufSize]
+	return fragments
 }
