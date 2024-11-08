@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"runtime"
 	"time"
 
 	"github.com/0glabs/0g-storage-client/common"
@@ -22,6 +23,8 @@ type downloadArgument struct {
 	root  string
 	proof bool
 
+	routines int
+
 	timeout time.Duration
 }
 
@@ -36,6 +39,8 @@ func bindDownloadFlags(cmd *cobra.Command, args *downloadArgument) {
 	cmd.Flags().StringVar(&args.root, "root", "", "Merkle root to download file")
 	cmd.MarkFlagRequired("root")
 	cmd.Flags().BoolVar(&args.proof, "proof", false, "Whether to download with merkle proof for validation")
+
+	cmd.Flags().IntVar(&args.routines, "routines", runtime.GOMAXPROCS(0), "number of go routines for downloading simutanously")
 
 	cmd.Flags().DurationVar(&args.timeout, "timeout", 0, "cli task timeout, 0 for no timeout")
 }
@@ -100,6 +105,7 @@ func newDownloader(args downloadArgument) (transfer.IDownloader, func(), error) 
 		closer()
 		return nil, nil, err
 	}
+	downloader.WithRoutines(downloadArgs.routines)
 
 	return downloader, closer, nil
 }

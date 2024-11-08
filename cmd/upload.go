@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"math/big"
+	"runtime"
 	"strings"
 	"time"
 
@@ -52,6 +53,7 @@ type uploadArgument struct {
 	skipTx           bool
 	finalityRequired bool
 	taskSize         uint
+	routines         int
 
 	fragmentSize int64
 
@@ -75,6 +77,8 @@ func bindUploadFlags(cmd *cobra.Command, args *uploadArgument) {
 	cmd.Flags().UintVar(&args.taskSize, "task-size", 10, "Number of segments to upload in single rpc request")
 
 	cmd.Flags().Int64Var(&args.fragmentSize, "fragment-size", 1024*1024*1024*5, "the size of fragment to split into when file is too large")
+
+	cmd.Flags().IntVar(&args.routines, "routines", runtime.GOMAXPROCS(0), "number of go routines for uploading simutanously")
 
 	cmd.Flags().DurationVar(&args.timeout, "timeout", 0, "cli task timeout, 0 for no timeout")
 }
@@ -141,6 +145,7 @@ func upload(*cobra.Command, []string) {
 		logrus.WithError(err).Fatal("Failed to initialize uploader")
 	}
 	defer closer()
+	uploader.WithRoutines(uploadArgs.routines)
 
 	_, roots, err := uploader.SplitableUpload(ctx, file, uploadArgs.fragmentSize, opt)
 	if err != nil {

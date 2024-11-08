@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
 
 	zg_common "github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/core"
@@ -28,6 +29,8 @@ type IDownloader interface {
 type Downloader struct {
 	clients []*node.ZgsClient
 
+	routines int
+
 	logger *logrus.Logger
 }
 
@@ -40,7 +43,13 @@ func NewDownloader(clients []*node.ZgsClient, opts ...zg_common.LogOption) (*Dow
 		clients: clients,
 		logger:  zg_common.NewLogger(opts...),
 	}
+	downloader.routines = runtime.GOMAXPROCS(0)
 	return downloader, nil
+}
+
+func (downloader *Downloader) WithRoutines(routines int) *Downloader {
+	downloader.routines = routines
+	return downloader
 }
 
 // Download download data from storage nodes.
@@ -127,7 +136,7 @@ func (downloader *Downloader) downloadFile(ctx context.Context, filename string,
 		return err
 	}
 
-	sd, err := newSegmentDownloader(downloader.clients, info, shardConfigs, file, withProof, downloader.logger)
+	sd, err := newSegmentDownloader(downloader, info, shardConfigs, file, withProof)
 	if err != nil {
 		return errors.WithMessage(err, "Failed to create segment downloader")
 	}

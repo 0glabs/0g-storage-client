@@ -80,10 +80,11 @@ type BatchUploadOption struct {
 
 // Uploader uploader to upload file to 0g storage, send on-chain transactions and transfer data to storage nodes.
 type Uploader struct {
-	flow    *contract.FlowContract // flow contract instance
-	market  *contract.Market       // market contract instance
-	clients []*node.ZgsClient      // 0g storage clients
-	logger  *logrus.Logger         // logger
+	flow     *contract.FlowContract // flow contract instance
+	market   *contract.Market       // market contract instance
+	clients  []*node.ZgsClient      // 0g storage clients
+	routines int                    // number of go routines for uploading
+	logger   *logrus.Logger         // logger
 }
 
 func getShardConfigs(ctx context.Context, clients []*node.ZgsClient) ([]*shard.ShardConfig, error) {
@@ -155,6 +156,11 @@ func checkLogExistance(ctx context.Context, clients []*node.ZgsClient, root comm
 		}
 	}
 	return info, nil
+}
+
+func (uploader *Uploader) WithRoutines(routines int) *Uploader {
+	uploader.routines = routines
+	return uploader
 }
 
 // SplitableUpload submit data to 0g storage contract and large data will be splited to reduce padding cost.
@@ -675,7 +681,7 @@ func (uploader *Uploader) uploadFile(ctx context.Context, info *node.FileInfo, d
 	}
 
 	opt := parallel.SerialOption{
-		Routines: min(runtime.GOMAXPROCS(0), len(uploader.clients)*5),
+		Routines: uploader.routines,
 	}
 	err = parallel.Serial(ctx, segmentUploader, len(segmentUploader.tasks), opt)
 	if err != nil {
@@ -812,6 +818,7 @@ func (uploader *FileSegmentUploader) newFileSegmentUploader(
 			uploadTasks = append(uploadTasks, tasks)
 		}
 	}
+	util.Shuffle(uploadTasks)
 
 	return &fileSegmentUploader{
 		FileSegmentsWithProof: fileSeg,
