@@ -105,6 +105,7 @@ class ClientTestFramework(TestFramework):
         node_rpc_url,
         indexer_url,
         file_to_upload,
+        fragment_size = None,
         skip_tx = True,
     ):
         upload_args = [
@@ -126,6 +127,10 @@ class ClientTestFramework(TestFramework):
         elif indexer_url is not None:
             upload_args.append("--indexer")
             upload_args.append(indexer_url)
+        if fragment_size is not None:
+            upload_args.append("--fragment-size")
+            upload_args.append(str(fragment_size))
+
         upload_args.append("--file")
         self.log.info("upload file with cli: {}".format(upload_args))
 
@@ -148,11 +153,10 @@ class ClientTestFramework(TestFramework):
             for line in lines:
                 line = line.decode("utf-8")
                 self.log.debug("line: %s", line)
-                if "root" in line:
-                    filtered_line = re.sub(r'\x1b\[([0-9,A-Z]{1,2}(;[0-9]{1,2})?(;[0-9]{3})?)?[m|K]?', '', line)
-                    index = filtered_line.find("root=")
-                    if index > 0:
-                        root = filtered_line[index + 5 : index + 5 + 66]
+                if "root = " in line:
+                    root = line.strip().split("root = ")[1]
+                if "roots = " in line:
+                    root = line.strip().split("roots = ")[1]
         except Exception as ex:
             self.log.error("Failed to upload file via CLI tool, output: %s", output_name)
             raise ex
@@ -167,21 +171,30 @@ class ClientTestFramework(TestFramework):
         self,
         node_rpc_url,
         indexer_url,
-        root,
+        root = None,
+        roots = None,
+        file_to_download = None,
         with_proof = True,
+        remove = True,
     ):
-        file_to_download = os.path.join(self.root_dir, "download_{}_{}".format(root, time.time()))
+        if file_to_download is None:
+            file_to_download = os.path.join(self.root_dir, "download_{}_{}".format(root, time.time()))
         download_args = [
             self.cli_binary,
             "download",
             "--file",
             file_to_download,
-            "--root",
-            root,
             "--proof=" + str(with_proof),
             "--log-level",
             "debug",
         ]
+        if root is not None:
+            download_args.append("--root")
+            download_args.append(root)
+        elif roots is not None:
+            download_args.append("--roots")
+            download_args.append(roots)
+
         if node_rpc_url is not None:
             download_args.append("--node")
             download_args.append(node_rpc_url)
@@ -213,7 +226,8 @@ class ClientTestFramework(TestFramework):
 
         assert return_code == 0, "%s download file failed, output: %s, log: %s" % (self.cli_binary, output_name, lines)
 
-        os.remove(file_to_download)
+        if remove:
+            os.remove(file_to_download)
 
         return
     

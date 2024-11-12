@@ -58,6 +58,7 @@ func uploadDir(*cobra.Command, []string) {
 		logrus.WithError(err).Fatal("Failed to initialize uploader")
 	}
 	defer closer()
+	uploader.WithRoutines(uploadArgs.routines)
 
 	txnHash, rootHash, err := uploader.UploadDir(ctx, uploadDirArgs.file, opt)
 	if err != nil {

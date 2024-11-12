@@ -46,7 +46,7 @@ func runTest() error {
 	if err != nil {
 		return errors.WithMessage(err, "failed to initialize indexer client")
 	}
-	_, roots, err := indexerClient.BatchUpload(ctx, w3client, datas, true, transfer.BatchUploadOption{
+	_, roots, err := indexerClient.BatchUpload(ctx, w3client, datas, transfer.BatchUploadOption{
 		TaskSize:    5,
 		DataOptions: opts,
 	})

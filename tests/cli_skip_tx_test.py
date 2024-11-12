@@ -54,7 +54,7 @@ class SkipTxTest(ClientTestFramework):
             self.nodes[node_idx].rpc_url,
             None,
             file_to_upload,
-            True
+            skip_tx=True
         )
         wait_until(lambda: self.contract.num_submissions() == 1)
         assert_equal(w3.eth.get_transaction_count(GENESIS_ACCOUNT.address), nonce)

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"runtime"
 	"time"
 
 	"github.com/0glabs/0g-storage-client/common"
@@ -20,7 +21,10 @@ type downloadArgument struct {
 	nodes   []string
 
 	root  string
+	roots []string
 	proof bool
+
+	routines int
 
 	timeout time.Duration
 }
@@ -34,8 +38,13 @@ func bindDownloadFlags(cmd *cobra.Command, args *downloadArgument) {
 	cmd.MarkFlagsOneRequired("indexer", "node")
 
 	cmd.Flags().StringVar(&args.root, "root", "", "Merkle root to download file")
-	cmd.MarkFlagRequired("root")
+	cmd.Flags().StringSliceVar(&args.roots, "roots", []string{}, "Merkle roots to download fragments")
+	cmd.MarkFlagsOneRequired("root", "roots")
+	cmd.MarkFlagsMutuallyExclusive("root", "roots")
+
 	cmd.Flags().BoolVar(&args.proof, "proof", false, "Whether to download with merkle proof for validation")
+
+	cmd.Flags().IntVar(&args.routines, "routines", runtime.GOMAXPROCS(0), "number of go routines for downloading simutanously")
 
 	cmd.Flags().DurationVar(&args.timeout, "timeout", 0, "cli task timeout, 0 for no timeout")
 }
@@ -70,8 +79,14 @@ func download(*cobra.Command, []string) {
 	}
 	defer closer()
 
-	if err := downloader.Download(ctx, downloadArgs.root, downloadArgs.file, downloadArgs.proof); err != nil {
-		logrus.WithError(err).Fatal("Failed to download file")
+	if downloadArgs.root != "" {
+		if err := downloader.Download(ctx, downloadArgs.root, downloadArgs.file, downloadArgs.proof); err != nil {
+			logrus.WithError(err).Fatal("Failed to download file")
+		}
+	} else {
+		if err := downloader.DownloadFragments(ctx, downloadArgs.roots, downloadArgs.file, downloadArgs.proof); err != nil {
+			logrus.WithError(err).Fatal("Failed to download file")
+		}
 	}
 }
 
@@ -100,6 +115,7 @@ func newDownloader(args downloadArgument) (transfer.IDownloader, func(), error) 
 		closer()
 		return nil, nil, err
 	}
+	downloader.WithRoutines(downloadArgs.routines)
 
 	return downloader, closer, nil
 }

@@ -30,6 +30,7 @@ import (
 
 // defaultTaskSize is the default number of data segments to upload in a single upload RPC request
 const defaultTaskSize = uint(10)
+const defaultBatchSize = uint(10)
 
 var dataAlreadyExistsError = "Invalid params: root; data: already uploaded and finalized"
 var segmentAlreadyExistsError = "segment has already been uploaded or is being uploaded"
@@ -79,10 +80,11 @@ type BatchUploadOption struct {
 
 // Uploader uploader to upload file to 0g storage, send on-chain transactions and transfer data to storage nodes.
 type Uploader struct {
-	flow    *contract.FlowContract // flow contract instance
-	market  *contract.Market       // market contract instance
-	clients []*node.ZgsClient      // 0g storage clients
-	logger  *logrus.Logger         // logger
+	flow     *contract.FlowContract // flow contract instance
+	market   *contract.Market       // market contract instance
+	clients  []*node.ZgsClient      // 0g storage clients
+	routines int                    // number of go routines for uploading
+	logger   *logrus.Logger         // logger
 }
 
 func getShardConfigs(ctx context.Context, clients []*node.ZgsClient) ([]*shard.ShardConfig, error) {
@@ -156,9 +158,61 @@ func checkLogExistance(ctx context.Context, clients []*node.ZgsClient, root comm
 	return info, nil
 }
 
+func (uploader *Uploader) WithRoutines(routines int) *Uploader {
+	uploader.routines = routines
+	return uploader
+}
+
+// SplitableUpload submit data to 0g storage contract and large data will be splited to reduce padding cost.
+func (uploader *Uploader) SplitableUpload(ctx context.Context, data core.IterableData, fragmentSize int64, option ...UploadOption) ([]common.Hash, []common.Hash, error) {
+	if fragmentSize < core.DefaultChunkSize {
+		fragmentSize = core.DefaultChunkSize
+	}
+	// align size of fragment to 2 power
+	fragmentSize = int64(core.NextPow2(uint64(fragmentSize)))
+	uploader.logger.Infof("fragment size: %v", fragmentSize)
+
+	txHashes := make([]common.Hash, 0)
+	rootHashes := make([]common.Hash, 0)
+	if data.Size() <= fragmentSize {
+		txHash, rootHash, err := uploader.Upload(ctx, data, option...)
+		if err != nil {
+			return txHashes, rootHashes, err
+		}
+		txHashes = append(txHashes, txHash)
+		rootHashes = append(rootHashes, rootHash)
+	} else {
+		fragments := data.Split(fragmentSize)
+		uploader.logger.Infof("splitted origin file into %v fragments, %v bytes each.", len(fragments), fragmentSize)
+		var opt UploadOption
+		if len(option) > 0 {
+			opt = option[0]
+		}
+		for l := 0; l < len(fragments); l += int(defaultBatchSize) {
+			r := min(l+int(defaultBatchSize), len(fragments))
+			uploader.logger.Infof("batch submitting fragments %v to %v...", l, r)
+			opts := BatchUploadOption{
+				Fee:         nil,
+				Nonce:       nil,
+				DataOptions: make([]UploadOption, 0),
+			}
+			for i := l; i < r; i += 1 {
+				opts.DataOptions = append(opts.DataOptions, opt)
+			}
+			txHash, roots, err := uploader.BatchUpload(ctx, fragments[l:r], opts)
+			if err != nil {
+				return txHashes, rootHashes, err
+			}
+			txHashes = append(txHashes, txHash)
+			rootHashes = append(rootHashes, roots...)
+		}
+	}
+	return txHashes, rootHashes, nil
+}
+
 // BatchUpload submit multiple data to 0g storage contract batchly in single on-chain transaction, then transfer the data to the storage nodes.
 // The nonce for upload transaction will be the first non-nil nonce in given upload options, the protocol fee is the sum of fees in upload options.
-func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.IterableData, waitForLogEntry bool, option ...BatchUploadOption) (common.Hash, []common.Hash, error) {
+func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.IterableData, option ...BatchUploadOption) (common.Hash, []common.Hash, error) {
 	stageTimer := time.Now()
 
 	n := len(datas)
@@ -248,7 +302,7 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 	var receipt *types.Receipt
 	if len(toSubmitDatas) > 0 {
 		var err error
-		if txHash, receipt, err = uploader.SubmitLogEntry(ctx, toSubmitDatas, toSubmitTags, waitForLogEntry, opts.Nonce, opts.Fee); err != nil {
+		if txHash, receipt, err = uploader.SubmitLogEntry(ctx, toSubmitDatas, toSubmitTags, opts.Nonce, opts.Fee); err != nil {
 			return txHash, nil, errors.WithMessage(err, "Failed to submit log entry")
 		}
 		// Wait for storage node to retrieve log entry from blockchain
@@ -302,7 +356,7 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 
 // Upload submit data to 0g storage contract, then transfer the data to the storage nodes.
 // returns the submission transaction hash and the hash will be zero if transaction is skipped.
-func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, option ...UploadOption) (common.Hash, error) {
+func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, option ...UploadOption) (common.Hash, common.Hash, error) {
 	stageTimer := time.Now()
 
 	var opt UploadOption
@@ -319,44 +373,44 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 	// Calculate file merkle root.
 	tree, err := core.MerkleTree(data)
 	if err != nil {
-		return common.Hash{}, errors.WithMessage(err, "Failed to create data merkle tree")
+		return common.Hash{}, common.Hash{}, errors.WithMessage(err, "Failed to create data merkle tree")
 	}
 	uploader.logger.WithField("root", tree.Root()).Info("Data merkle root calculated")
 
 	// Check existance
 	info, err := checkLogExistance(ctx, uploader.clients, tree.Root())
 	if err != nil {
-		return common.Hash{}, errors.WithMessage(err, "Failed to check if skipped log entry available on storage node")
+		return common.Hash{}, tree.Root(), errors.WithMessage(err, "Failed to check if skipped log entry available on storage node")
 	}
 	txHash := common.Hash{}
 	// Append log on blockchain
 	if !opt.SkipTx || info == nil {
 		var receipt *types.Receipt
 
-		txHash, receipt, err = uploader.SubmitLogEntry(ctx, []core.IterableData{data}, [][]byte{opt.Tags}, opt.FinalityRequired <= TransactionPacked, opt.Nonce, opt.Fee)
+		txHash, receipt, err = uploader.SubmitLogEntry(ctx, []core.IterableData{data}, [][]byte{opt.Tags}, opt.Nonce, opt.Fee)
 		if err != nil {
-			return txHash, errors.WithMessage(err, "Failed to submit log entry")
+			return txHash, tree.Root(), errors.WithMessage(err, "Failed to submit log entry")
 		}
 
 		// Wait for storage node to retrieve log entry from blockchain
 		info, err = uploader.waitForLogEntry(ctx, tree.Root(), TransactionPacked, receipt)
 		if err != nil {
-			return txHash, errors.WithMessage(err, "Failed to check if log entry available on storage node")
+			return txHash, tree.Root(), errors.WithMessage(err, "Failed to check if log entry available on storage node")
 		}
 	}
 	// Upload file to storage node
 	if err := uploader.uploadFile(ctx, info, data, tree, opt.ExpectedReplica, opt.TaskSize); err != nil {
-		return txHash, errors.WithMessage(err, "Failed to upload file")
+		return txHash, tree.Root(), errors.WithMessage(err, "Failed to upload file")
 	}
 
 	// Wait for transaction finality
 	if _, err = uploader.waitForLogEntry(ctx, tree.Root(), opt.FinalityRequired, nil); err != nil {
-		return txHash, errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
+		return txHash, tree.Root(), errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
 	}
 
 	uploader.logger.WithField("duration", time.Since(stageTimer)).Info("upload took")
 
-	return txHash, nil
+	return txHash, tree.Root(), nil
 }
 
 func (uploader *Uploader) UploadDir(ctx context.Context, folder string, option ...UploadOption) (txnHash, rootHash common.Hash, _ error) {
@@ -394,7 +448,7 @@ func (uploader *Uploader) UploadDir(ctx context.Context, folder string, option .
 	// Upload each file to the storage network.
 	for i := range relPaths {
 		path := filepath.Join(folder, relPaths[i])
-		txhash, err := uploader.UploadFile(ctx, path, option...)
+		txhash, _, err := uploader.UploadFile(ctx, path, option...)
 		if err != nil {
 			return txnHash, rootHash, errors.WithMessagef(err, "failed to upload file %s", path)
 		}
@@ -406,7 +460,7 @@ func (uploader *Uploader) UploadDir(ctx context.Context, folder string, option .
 	}
 
 	// Finally, upload the directory metadata
-	txnHash, err = uploader.Upload(ctx, iterdata, option...)
+	txnHash, _, err = uploader.Upload(ctx, iterdata, option...)
 	if err != nil {
 		err = errors.WithMessage(err, "failed to upload directory metadata")
 	}
@@ -414,7 +468,7 @@ func (uploader *Uploader) UploadDir(ctx context.Context, folder string, option .
 	return txnHash, rootHash, err
 }
 
-func (uploader *Uploader) UploadFile(ctx context.Context, path string, option ...UploadOption) (txnHash common.Hash, err error) {
+func (uploader *Uploader) UploadFile(ctx context.Context, path string, option ...UploadOption) (txnHash common.Hash, rootHash common.Hash, err error) {
 	file, err := core.Open(path)
 	if err != nil {
 		err = errors.WithMessagef(err, "failed to open file %s", path)
@@ -426,7 +480,7 @@ func (uploader *Uploader) UploadFile(ctx context.Context, path string, option ..
 }
 
 // SubmitLogEntry submit the data to 0g storage contract by sending a transaction
-func (uploader *Uploader) SubmitLogEntry(ctx context.Context, datas []core.IterableData, tags [][]byte, waitForReceipt bool, nonce *big.Int, fee *big.Int) (common.Hash, *types.Receipt, error) {
+func (uploader *Uploader) SubmitLogEntry(ctx context.Context, datas []core.IterableData, tags [][]byte, nonce *big.Int, fee *big.Int) (common.Hash, *types.Receipt, error) {
 	// Construct submission
 	submissions := make([]contract.Submission, len(datas))
 	for i := 0; i < len(datas); i++ {
@@ -498,12 +552,9 @@ func (uploader *Uploader) SubmitLogEntry(ctx context.Context, datas []core.Itera
 
 	uploader.logger.WithField("hash", tx.Hash().Hex()).Info("Succeeded to send transaction to append log entry")
 
-	if waitForReceipt {
-		// Wait for successful execution
-		receipt, err := uploader.flow.WaitForReceipt(ctx, tx.Hash(), true)
-		return tx.Hash(), receipt, err
-	}
-	return tx.Hash(), nil, nil
+	// Wait for successful execution
+	receipt, err := uploader.flow.WaitForReceipt(ctx, tx.Hash(), true)
+	return tx.Hash(), receipt, err
 }
 
 // Wait for log entry ready on storage node.
@@ -631,7 +682,7 @@ func (uploader *Uploader) uploadFile(ctx context.Context, info *node.FileInfo, d
 	}
 
 	opt := parallel.SerialOption{
-		Routines: min(runtime.GOMAXPROCS(0), len(uploader.clients)*5),
+		Routines: uploader.routines,
 	}
 	err = parallel.Serial(ctx, segmentUploader, len(segmentUploader.tasks), opt)
 	if err != nil {
@@ -768,6 +819,7 @@ func (uploader *FileSegmentUploader) newFileSegmentUploader(
 			uploadTasks = append(uploadTasks, tasks)
 		}
 	}
+	util.Shuffle(uploadTasks)
 
 	return &fileSegmentUploader{
 		FileSegmentsWithProof: fileSeg,

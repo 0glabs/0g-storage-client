@@ -61,7 +61,7 @@ func (b *Batcher) Exec(ctx context.Context, option ...transfer.UploadOption) (co
 		opt = option[0]
 	}
 	opt.Tags = b.buildTags()
-	txHash, err := uploader.Upload(ctx, data, opt)
+	txHash, _, err := uploader.Upload(ctx, data, opt)
 	if err != nil {
 		return txHash, errors.WithMessagef(err, "Failed to upload data")
 	}

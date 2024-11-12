@@ -3,7 +3,9 @@ package transfer
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
+	"runtime"
 
 	zg_common "github.com/0glabs/0g-storage-client/common"
 	"github.com/0glabs/0g-storage-client/core"
@@ -22,11 +24,14 @@ var (
 
 type IDownloader interface {
 	Download(ctx context.Context, root, filename string, withProof bool) error
+	DownloadFragments(ctx context.Context, roots []string, filename string, withProof bool) error
 }
 
 // Downloader downloader to download file to storage nodes
 type Downloader struct {
 	clients []*node.ZgsClient
+
+	routines int
 
 	logger *logrus.Logger
 }
@@ -40,7 +45,45 @@ func NewDownloader(clients []*node.ZgsClient, opts ...zg_common.LogOption) (*Dow
 		clients: clients,
 		logger:  zg_common.NewLogger(opts...),
 	}
+	downloader.routines = runtime.GOMAXPROCS(0)
 	return downloader, nil
+}
+
+func (downloader *Downloader) WithRoutines(routines int) *Downloader {
+	downloader.routines = routines
+	return downloader
+}
+
+func (downloader *Downloader) DownloadFragments(ctx context.Context, roots []string, filename string, withProof bool) error {
+	outFile, err := os.Create(filename)
+	if err != nil {
+		return errors.WithMessage(err, "failed to create output file")
+	}
+	defer outFile.Close()
+
+	for _, root := range roots {
+		tempFile := fmt.Sprintf("%v.temp", root)
+		err := downloader.Download(ctx, root, tempFile, withProof)
+		if err != nil {
+			return errors.WithMessage(err, "Failed to download file")
+		}
+		inFile, err := os.Open(tempFile)
+		if err != nil {
+			return errors.WithMessage(err, fmt.Sprintf("failed to open file %s", tempFile))
+		}
+		_, err = io.Copy(outFile, inFile)
+		inFile.Close()
+		if err != nil {
+			return errors.WithMessage(err, fmt.Sprintf("failed to copy content from temp file %s", tempFile))
+		}
+
+		err = os.Remove(tempFile)
+		if err != nil {
+			return errors.WithMessage(err, fmt.Sprintf("failed to delete temp file %s:", tempFile))
+		}
+	}
+
+	return nil
 }
 
 // Download download data from storage nodes.
@@ -127,7 +170,7 @@ func (downloader *Downloader) downloadFile(ctx context.Context, filename string,
 		return err
 	}
 
-	sd, err := newSegmentDownloader(downloader.clients, info, shardConfigs, file, withProof, downloader.logger)
+	sd, err := newSegmentDownloader(downloader, info, shardConfigs, file, withProof)
 	if err != nil {
 		return errors.WithMessage(err, "Failed to create segment downloader")
 	}

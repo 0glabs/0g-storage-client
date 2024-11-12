@@ -2,9 +2,8 @@ package shard
 
 import (
 	"sort"
-	"time"
 
-	"golang.org/x/exp/rand"
+	"github.com/0glabs/0g-storage-client/common/util"
 )
 
 type ShardConfig struct {
@@ -130,12 +129,7 @@ func CheckReplica(shardConfigs []*ShardConfig, expectedReplica uint) bool {
 // Helper function to pre-process (sort or shuffle) the nodes before selection
 func prepareSelectionNodes(nodes []*ShardedNode, random bool) []*ShardedNode {
 	if random {
-		// Shuffle the nodes randomly if needed
-		rng := rand.New(rand.NewSource(uint64(time.Now().UnixNano())))
-		for i := range nodes {
-			j := rng.Intn(i + 1)
-			nodes[i], nodes[j] = nodes[j], nodes[i]
-		}
+		util.Shuffle(nodes)
 	} else {
 		// Sort nodes based on NumShard and ShardId
 		sort.Slice(nodes, func(i, j int) bool {

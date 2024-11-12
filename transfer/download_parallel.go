@@ -29,19 +29,21 @@ type segmentDownloader struct {
 
 	numChunks uint64
 
+	routines int
+
 	logger *logrus.Logger
 }
 
 var _ parallel.Interface = (*segmentDownloader)(nil)
 
-func newSegmentDownloader(clients []*node.ZgsClient, info *node.FileInfo, shardConfigs []*shard.ShardConfig, file *download.DownloadingFile, withProof bool, logger *logrus.Logger) (*segmentDownloader, error) {
+func newSegmentDownloader(downloader *Downloader, info *node.FileInfo, shardConfigs []*shard.ShardConfig, file *download.DownloadingFile, withProof bool) (*segmentDownloader, error) {
 	startSegmentIndex := info.Tx.StartEntryIndex / core.DefaultSegmentMaxChunks
 	endSegmentIndex := (info.Tx.StartEntryIndex + core.NumSplits(int64(info.Tx.Size), core.DefaultChunkSize) - 1) / core.DefaultSegmentMaxChunks
 
 	offset := file.Metadata().Offset / core.DefaultSegmentSize
 
 	return &segmentDownloader{
-		clients:      clients,
+		clients:      downloader.clients,
 		shardConfigs: shardConfigs,
 		file:         file,
 		txSeq:        info.Tx.Seq,
@@ -55,14 +57,19 @@ func newSegmentDownloader(clients []*node.ZgsClient, info *node.FileInfo, shardC
 
 		numChunks: core.NumSplits(int64(info.Tx.Size), core.DefaultChunkSize),
 
-		logger: logger,
+		routines: downloader.routines,
+
+		logger: downloader.logger,
 	}, nil
 }
 
 // Download downloads segments in parallel.
 func (downloader *segmentDownloader) Download(ctx context.Context) error {
 	numTasks := downloader.endSegmentIndex - downloader.startSegmentIndex + 1 - downloader.offset
-	return parallel.Serial(ctx, downloader, int(numTasks))
+	option := parallel.SerialOption{
+		Routines: downloader.routines,
+	}
+	return parallel.Serial(ctx, downloader, int(numTasks), option)
 }
 
 // ParallelDo implements the parallel.Interface interface.
