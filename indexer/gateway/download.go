@@ -48,6 +48,11 @@ func downloadFile(c *gin.Context) {
 		return
 	}
 
+	if fileInfo.Pruned {
+		c.JSON(http.StatusBadRequest, "File already pruned")
+		return
+	}
+
 	if !fileInfo.Finalized {
 		c.JSON(http.StatusBadRequest, "File not finalized yet")
 		return
@@ -92,6 +97,11 @@ func downloadFileInFolder(c *gin.Context) {
 
 	if fileInfo == nil {
 		c.JSON(http.StatusNotFound, "File not found")
+		return
+	}
+
+	if fileInfo.Pruned {
+		c.JSON(http.StatusBadRequest, "File already pruned")
 		return
 	}
 

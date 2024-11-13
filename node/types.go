@@ -48,6 +48,7 @@ type FileInfo struct {
 	Finalized      bool        `json:"finalized"`      // whether the file has been finalized in the storage node
 	IsCached       bool        `json:"isCached"`       // whether the file is cached in the storage node
 	UploadedSegNum uint64      `json:"uploadedSegNum"` // the number of uploaded segments
+	Pruned         bool        `json:"pruned"`         // whether the file has been pruned, and mutually exclusive with Finalized
 }
 
 // SegmentWithProof data segment with merkle proof
