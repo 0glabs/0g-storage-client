@@ -90,6 +90,10 @@ func getFileStatus(c *gin.Context) (interface{}, error) {
 			return "unavailable", nil
 		}
 
+		if info.Pruned {
+			return "pruned", nil
+		}
+
 		if !info.Finalized {
 			notFinalized = true
 		}
