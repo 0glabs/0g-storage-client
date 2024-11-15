@@ -12,6 +12,7 @@ import tempfile
 import time
 import traceback
 import json
+import requests
 from pathlib import Path
 
 from eth_utils import encode_hex
@@ -393,7 +394,15 @@ class ClientTestFramework(TestFramework):
             env=os.environ.copy(),
         )
         self.indexer_rpc_url = "http://127.0.0.1:{}".format(indexer_port(0))
-    
+
+        def is_port_available(url):
+            try:
+                response = requests.get(url, timeout=20)
+                return response.status_code is not None
+            except requests.RequestException:
+                return False
+        wait_until(lambda: is_port_available(self.indexer_rpc_url), timeout=20)
+
     def stop_indexer(self):
         if self.indexer_process is not None:
             self.indexer_process.terminate()
