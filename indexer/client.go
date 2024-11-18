@@ -187,6 +187,58 @@ func (c *Client) BatchUpload(ctx context.Context, w3Client *web3go.Client, datas
 	}
 }
 
+// NewUploaderFromIndexerNodes return a file segment uploader with selected storage nodes from indexer service.
+func (c *Client) NewFileSegmentUploaderFromIndexerNodes(
+	ctx context.Context, segNum uint64, expectedReplica uint, dropped []string) (*transfer.FileSegmentUploader, error) {
+
+	clients, err := c.SelectNodes(ctx, segNum, expectedReplica, dropped)
+	if err != nil {
+		return nil, err
+	}
+	urls := make([]string, len(clients))
+	for i, client := range clients {
+		urls[i] = client.URL()
+	}
+	c.logger.Infof("get %v storage nodes from indexer: %v", len(urls), urls)
+	return transfer.NewFileSegementUploader(clients, c.option.LogOption), nil
+}
+
+// UploadFileSegments transfer segment data of a file, which should has already been submitted to the 0g storage contract,
+// to the storage nodes selected from indexer service.
+func (c *Client) UploadFileSegments(
+	ctx context.Context, fileSeg transfer.FileSegmentsWithProof, option ...transfer.UploadOption) error {
+
+	if fileSeg.FileInfo == nil {
+		return errors.New("file not found")
+	}
+
+	if len(fileSeg.Segments) == 0 {
+		return errors.New("segment data is empty")
+	}
+
+	expectedReplica := uint(1)
+	if len(option) > 0 {
+		expectedReplica = max(expectedReplica, option[0].ExpectedReplica)
+	}
+
+	numSeg := core.NumSplits(int64(fileSeg.FileInfo.Tx.Size), core.DefaultSegmentSize)
+	dropped := make([]string, 0)
+	for {
+		uploader, err := c.NewFileSegmentUploaderFromIndexerNodes(ctx, numSeg, expectedReplica, dropped)
+		if err != nil {
+			return err
+		}
+
+		var rpcError *node.RPCError
+		if err := uploader.Upload(ctx, fileSeg, option...); errors.As(err, &rpcError) {
+			dropped = append(dropped, rpcError.URL)
+			c.logger.Infof("dropped problematic node and retry: %v", rpcError.Error())
+		} else {
+			return err
+		}
+	}
+}
+
 func (c *Client) NewDownloaderFromIndexerNodes(ctx context.Context, root string) (*transfer.Downloader, error) {
 	locations, err := c.GetFileLocations(ctx, root)
 	if err != nil {
