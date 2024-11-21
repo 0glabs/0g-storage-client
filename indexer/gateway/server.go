@@ -52,7 +52,8 @@ func newRouter() *gin.Engine {
 	// handlers
 	router.GET("/file", downloadFile)
 	router.GET("/file/:cid/*filePath", downloadFileInFolder)
-	router.GET("/status/:cid", getFileStatus)
+	router.GET("/file/info/:cid", getFileStatus)
+	router.GET("/node/status", getNodeStatus)
 	router.POST("/file/segment", uploadSegment)
 
 	return router

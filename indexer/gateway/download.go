@@ -179,6 +179,7 @@ func getFileInfo(ctx context.Context, root common.Hash, txSeq *uint64) (info *no
 
 		if finalInfo == nil {
 			finalInfo = info
+			continue
 		}
 
 		finalInfo.Finalized = finalInfo.Finalized && info.Finalized
