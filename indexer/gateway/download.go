@@ -161,6 +161,7 @@ func getFileInfo(ctx context.Context, root common.Hash, txSeq *uint64) (info *no
 		return nil, errors.New("no clients available")
 	}
 
+	var finalInfo *node.FileInfo
 	for _, client := range clients {
 		if txSeq != nil {
 			info, err = client.GetFileInfoByTxSeq(ctx, *txSeq)
@@ -172,12 +173,21 @@ func getFileInfo(ctx context.Context, root common.Hash, txSeq *uint64) (info *no
 			return nil, err
 		}
 
-		if info != nil {
-			return info, nil
+		if info == nil {
+			return nil, nil
 		}
+
+		if finalInfo == nil {
+			finalInfo = info
+		}
+
+		finalInfo.Finalized = finalInfo.Finalized && info.Finalized
+		finalInfo.IsCached = finalInfo.IsCached && info.IsCached
+		finalInfo.Pruned = finalInfo.Pruned || info.Pruned
+		finalInfo.UploadedSegNum = min(finalInfo.UploadedSegNum, info.UploadedSegNum)
 	}
 
-	return nil, nil
+	return finalInfo, nil
 }
 
 // downloadAndServeFile downloads the file and serves it as an attachment.
