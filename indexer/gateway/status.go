@@ -1,7 +1,6 @@
 package gateway
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -50,7 +49,7 @@ func getNodeStatus(c *gin.Context) {
 
 	var finalStatus *node.Status
 	for _, client := range clients {
-		status, err := client.GetStatus(context.Background())
+		status, err := client.GetStatus(c)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, fmt.Sprintf("Failed to retrieve node status: %v", err))
 		}
