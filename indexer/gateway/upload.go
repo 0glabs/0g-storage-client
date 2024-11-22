@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/0glabs/0g-storage-client/core"
@@ -12,17 +13,16 @@ import (
 	"github.com/pkg/errors"
 )
 
-var expectedReplica uint
-
 type UploadSegmentRequest struct {
-	Root  common.Hash  `json:"root"`  // file merkle root
-	TxSeq *uint64      `json:"txSeq"` // Transaction sequence
-	Data  []byte       `json:"data"`  // segment data
-	Index uint64       `json:"index"` // segment index
-	Proof merkle.Proof `json:"proof"` // segment merkle proof
+	Root            common.Hash  `json:"root"`            // file merkle root
+	TxSeq           *uint64      `json:"txSeq"`           // Transaction sequence
+	Data            []byte       `json:"data"`            // segment data
+	Index           uint64       `json:"index"`           // segment index
+	Proof           merkle.Proof `json:"proof"`           // segment merkle proof
+	ExpectedReplica uint         `json:"expectedReplica"` // expected replica count, default 1
 }
 
-func uploadSegment(c *gin.Context) {
+func (ctrl *RestController) uploadSegment(c *gin.Context) {
 	var input UploadSegmentRequest
 
 	// bind the `application/json` request
@@ -37,13 +37,27 @@ func uploadSegment(c *gin.Context) {
 		return
 	}
 
-	// retrieve and validate file info
-	fileInfo, err := getFileInfo(c, input.Root, input.TxSeq)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.WithMessage(err, "Failed to retrieve file info").Error())
-		return
+	cid := Cid{
+		Root:  input.Root.String(),
+		TxSeq: input.TxSeq,
 	}
-	if fileInfo == nil {
+
+	var fileInfo *node.FileInfo
+	var selectedClients []*node.ZgsClient
+
+	// select trusted storage nodes that have already synced the submitted event
+	for _, client := range ctrl.nodeManager.TrustedClients() {
+		info, err := getOverallFileInfo(c, []*node.ZgsClient{client}, cid)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, errors.WithMessage(err, "Failed to retrieve file info").Error())
+			return
+		}
+		if info != nil {
+			selectedClients = append(selectedClients, client)
+			fileInfo = info
+		}
+	}
+	if len(selectedClients) == 0 || fileInfo == nil {
 		c.JSON(http.StatusNotFound, "File not found")
 		return
 	}
@@ -62,7 +76,7 @@ func uploadSegment(c *gin.Context) {
 		Proof:    input.Proof,
 		FileSize: fileInfo.Tx.Size,
 	}
-	if err := uploadSegmentWithProof(c, segment, fileInfo); err != nil {
+	if err := uploadSegmentWithProof(c, selectedClients, segment, fileInfo, input.ExpectedReplica); err != nil {
 		c.JSON(http.StatusInternalServerError, errors.WithMessage(err, "Failed to upload segment with proof").Error())
 		return
 	}
@@ -79,7 +93,13 @@ func validateMerkleProof(req UploadSegmentRequest, fileInfo *node.FileInfo) erro
 }
 
 // uploadSegmentWithProof is a helper function to upload the segment with proof
-func uploadSegmentWithProof(c *gin.Context, segment node.SegmentWithProof, fileInfo *node.FileInfo) error {
+func uploadSegmentWithProof(
+	ctx context.Context, clients []*node.ZgsClient, segment node.SegmentWithProof, fileInfo *node.FileInfo, expectedReplica uint) error {
+
+	if expectedReplica == 0 {
+		expectedReplica = 1
+	}
+
 	opt := transfer.UploadOption{
 		ExpectedReplica: expectedReplica,
 	}
@@ -87,5 +107,5 @@ func uploadSegmentWithProof(c *gin.Context, segment node.SegmentWithProof, fileI
 		Segments: []node.SegmentWithProof{segment},
 		FileInfo: fileInfo,
 	}
-	return transfer.NewFileSegementUploader(clients).Upload(c, fileSegements, opt)
+	return transfer.NewFileSegementUploader(clients).Upload(ctx, fileSegements, opt)
 }

@@ -51,7 +51,7 @@ type NodeManager struct {
 }
 
 // InitDefaultNodeManager initializes the default `NodeManager`.
-func InitDefaultNodeManager(config NodeManagerConfig) (closable func(), err error) {
+func InitDefaultNodeManager(config NodeManagerConfig) (mgr *NodeManager, err error) {
 	if len(config.DiscoveryNode) > 0 {
 		if defaultNodeManager.discoverNode, err = node.NewAdminClient(config.DiscoveryNode, defaultZgsClientOpt); err != nil {
 			return nil, errors.WithMessage(err, "Failed to create admin client to discover peers")
@@ -68,7 +68,7 @@ func InitDefaultNodeManager(config NodeManagerConfig) (closable func(), err erro
 		go util.Schedule(defaultNodeManager.update, config.UpdateInterval, "Failed to update shard configs once")
 	}
 
-	return defaultNodeManager.close, nil
+	return &defaultNodeManager, nil
 }
 
 // TrustedClients returns trusted clients.
@@ -159,7 +159,7 @@ func (nm *NodeManager) AddTrustedNodes(nodes ...string) error {
 	return nil
 }
 
-func (nm *NodeManager) close() {
+func (nm *NodeManager) Close() {
 	nm.trusted.Range(func(key, value any) bool {
 		value.(*node.ZgsClient).Close()
 		return true

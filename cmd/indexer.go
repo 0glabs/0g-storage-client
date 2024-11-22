@@ -17,7 +17,6 @@ var (
 		locations           indexer.IPLocationConfig
 		locationCache       indexer.FileLocationCacheConfig
 		maxDownloadFileSize uint64
-		ExpectedReplica     uint
 	}
 
 	indexerCmd = &cobra.Command{
@@ -45,7 +44,6 @@ func init() {
 	indexerCmd.Flags().IntVar(&indexerArgs.locationCache.CacheSize, "file-location-cache-size", 100000, "size of file location cache")
 
 	indexerCmd.Flags().Uint64Var(&indexerArgs.maxDownloadFileSize, "max-download-file-size", 100*1024*1024, "Maximum file size in bytes to download")
-	indexerCmd.Flags().UintVar(&indexerArgs.ExpectedReplica, "expected-replica", 1, "Expected number of replications to upload")
 
 	indexerCmd.MarkFlagsOneRequired("trusted", "node")
 
@@ -58,17 +56,17 @@ func startIndexer(*cobra.Command, []string) {
 
 	indexer.InitDefaultIPLocationManager(indexerArgs.locations)
 
-	nodeManagerClosable, err := indexer.InitDefaultNodeManager(indexerArgs.nodes)
+	nodeManager, err := indexer.InitDefaultNodeManager(indexerArgs.nodes)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to initialize the default node manager")
 	}
-	defer nodeManagerClosable()
+	defer nodeManager.Close()
 
-	fileLocationCacheClosable, err := indexer.InitFileLocationCache(indexerArgs.locationCache)
+	fileLocationCache, err := indexer.InitFileLocationCache(indexerArgs.locationCache)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to initialize the default file location cache")
 	}
-	defer fileLocationCacheClosable()
+	defer fileLocationCache.Close()
 
 	api := indexer.NewIndexerApi()
 
@@ -77,11 +75,9 @@ func startIndexer(*cobra.Command, []string) {
 		"discover": len(indexerArgs.nodes.DiscoveryNode) > 0,
 	}).Info("Starting indexer service ...")
 
-	gateway.MustServeWithRPC(gateway.Config{
+	gateway.MustServeWithRPC(nodeManager, fileLocationCache, gateway.Config{
 		Endpoint:            indexerArgs.endpoint,
-		Nodes:               indexerArgs.nodes.TrustedNodes,
 		MaxDownloadFileSize: indexerArgs.maxDownloadFileSize,
-		ExpectedReplica:     indexerArgs.ExpectedReplica,
 		RPCHandler: rpc.MustNewHandler(map[string]interface{}{
 			api.Namespace: api,
 		}),
