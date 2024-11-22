@@ -4,34 +4,23 @@ import (
 	"net/http"
 
 	"github.com/0glabs/0g-storage-client/common/rpc"
-	"github.com/0glabs/0g-storage-client/node"
+	"github.com/0glabs/0g-storage-client/indexer"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 )
 
 type Config struct {
-	Endpoint string // http endpoint
-
-	Nodes               []string // storage nodes for file upload or download
-	MaxDownloadFileSize uint64   // max download file size
-	ExpectedReplica     uint     // expected upload replica number
-
-	RPCHandler http.Handler // enable to provide both RPC and REST API service
+	Endpoint            string       // http endpoint
+	RPCHandler          http.Handler // enable to provide both RPC and REST API service
+	MaxDownloadFileSize uint64       // max download file size
 }
 
-func MustServeWithRPC(config Config) {
-	if len(config.Nodes) == 0 {
-		logrus.Fatal("Nodes not specified to start HTTP server")
-	}
-
-	// init global variables
-	clients = node.MustNewZgsClients(config.Nodes)
-	maxDownloadFileSize = config.MaxDownloadFileSize
-	expectedReplica = config.ExpectedReplica
+func MustServeWithRPC(nodeManager *indexer.NodeManager, locationCache *indexer.FileLocationCache, config Config) {
+	controller := NewRestController(nodeManager, locationCache, config.MaxDownloadFileSize)
 
 	// init router
-	router := newRouter()
+	router := newRouter(controller)
 	if config.RPCHandler != nil {
 		router.POST("/", gin.WrapH(config.RPCHandler))
 	}
@@ -39,7 +28,7 @@ func MustServeWithRPC(config Config) {
 	rpc.Start(config.Endpoint, router)
 }
 
-func newRouter() *gin.Engine {
+func newRouter(controller *RestController) *gin.Engine {
 	router := gin.New()
 
 	// middlewares
@@ -50,9 +39,11 @@ func newRouter() *gin.Engine {
 	router.Use(middlewareCors())
 
 	// handlers
-	router.GET("/file", downloadFile)
-	router.GET("/file/:cid/*filePath", downloadFileInFolder)
-	router.POST("/file/segment", uploadSegment)
+	router.GET("/file", controller.downloadFile)
+	router.GET("/file/:cid/*filePath", controller.downloadFileInFolder)
+	router.GET("/file/info/:cid", controller.getFileStatus)
+	router.GET("/node/status", controller.getNodeStatus)
+	router.POST("/file/segment", controller.uploadSegment)
 
 	return router
 }

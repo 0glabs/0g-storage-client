@@ -41,7 +41,7 @@ type FileLocationCache struct {
 
 var defaultFileLocationCache FileLocationCache
 
-func InitFileLocationCache(config FileLocationCacheConfig) (closable func(), err error) {
+func InitFileLocationCache(config FileLocationCacheConfig) (cache *FileLocationCache, err error) {
 	if len(config.DiscoveryNode) > 0 {
 		if defaultFileLocationCache.discoverNode, err = node.NewAdminClient(config.DiscoveryNode, defaultZgsClientOpt); err != nil {
 			return nil, errors.WithMessage(err, "Failed to create admin client to discover peers")
@@ -49,10 +49,10 @@ func InitFileLocationCache(config FileLocationCacheConfig) (closable func(), err
 	}
 	defaultFileLocationCache.cache = expirable.NewLRU[uint64, []*shard.ShardedNode](config.CacheSize, nil, config.Expiry)
 	defaultFileLocationCache.discoveryPorts = config.DiscoveryPorts
-	return defaultFileLocationCache.close, nil
+	return &defaultFileLocationCache, nil
 }
 
-func (c *FileLocationCache) close() {
+func (c *FileLocationCache) Close() {
 	if c.discoverNode != nil {
 		c.discoverNode.Close()
 	}
