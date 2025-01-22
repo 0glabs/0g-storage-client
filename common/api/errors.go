@@ -2,7 +2,7 @@ package api
 
 // General errors
 var (
-	ErrNil        = newBusinessError(0, "ok")
+	ErrNil        = newBusinessError(0, "Success")
 	ErrValidation = newBusinessError(1, "Invalid parameter")
 	ErrInternal   = newBusinessError(2, "Internal server error")
 )

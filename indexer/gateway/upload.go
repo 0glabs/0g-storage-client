@@ -2,8 +2,8 @@ package gateway
 
 import (
 	"context"
-	"net/http"
 
+	"github.com/0glabs/0g-storage-client/common/api"
 	"github.com/0glabs/0g-storage-client/core"
 	"github.com/0glabs/0g-storage-client/core/merkle"
 	"github.com/0glabs/0g-storage-client/node"
@@ -22,19 +22,17 @@ type UploadSegmentRequest struct {
 	ExpectedReplica uint         `json:"expectedReplica"` // expected replica count, default 1
 }
 
-func (ctrl *RestController) uploadSegment(c *gin.Context) {
+func (ctrl *RestController) uploadSegment(c *gin.Context) (interface{}, error) {
 	var input UploadSegmentRequest
 
 	// bind the `application/json` request
 	if err := c.ShouldBind(&input); err != nil {
-		c.JSON(http.StatusBadRequest, errors.WithMessagef(err, "Failed to bind input parameters").Error())
-		return
+		return nil, api.ErrValidation.WithData(err)
 	}
 
 	// validate segment data
 	if len(input.Data) == 0 {
-		c.JSON(http.StatusBadRequest, "Segment data is empty")
-		return
+		return nil, api.ErrValidation.WithData("Segment data is empty")
 	}
 
 	cid := Cid{
@@ -49,8 +47,7 @@ func (ctrl *RestController) uploadSegment(c *gin.Context) {
 	for _, client := range ctrl.nodeManager.TrustedClients() {
 		info, err := getOverallFileInfo(c, []*node.ZgsClient{client}, cid)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, errors.WithMessage(err, "Failed to retrieve file info").Error())
-			return
+			return nil, errors.WithMessage(err, "Failed to retrieve file info")
 		}
 		if info != nil {
 			selectedClients = append(selectedClients, client)
@@ -58,14 +55,12 @@ func (ctrl *RestController) uploadSegment(c *gin.Context) {
 		}
 	}
 	if len(selectedClients) == 0 || fileInfo == nil {
-		c.JSON(http.StatusNotFound, "File not found")
-		return
+		return nil, ErrFileNotFound
 	}
 
 	// validate merkle proof
 	if err := validateMerkleProof(input, fileInfo); err != nil {
-		c.JSON(http.StatusBadRequest, errors.WithMessagef(err, "Failed to validate merkle proof").Error())
-		return
+		return nil, api.ErrValidation.WithData(errors.WithMessage(err, "Failed to validate merkle proof"))
 	}
 
 	// upload the segment
@@ -77,11 +72,10 @@ func (ctrl *RestController) uploadSegment(c *gin.Context) {
 		FileSize: fileInfo.Tx.Size,
 	}
 	if err := uploadSegmentWithProof(c, selectedClients, segment, fileInfo, input.ExpectedReplica); err != nil {
-		c.JSON(http.StatusInternalServerError, errors.WithMessage(err, "Failed to upload segment with proof").Error())
-		return
+		return nil, errors.WithMessage(err, "Failed to upload segment with proof")
 	}
 
-	c.JSON(http.StatusOK, "Segment upload ok")
+	return "Succeeded to upload segment", nil
 }
 
 // validateMerkleProof is a helper function to validate merkle proof for the upload request

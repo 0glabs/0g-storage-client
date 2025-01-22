@@ -18,11 +18,11 @@ func MustServeWithRPC(nodeManager *indexer.NodeManager, locationCache *indexer.F
 	controller := NewRestController(nodeManager, locationCache, config.MaxDownloadFileSize)
 
 	api.Serve(config.Endpoint, func(router *gin.Engine) {
-		router.GET("/file", controller.downloadFile)
-		router.GET("/file/:cid/*filePath", controller.downloadFileInFolder)
-		router.GET("/file/info/:cid", controller.getFileStatus)
-		router.GET("/node/status", controller.getNodeStatus)
-		router.POST("/file/segment", controller.uploadSegment)
+		router.GET("/file", api.Wrap(controller.downloadFile))
+		router.GET("/file/:cid/*filePath", api.Wrap(controller.downloadFileInFolder))
+		router.GET("/file/info/:cid", api.Wrap(controller.getFileStatus))
+		router.GET("/node/status", api.Wrap(controller.getNodeStatus))
+		router.POST("/file/segment", api.Wrap(controller.uploadSegment))
 
 		if config.RPCHandler != nil {
 			router.POST("/", gin.WrapH(config.RPCHandler))

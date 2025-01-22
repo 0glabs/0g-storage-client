@@ -2,145 +2,130 @@ package gateway
 
 import (
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/0glabs/0g-storage-client/common/api"
 	"github.com/0glabs/0g-storage-client/transfer"
 	"github.com/0glabs/0g-storage-client/transfer/dir"
 	"github.com/gin-gonic/gin"
+	"github.com/pkg/errors"
 )
 
 // downloadFile handles file downloads by root hash or transaction sequence.
-func (ctrl *RestController) downloadFile(c *gin.Context) {
+func (ctrl *RestController) downloadFile(c *gin.Context) (interface{}, error) {
 	var input struct {
 		Cid
 		Name string `form:"name" json:"name"`
 	}
 
 	if err := c.ShouldBind(&input); err != nil {
-		c.JSON(http.StatusBadRequest, fmt.Sprintf("Failed to bind input parameters, %v", err.Error()))
-		return
+		return nil, api.ErrValidation.WithData(err)
 	}
 
 	if input.TxSeq == nil && len(input.Root) == 0 {
-		c.JSON(http.StatusBadRequest, "Either 'root' or 'txSeq' must be provided")
-		return
+		return nil, api.ErrValidation.WithData("Either 'root' or 'txSeq' must be provided")
 	}
 
-	ctrl.downloadAndServeFile(c, input.Cid, input.Name)
+	return nil, ctrl.downloadAndServeFile(c, input.Cid, input.Name)
 }
 
 // downloadFileInFolder handles file downloads from a directory structure.
-func (ctrl *RestController) downloadFileInFolder(c *gin.Context) {
+func (ctrl *RestController) downloadFileInFolder(c *gin.Context) (interface{}, error) {
 	cidStr := strings.TrimSpace(c.Param("cid"))
 	filePath := filepath.Clean(c.Param("filePath"))
 	cid := NewCid(cidStr)
 
 	clients, err := ctrl.getAvailableStorageNodes(c, cid)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, fmt.Sprintf("Failed to get available storage nodes, %v", err.Error()))
-		return
+		return nil, errors.WithMessage(err, "Failed to get available storage nodes")
 	}
 
 	fileInfo, err := getOverallFileInfo(c, clients, cid)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, fmt.Sprintf("Failed to retrieve file info: %v", err))
-		return
+		return nil, errors.WithMessage(err, "Failed to retrieve file info")
 	}
 
 	if fileInfo == nil {
-		c.JSON(http.StatusNotFound, "File not found")
-		return
+		return nil, ErrFileNotFound
 	}
 
 	if fileInfo.Pruned {
-		c.JSON(http.StatusBadRequest, "File already pruned")
-		return
+		return nil, ErrFilePruned
 	}
 
 	if !fileInfo.Finalized {
-		c.JSON(http.StatusBadRequest, "File not finalized yet")
-		return
+		return nil, ErrFileNotFinalized
 	}
 
 	downloader, err := transfer.NewDownloader(clients)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, fmt.Sprintf("Failed to create downloader, %v", err.Error()))
-		return
+		return nil, errors.WithMessage(err, "Failed to create downloader")
 	}
 
 	root := fileInfo.Tx.DataMerkleRoot
 
 	ftree, err := transfer.BuildFileTree(c, downloader, root.Hex(), true)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, fmt.Sprintf("Failed to build file tree, %v", err.Error()))
-		return
+		return nil, errors.WithMessage(err, "Failed to build file tree")
 	}
 
 	fnode, err := ftree.Locate(filePath)
 	if err != nil {
-		c.JSON(http.StatusNotFound, fmt.Sprintf("File path not found: %v", err))
-		return
+		return nil, ErrFilePathNotFound.WithData(err)
 	}
 
 	switch fnode.Type {
 	case dir.FileTypeDirectory:
 		// Show the list of files in the directory.
-		serveDirectoryListing(c, fnode)
+		return serveDirectoryListing(fnode), nil
 	case dir.FileTypeSymbolic:
 		// If the file type is symbolic (a symlink), return the metadata of the symbolic link itself
 		// (i.e., information about the symlink, not the target it points to).
 		// This prevents the server from following the symbolic link and returning the target file's content.
-		c.JSON(http.StatusOK, fnode)
+		return fnode, nil
 	case dir.FileTypeFile:
 		if fnode.Size > int64(ctrl.maxDownloadFileSize) {
-			errMsg := fmt.Sprintf("Requested file size too large, actual = %v, max = %v", fnode.Size, ctrl.maxDownloadFileSize)
-			c.JSON(http.StatusBadRequest, errMsg)
-			return
+			return nil, ErrFileSizeTooLarge.WithData(map[string]uint64{
+				"actual": uint64(fnode.Size),
+				"max":    ctrl.maxDownloadFileSize,
+			})
 		}
 
-		ctrl.downloadAndServeFile(c, Cid{Root: fnode.Root}, fnode.Name)
+		return nil, ctrl.downloadAndServeFile(c, Cid{Root: fnode.Root}, fnode.Name)
 	default:
-		c.JSON(http.StatusInternalServerError, fmt.Sprintf("Unsupported file type: %v", fnode.Type))
-		return
+		return nil, ErrFileTypeUnsupported.WithData(fnode.Type)
 	}
 }
 
 // downloadAndServeFile downloads the file and serves it as an attachment.
-func (ctrl *RestController) downloadAndServeFile(c *gin.Context, cid Cid, filename string) {
+func (ctrl *RestController) downloadAndServeFile(c *gin.Context, cid Cid, filename string) error {
 	clients, err := ctrl.getAvailableStorageNodes(c, cid)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, fmt.Sprintf("Failed to get available storage nodes, %v", err.Error()))
-		return
+		return errors.WithMessage(err, "Failed to get available storage nodes")
 	}
 
 	fileInfo, err := getOverallFileInfo(c, clients, cid)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, fmt.Sprintf("Failed to retrieve file info: %v", err))
-		return
+		return errors.WithMessage(err, "Failed to retrieve file info")
 	}
 
 	if fileInfo == nil {
-		c.JSON(http.StatusNotFound, "File not found")
-		return
+		return ErrFileNotFound
 	}
 
 	if fileInfo.Pruned {
-		c.JSON(http.StatusBadRequest, "File already pruned")
-		return
+		return ErrFilePruned
 	}
 
 	if !fileInfo.Finalized {
-		c.JSON(http.StatusBadRequest, "File not finalized yet")
-		return
+		return ErrFileNotFinalized
 	}
 
 	downloader, err := transfer.NewDownloader(clients)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, fmt.Sprintf("Failed to create downloader, %v", err.Error()))
-		return
+		return errors.WithMessage(err, "Failed to create downloader")
 	}
 
 	root := fileInfo.Tx.DataMerkleRoot.Hex()
@@ -148,8 +133,7 @@ func (ctrl *RestController) downloadAndServeFile(c *gin.Context, cid Cid, filena
 	defer os.Remove(tmpfile)
 
 	if err := downloader.Download(c, root, tmpfile, true); err != nil {
-		c.JSON(http.StatusInternalServerError, fmt.Sprintf("Failed to download file: %v", err.Error()))
-		return
+		return errors.WithMessage(err, "Failed to download file")
 	}
 
 	if len(filename) == 0 {
@@ -157,10 +141,12 @@ func (ctrl *RestController) downloadAndServeFile(c *gin.Context, cid Cid, filena
 	}
 
 	c.FileAttachment(tmpfile, filename)
+
+	return api.ErrHandled
 }
 
 // serveDirectoryListing serves the list of files in a directory.
-func serveDirectoryListing(c *gin.Context, dirNode *dir.FsNode) {
+func serveDirectoryListing(dirNode *dir.FsNode) interface{} {
 	type DirListing struct {
 		Name string `json:"name"`
 		Type string `json:"type"`
@@ -175,5 +161,5 @@ func serveDirectoryListing(c *gin.Context, dirNode *dir.FsNode) {
 			Size: uint64(entry.Size),
 		})
 	}
-	c.JSON(http.StatusOK, dirListing)
+	return dirListing
 }

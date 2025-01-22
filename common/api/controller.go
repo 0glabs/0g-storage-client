@@ -9,6 +9,8 @@ import (
 
 const httpStatusCodeInternalError = 600
 
+var ErrHandled = new(BusinessError)
+
 func Wrap(controller func(c *gin.Context) (interface{}, error)) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		result, err := controller(c)
@@ -16,7 +18,9 @@ func Wrap(controller func(c *gin.Context) (interface{}, error)) gin.HandlerFunc 
 			switch e := err.(type) {
 			case *BusinessError:
 				// custom business error
-				c.JSON(http.StatusOK, e)
+				if e != ErrHandled {
+					c.JSON(http.StatusOK, e)
+				}
 			case validator.ValidationErrors:
 				// binding error
 				c.JSON(http.StatusOK, ErrValidation.WithData(e))
