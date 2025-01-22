@@ -2,9 +2,9 @@ package api
 
 // General errors
 var (
-	ErrNil        = newBusinessError(0, "Success")
-	ErrValidation = newBusinessError(1, "Invalid parameter")
-	ErrInternal   = newBusinessError(2, "Internal server error")
+	ErrNil        = NewBusinessError(0, "Success")
+	ErrValidation = NewBusinessError(1, "Invalid parameter")
+	ErrInternal   = NewBusinessError(2, "Internal server error")
 )
 
 type BusinessError struct {
@@ -13,12 +13,12 @@ type BusinessError struct {
 	Data    interface{} `json:"data"`
 }
 
-func NewBusinessError(code int, message string, data interface{}) *BusinessError {
-	return &BusinessError{code, message, data}
+func NewBusinessError(code int, message string) *BusinessError {
+	return &BusinessError{code, message, nil}
 }
 
-func newBusinessError(code int, message string) *BusinessError {
-	return NewBusinessError(code, message, nil)
+func NewBusinessErrorWithData(code int, message string, data interface{}) *BusinessError {
+	return &BusinessError{code, message, data}
 }
 
 func (err *BusinessError) Error() string {
@@ -26,5 +26,5 @@ func (err *BusinessError) Error() string {
 }
 
 func (be *BusinessError) WithData(data interface{}) *BusinessError {
-	return NewBusinessError(be.Code, be.Message, data)
+	return NewBusinessErrorWithData(be.Code, be.Message, data)
 }
