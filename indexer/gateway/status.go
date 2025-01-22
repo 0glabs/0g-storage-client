@@ -3,6 +3,7 @@ package gateway
 import (
 	"strings"
 
+	"github.com/0glabs/0g-storage-client/common/api"
 	"github.com/0glabs/0g-storage-client/node"
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
@@ -22,6 +23,35 @@ func (ctrl *RestController) getFileStatus(c *gin.Context) (interface{}, error) {
 	}
 
 	return fileInfo, nil
+}
+
+func (ctrl *RestController) batchGetFileStatus(c *gin.Context) (interface{}, error) {
+	var params struct {
+		Cids []string `form:"cid" json:"cid"`
+	}
+
+	if err := c.ShouldBind(&params); err != nil {
+		return nil, api.ErrValidation.WithData(err)
+	}
+
+	if len(params.Cids) == 0 {
+		return nil, api.ErrValidation.WithData("No cid specified")
+	}
+
+	var result []*node.FileInfo
+
+	for _, v := range params.Cids {
+		cid := NewCid(strings.TrimSpace(v))
+
+		fileInfo, err := ctrl.fetchFileInfo(c, cid)
+		if err != nil {
+			return nil, errors.WithMessage(err, "Failed to retrieve file info")
+		}
+
+		result = append(result, fileInfo)
+	}
+
+	return result, nil
 }
 
 func (ctrl *RestController) getNodeStatus(c *gin.Context) (interface{}, error) {

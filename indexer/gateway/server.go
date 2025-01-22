@@ -21,6 +21,7 @@ func MustServeWithRPC(nodeManager *indexer.NodeManager, locationCache *indexer.F
 		router.GET("/file", api.Wrap(controller.downloadFile))
 		router.GET("/file/:cid/*filePath", api.Wrap(controller.downloadFileInFolder))
 		router.GET("/file/info/:cid", api.Wrap(controller.getFileStatus))
+		router.GET("/files/info", api.Wrap(controller.batchGetFileStatus))
 		router.GET("/node/status", api.Wrap(controller.getNodeStatus))
 		router.POST("/file/segment", api.Wrap(controller.uploadSegment))
 
