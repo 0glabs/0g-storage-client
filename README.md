@@ -160,3 +160,38 @@ There are two options for uploading:
     ```
 
 > **Note:** The `proof` field should contain a [`merkle.Proof`](https://github.com/0glabs/0g-storage-client/blob/8780c5020928a79fb60ed7dea26a42d9876ecfae/core/merkle/proof.go#L20) object, which is used to verify the integrity of each segment.
+
+### Query File Info
+
+Users could query file information by `cid` (transaction sequence number or file merkle root):
+
+```
+GET /file/info/{cid}
+```
+
+or query multiple files in batch:
+
+```
+GET /files/info?cid={cid1}&cid={cid2}&cid={cid3}
+```
+
+Note, the batch API will return `null` if specified `cid` not found.
+
+### HTTP Response
+
+Basically, the REST APIs return 2 kinds of HTTP status code:
+
+- `200`: success or business error.
+- `600`: server internal error.
+
+The HTTP response body is in JSON format, including `code`, `message` and `data`:
+
+```go
+type BusinessError struct {
+	Code    int         `json:"code"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data"`
+}
+```
+
+There are several pre-defined [common errors](/common/api/errors.go) and [business errors](/indexer/gateway/errors.go), and those errors may contain different `data` for detailed error context.
