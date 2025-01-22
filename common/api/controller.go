@@ -14,6 +14,10 @@ var ErrHandled = new(BusinessError)
 func Wrap(controller func(c *gin.Context) (interface{}, error)) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		result, err := controller(c)
+		if err == ErrHandled {
+			return
+		}
+
 		if err != nil {
 			switch e := err.(type) {
 			case *BusinessError:
