@@ -16,8 +16,14 @@ type RouterOption struct {
 	OriginsAllowed   []string
 }
 
+func MustServe(endpoint string, factory RouteFactory, option ...RouterOption) {
+	if err := Serve(endpoint, factory, option...); err != http.ErrServerClosed {
+		logrus.WithError(err).Fatal("Failed to serve API")
+	}
+}
+
 func Serve(endpoint string, factory RouteFactory, option ...RouterOption) error {
-	router := NewRouter(factory, option...)
+	router := newRouter(factory, option...)
 
 	server := http.Server{
 		Addr:    endpoint,
@@ -27,7 +33,7 @@ func Serve(endpoint string, factory RouteFactory, option ...RouterOption) error 
 	return server.ListenAndServe()
 }
 
-func NewRouter(factory RouteFactory, option ...RouterOption) *gin.Engine {
+func newRouter(factory RouteFactory, option ...RouterOption) *gin.Engine {
 	var opt RouterOption
 	if len(option) > 0 {
 		opt = option[0]
