@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/0glabs/0g-storage-client/common/api"
@@ -8,6 +9,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 )
+
+const maxBatchSize = 100
 
 func (ctrl *RestController) getFileStatus(c *gin.Context) (interface{}, error) {
 	cidStr := strings.TrimSpace(c.Param("cid"))
@@ -36,6 +39,10 @@ func (ctrl *RestController) batchGetFileStatus(c *gin.Context) (interface{}, err
 
 	if len(params.Cids) == 0 {
 		return nil, api.ErrValidation.WithData("No cid specified")
+	}
+
+	if len(params.Cids) > maxBatchSize {
+		return nil, api.ErrValidation.WithData(fmt.Sprintf("Too many cid specified, exceeded %v", maxBatchSize))
 	}
 
 	var result []*node.FileInfo
