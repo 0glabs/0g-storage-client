@@ -2,7 +2,6 @@ package gateway
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 
 	"github.com/0glabs/0g-storage-client/common/shard"
@@ -85,12 +84,12 @@ func (ctrl *RestController) getAvailableStorageNodes(ctx context.Context, cid Ci
 func (ctrl *RestController) fetchFileInfo(ctx context.Context, cid Cid) (*node.FileInfo, error) {
 	clients, err := ctrl.getAvailableStorageNodes(ctx, cid)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get available storage nodes: %v", err)
+		return nil, errors.WithMessage(err, "Failed to get available storage nodes")
 	}
 
 	fileInfo, err := getOverallFileInfo(ctx, clients, cid)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve file info from storage nodes: %v", err)
+		return nil, errors.WithMessage(err, "Failed to retrieve file info from storage nodes")
 	}
 
 	if fileInfo != nil {
@@ -100,7 +99,7 @@ func (ctrl *RestController) fetchFileInfo(ctx context.Context, cid Cid) (*node.F
 	// Attempt retrieval from trusted clients as a fallback
 	fileInfo, err = getOverallFileInfo(ctx, ctrl.nodeManager.TrustedClients(), cid)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve file info from trusted clients: %v", err)
+		return nil, errors.WithMessage(err, "Failed to retrieve file info from trusted clients")
 	}
 
 	return fileInfo, nil

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	zg_common "github.com/0glabs/0g-storage-client/common"
+	"github.com/0glabs/0g-storage-client/common/api"
 	"github.com/0glabs/0g-storage-client/core"
 	"github.com/0glabs/0g-storage-client/node"
 	"github.com/0glabs/0g-storage-client/transfer"
@@ -118,12 +119,12 @@ func uploadLocalFile(c *gin.Context) (interface{}, error) {
 	}
 
 	if input.Node < 0 || input.Node >= len(allClients) {
-		return nil, ErrValidation.WithData("node index out of bound")
+		return nil, api.ErrValidation.WithData("node index out of bound")
 	}
 
 	uploader, err := transfer.NewUploader(context.Background(), nil, []*node.ZgsClient{allClients[input.Node]}, zg_common.LogOption{Logger: logrus.StandardLogger()})
 	if err != nil {
-		return nil, ErrValidation.WithData(err)
+		return nil, api.ErrValidation.WithData(err)
 	}
 
 	filename := getFilePath(input.Path, false)
@@ -131,7 +132,7 @@ func uploadLocalFile(c *gin.Context) (interface{}, error) {
 	// Open file to upload
 	file, err := core.Open(filename)
 	if err != nil {
-		return nil, ErrValidation.WithData(err)
+		return nil, api.ErrValidation.WithData(err)
 	}
 	defer file.Close()
 
@@ -154,7 +155,7 @@ func downloadFileLocal(c *gin.Context) (interface{}, error) {
 	}
 
 	if input.Node < 0 || input.Node >= len(allClients) {
-		return nil, ErrValidation.WithData("node index out of bound")
+		return nil, api.ErrValidation.WithData("node index out of bound")
 	}
 
 	downloader, err := transfer.NewDownloader([]*node.ZgsClient{allClients[input.Node]}, zg_common.LogOption{Logger: logrus.StandardLogger()})

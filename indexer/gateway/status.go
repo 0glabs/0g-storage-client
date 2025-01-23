@@ -2,37 +2,71 @@ package gateway
 
 import (
 	"fmt"
-	"net/http"
 	"strings"
 
+	"github.com/0glabs/0g-storage-client/common/api"
 	"github.com/0glabs/0g-storage-client/node"
 	"github.com/gin-gonic/gin"
+	"github.com/pkg/errors"
 )
 
-func (ctrl *RestController) getFileStatus(c *gin.Context) {
+const maxBatchSize = 100
+
+func (ctrl *RestController) getFileStatus(c *gin.Context) (interface{}, error) {
 	cidStr := strings.TrimSpace(c.Param("cid"))
 	cid := NewCid(cidStr)
 
 	fileInfo, err := ctrl.fetchFileInfo(c, cid)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, fmt.Sprintf("Failed to retrieve file info: %v", err))
-		return
+		return nil, errors.WithMessage(err, "Failed to retrieve file info")
 	}
 
 	if fileInfo == nil {
-		c.JSON(http.StatusNotFound, "File not found")
-		return
+		return nil, ErrFileNotFound
 	}
 
-	c.JSON(http.StatusOK, fileInfo)
+	return fileInfo, nil
 }
 
-func (ctrl *RestController) getNodeStatus(c *gin.Context) {
+func (ctrl *RestController) batchGetFileStatus(c *gin.Context) (interface{}, error) {
+	var params struct {
+		Cids []string `form:"cid" json:"cid"`
+	}
+
+	if err := c.ShouldBind(&params); err != nil {
+		return nil, api.ErrValidation.WithData(err)
+	}
+
+	if len(params.Cids) == 0 {
+		return nil, api.ErrValidation.WithData("No cid specified")
+	}
+
+	if len(params.Cids) > maxBatchSize {
+		return nil, api.ErrValidation.WithData(fmt.Sprintf("Too many cid specified, exceeded %v", maxBatchSize))
+	}
+
+	var result []*node.FileInfo
+
+	for _, v := range params.Cids {
+		cid := NewCid(strings.TrimSpace(v))
+
+		fileInfo, err := ctrl.fetchFileInfo(c, cid)
+		if err != nil {
+			return nil, errors.WithMessage(err, "Failed to retrieve file info")
+		}
+
+		result = append(result, fileInfo)
+	}
+
+	return result, nil
+}
+
+func (ctrl *RestController) getNodeStatus(c *gin.Context) (interface{}, error) {
 	var finalStatus *node.Status
 	for _, client := range ctrl.nodeManager.TrustedClients() {
 		status, err := client.GetStatus(c)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, fmt.Sprintf("Failed to retrieve node status: %v", err))
+			return nil, errors.WithMessagef(err, "Failed to retrieve node status")
 		}
 
 		if finalStatus == nil {
@@ -49,5 +83,5 @@ func (ctrl *RestController) getNodeStatus(c *gin.Context) {
 		finalStatus.NextTxSeq = min(finalStatus.NextTxSeq, status.NextTxSeq)
 	}
 
-	c.JSON(http.StatusOK, finalStatus)
+	return finalStatus, nil
 }
