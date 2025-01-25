@@ -21,7 +21,7 @@ func (ctrl *RestController) downloadFile(c *gin.Context) (interface{}, error) {
 	}
 
 	if err := c.ShouldBind(&input); err != nil {
-		return nil, api.ErrValidation.WithData(err)
+		return nil, api.ErrValidation.WithData(err.Error())
 	}
 
 	if input.TxSeq == nil && len(input.Root) == 0 {
@@ -73,7 +73,7 @@ func (ctrl *RestController) downloadFileInFolder(c *gin.Context) (interface{}, e
 
 	fnode, err := ftree.Locate(filePath)
 	if err != nil {
-		return nil, ErrFilePathNotFound.WithData(err)
+		return nil, ErrFilePathNotFound.WithData(err.Error())
 	}
 
 	switch fnode.Type {

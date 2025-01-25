@@ -34,7 +34,7 @@ func (ctrl *RestController) batchGetFileStatus(c *gin.Context) (interface{}, err
 	}
 
 	if err := c.ShouldBind(&params); err != nil {
-		return nil, api.ErrValidation.WithData(err)
+		return nil, api.ErrValidation.WithData(err.Error())
 	}
 
 	if len(params.Cids) == 0 {

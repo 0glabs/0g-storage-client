@@ -27,7 +27,7 @@ func (ctrl *RestController) uploadSegment(c *gin.Context) (interface{}, error) {
 
 	// bind the `application/json` request
 	if err := c.ShouldBind(&input); err != nil {
-		return nil, api.ErrValidation.WithData(err)
+		return nil, api.ErrValidation.WithData(err.Error())
 	}
 
 	// validate segment data
