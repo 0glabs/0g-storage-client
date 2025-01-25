@@ -27,10 +27,10 @@ func Wrap(controller func(c *gin.Context) (interface{}, error)) gin.HandlerFunc 
 				}
 			case validator.ValidationErrors:
 				// binding error
-				c.JSON(http.StatusOK, ErrValidation.WithData(e))
+				c.JSON(http.StatusOK, ErrValidation.WithData(e.Error()))
 			default:
 				// internal server error
-				c.JSON(httpStatusCodeInternalError, ErrInternal.WithData(e))
+				c.JSON(httpStatusCodeInternalError, ErrInternal.WithData(e.Error()))
 			}
 		} else if result == nil {
 			c.JSON(http.StatusOK, ErrNil)

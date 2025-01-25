@@ -11,6 +11,7 @@ import (
 	"github.com/0glabs/0g-storage-client/transfer"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gin-gonic/gin"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -124,7 +125,7 @@ func uploadLocalFile(c *gin.Context) (interface{}, error) {
 
 	uploader, err := transfer.NewUploader(context.Background(), nil, []*node.ZgsClient{allClients[input.Node]}, zg_common.LogOption{Logger: logrus.StandardLogger()})
 	if err != nil {
-		return nil, api.ErrValidation.WithData(err)
+		return nil, errors.WithMessage(err, "Failed to create uploader")
 	}
 
 	filename := getFilePath(input.Path, false)
@@ -132,7 +133,7 @@ func uploadLocalFile(c *gin.Context) (interface{}, error) {
 	// Open file to upload
 	file, err := core.Open(filename)
 	if err != nil {
-		return nil, api.ErrValidation.WithData(err)
+		return nil, errors.WithMessage(err, "Failed to open file")
 	}
 	defer file.Close()
 

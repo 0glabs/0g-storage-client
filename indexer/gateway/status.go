@@ -34,7 +34,7 @@ func (ctrl *RestController) batchGetFileStatus(c *gin.Context) (interface{}, err
 	}
 
 	if err := c.ShouldBind(&params); err != nil {
-		return nil, api.ErrValidation.WithData(err)
+		return nil, api.ErrValidation.WithData(err.Error())
 	}
 
 	if len(params.Cids) == 0 {
@@ -45,17 +45,17 @@ func (ctrl *RestController) batchGetFileStatus(c *gin.Context) (interface{}, err
 		return nil, api.ErrValidation.WithData(fmt.Sprintf("Too many cid specified, exceeded %v", maxBatchSize))
 	}
 
-	var result []*node.FileInfo
+	var result []interface{}
 
 	for _, v := range params.Cids {
 		cid := NewCid(strings.TrimSpace(v))
 
 		fileInfo, err := ctrl.fetchFileInfo(c, cid)
 		if err != nil {
-			return nil, errors.WithMessage(err, "Failed to retrieve file info")
+			result = append(result, errors.WithMessage(err, "Failed to retrieve file info").Error())
+		} else {
+			result = append(result, fileInfo)
 		}
-
-		result = append(result, fileInfo)
 	}
 
 	return result, nil
