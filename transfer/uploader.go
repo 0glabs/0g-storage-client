@@ -45,13 +45,6 @@ func isTooManyDataError(msg string) bool {
 	return strings.Contains(msg, tooManyDataError)
 }
 
-var submitLogEntryRetries = 12
-var specifiedBlockError = "Specified block header does not exist"
-
-func isRetriableSubmitLogEntryError(msg string) bool {
-	return strings.Contains(msg, specifiedBlockError)
-}
-
 type FinalityRequirement uint
 
 const (
@@ -513,17 +506,7 @@ func (uploader *Uploader) SubmitLogEntry(ctx context.Context, datas []core.Itera
 			opts.Value = submissions[0].Fee(pricePerSector)
 		}
 		uploader.logger.WithField("fee(neuron)", opts.Value).Info("submit with fee")
-		for attempt := 0; attempt < submitLogEntryRetries; attempt++ {
-			tx, err = uploader.flow.Submit(opts, submissions[0])
-			if err == nil || !isRetriableSubmitLogEntryError(err.Error()) || attempt >= submitLogEntryRetries-1 {
-				break
-			}
-			uploader.logger.WithFields(logrus.Fields{
-				"error":   err,
-				"attempt": attempt,
-			}).Warn("Failed to submit, retrying...")
-			time.Sleep(10 * time.Second)
-		}
+		tx, err = contract.TransactWithGasAdjustment(uploader.flow, "submit", opts, nil, submissions[0])
 	} else {
 		if fee != nil {
 			opts.Value = fee
@@ -534,17 +517,7 @@ func (uploader *Uploader) SubmitLogEntry(ctx context.Context, datas []core.Itera
 			}
 		}
 		uploader.logger.WithField("fee(neuron)", opts.Value).Info("batch submit with fee")
-		for attempt := 0; attempt < submitLogEntryRetries; attempt++ {
-			tx, err = uploader.flow.BatchSubmit(opts, submissions)
-			if err == nil || !isRetriableSubmitLogEntryError(err.Error()) || attempt >= submitLogEntryRetries-1 {
-				break
-			}
-			uploader.logger.WithFields(logrus.Fields{
-				"error":   err,
-				"attempt": attempt,
-			}).Warn("Failed to submit, retrying...")
-			time.Sleep(10 * time.Second)
-		}
+		tx, err = contract.TransactWithGasAdjustment(uploader.flow, "batchSubmit", opts, nil, submissions)
 	}
 	if err != nil {
 		return common.Hash{}, nil, errors.WithMessage(err, "Failed to send transaction to append log entry")
