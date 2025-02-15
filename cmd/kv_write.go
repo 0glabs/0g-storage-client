@@ -54,9 +54,9 @@ func init() {
 	kvWriteCmd.MarkFlagRequired("stream-id")
 
 	kvWriteCmd.Flags().StringSliceVar(&kvWriteArgs.keys, "stream-keys", []string{}, "kv keys")
-	kvWriteCmd.MarkFlagRequired("kv-keys")
+	kvWriteCmd.MarkFlagRequired("stream-keys")
 	kvWriteCmd.Flags().StringSliceVar(&kvWriteArgs.values, "stream-values", []string{}, "kv values")
-	kvWriteCmd.MarkFlagRequired("kv-values")
+	kvWriteCmd.MarkFlagRequired("stream-values")
 
 	kvWriteCmd.Flags().Uint64Var(&kvWriteArgs.version, "version", math.MaxUint64, "key version")
 
@@ -104,7 +104,7 @@ func kvWrite(*cobra.Command, []string) {
 		nonce = big.NewInt(int64(kvWriteArgs.nonce))
 	}
 	finalityRequired := transfer.TransactionPacked
-	if uploadArgs.finalityRequired {
+	if kvWriteArgs.finalityRequired {
 		finalityRequired = transfer.FileFinalized
 	}
 	opt := transfer.UploadOption{
