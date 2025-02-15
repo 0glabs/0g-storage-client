@@ -91,7 +91,7 @@ func (node *shardSegmentTreeNode) insert(numShard uint, shardId uint, expectedRe
 	return inserted
 }
 
-// select a set of given sharded node and make the data is replicated at least expctedReplica times
+// select a set of given sharded node and make the data is replicated at least expectedReplica times
 // return the selected nodes and if selection is successful
 func Select(nodes []*ShardedNode, expectedReplica uint, random bool) ([]*ShardedNode, bool) {
 	selected := make([]*ShardedNode, 0)
