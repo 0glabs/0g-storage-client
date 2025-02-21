@@ -313,13 +313,13 @@ def zpad(x, l):
 def rzpad(value, total_length):
     """Right zero pad value `x` at least to length `l`.
 
-    >>> zpad('', 1)
+    >>> rzpad('', 1)
     '\x00'
-    >>> zpad('\xca\xfe', 4)
+    >>> rzpad('\xca\xfe', 4)
     '\xca\xfe\x00\x00'
-    >>> zpad('\xff', 1)
+    >>> rzpad('\xff', 1)
     '\xff'
-    >>> zpad('\xca\xfe', 2)
+    >>> rzpad('\xca\xfe', 2)
     '\xca\xfe'
     """
     return value + b"\x00" * max(0, total_length - len(value))
@@ -410,7 +410,7 @@ def decode_addr(v):
 
 
 def decode_int(v):
-    """decodes and integer from serialization"""
+    """decodes an integer from serialization"""
     if len(v) > 0 and (v[0] == b"\x00" or v[0] == 0):
         raise Exception("No leading zero bytes allowed for integers")
     return big_endian_to_int(v)
@@ -514,7 +514,7 @@ def print_func_call(ignore_first_arg=False, max_call_number=100):
     usage:
 
         @print_func_call
-        def some_func_to_be_debu():
+        def some_func_to_be_debug():
             pass
 
     :param ignore_first_arg: whether print the first arg or not.
