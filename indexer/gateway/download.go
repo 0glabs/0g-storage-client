@@ -42,6 +42,12 @@ func (ctrl *RestController) downloadFileInFolder(c *gin.Context) (interface{}, e
 		return nil, errors.WithMessage(err, "Failed to get available storage nodes")
 	}
 
+	defer func() {
+		for _, client := range clients {
+			client.Close()
+		}
+	}()
+
 	fileInfo, err := getOverallFileInfo(c, clients, cid)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to retrieve file info")
@@ -105,6 +111,12 @@ func (ctrl *RestController) downloadAndServeFile(c *gin.Context, cid Cid, filena
 	if err != nil {
 		return errors.WithMessage(err, "Failed to get available storage nodes")
 	}
+
+	defer func() {
+		for _, client := range clients {
+			client.Close()
+		}
+	}()
 
 	fileInfo, err := getOverallFileInfo(c, clients, cid)
 	if err != nil {
