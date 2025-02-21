@@ -44,7 +44,7 @@ func bindDownloadFlags(cmd *cobra.Command, args *downloadArgument) {
 
 	cmd.Flags().BoolVar(&args.proof, "proof", false, "Whether to download with merkle proof for validation")
 
-	cmd.Flags().IntVar(&args.routines, "routines", runtime.GOMAXPROCS(0), "number of go routines for downloading simutanously")
+	cmd.Flags().IntVar(&args.routines, "routines", runtime.GOMAXPROCS(0), "number of go routines for downloading simultaneously")
 
 	cmd.Flags().DurationVar(&args.timeout, "timeout", 0, "cli task timeout, 0 for no timeout")
 }
