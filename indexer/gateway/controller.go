@@ -61,15 +61,23 @@ func (ctrl *RestController) getAvailableFileLocations(ctx context.Context, cid C
 }
 
 // getAvailableStorageNodes returns a list of available storage nodes for a file with the given CID.
-func (ctrl *RestController) getAvailableStorageNodes(ctx context.Context, cid Cid) ([]*node.ZgsClient, error) {
+func (ctrl *RestController) getAvailableStorageNodes(ctx context.Context, cid Cid) (clients []*node.ZgsClient, err error) {
 	nodes, err := ctrl.getAvailableFileLocations(ctx, cid)
 	if err != nil {
 		return nil, errors.WithMessage(err, "failed to get file locations")
 	}
 
-	var clients []*node.ZgsClient
+	defer func() {
+		if err != nil { // close clients that were already built if any error occurs
+			for _, client := range clients {
+				client.Close()
+			}
+		}
+	}()
+
 	for i := range nodes {
-		client, err := node.NewZgsClient(nodes[i].URL)
+		var client *node.ZgsClient
+		client, err = node.NewZgsClient(nodes[i].URL)
 		if err != nil {
 			return nil, errors.WithMessage(err, "failed to create zgs client")
 		}
@@ -86,6 +94,12 @@ func (ctrl *RestController) fetchFileInfo(ctx context.Context, cid Cid) (*node.F
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to get available storage nodes")
 	}
+
+	defer func() {
+		for _, client := range clients {
+			client.Close()
+		}
+	}()
 
 	fileInfo, err := getOverallFileInfo(ctx, clients, cid)
 	if err != nil {
