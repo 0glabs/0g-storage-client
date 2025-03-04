@@ -33,7 +33,7 @@ var defaultTimeout = 30 * time.Second
 var defaultMaxNonGasRetries = 10
 
 func isRetriableSubmitLogEntryError(msg string) bool {
-	return strings.Contains(msg, specifiedBlockError)
+	return strings.Contains(msg, specifiedBlockError) || strings.Contains(msg, "mempool") || strings.Contains(msg, "timeout")
 }
 
 func NewFlowContract(flowAddress common.Address, clientWithSigner *web3go.Client) (*FlowContract, error) {
