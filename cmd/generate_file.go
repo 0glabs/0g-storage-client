@@ -44,7 +44,7 @@ func generateTempFile(*cobra.Command, []string) {
 			return
 		}
 
-		logrus.WithField("file", genFileArgs.file).Info("Overrite file")
+		logrus.WithField("file", genFileArgs.file).Info("Overwrite file")
 	}
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
