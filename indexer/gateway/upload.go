@@ -101,5 +101,5 @@ func uploadSegmentWithProof(
 		Segments: []node.SegmentWithProof{segment},
 		FileInfo: fileInfo,
 	}
-	return transfer.NewFileSegementUploader(clients).Upload(ctx, fileSegements, opt)
+	return transfer.NewFileSegmentUploader(clients).Upload(ctx, fileSegments, opt)
 }
