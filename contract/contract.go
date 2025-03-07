@@ -24,16 +24,16 @@ type FlowContract struct {
 
 type TxRetryOption struct {
 	Timeout          time.Duration
-	maxNonGasRetries int
-	maxGasPrice      *big.Int
+	MaxNonGasRetries int
+	MaxGasPrice      *big.Int
 }
 
-var specifiedBlockError = "Specified block header does not exist"
-var defaultTimeout = 30 * time.Second
-var defaultMaxNonGasRetries = 10
+var SpecifiedBlockError = "Specified block header does not exist"
+var DefaultTimeout = 30 * time.Second
+var DefaultMaxNonGasRetries = 10
 
-func isRetriableSubmitLogEntryError(msg string) bool {
-	return strings.Contains(msg, specifiedBlockError) || strings.Contains(msg, "mempool") || strings.Contains(msg, "timeout")
+func IsRetriableSubmitLogEntryError(msg string) bool {
+	return strings.Contains(msg, SpecifiedBlockError) || strings.Contains(msg, "mempool") || strings.Contains(msg, "timeout")
 }
 
 func NewFlowContract(flowAddress common.Address, clientWithSigner *web3go.Client) (*FlowContract, error) {
@@ -114,8 +114,8 @@ func TransactWithGasAdjustment(
 	// Set timeout and max non-gas retries from retryOpts if provided.
 	if retryOpts == nil {
 		retryOpts = &TxRetryOption{
-			Timeout:          defaultTimeout,
-			maxNonGasRetries: defaultMaxNonGasRetries,
+			Timeout:          DefaultTimeout,
+			MaxNonGasRetries: DefaultMaxNonGasRetries,
 		}
 	}
 
@@ -144,18 +144,18 @@ func TransactWithGasAdjustment(
 
 		errStr := strings.ToLower(err.Error())
 
-		if !isRetriableSubmitLogEntryError(errStr) {
+		if !IsRetriableSubmitLogEntryError(errStr) {
 			return nil, fmt.Errorf("failed to send transaction: %w", err)
 		}
 
 		if strings.Contains(errStr, "mempool") || strings.Contains(errStr, "timeout") {
-			if retryOpts.maxGasPrice == nil {
+			if retryOpts.MaxGasPrice == nil {
 				return nil, fmt.Errorf("mempool full and no max gas price is set, failed to send transaction: %w", err)
 			} else {
 				newGasPrice := new(big.Int).Mul(opts.GasPrice, big.NewInt(11))
 				newGasPrice.Div(newGasPrice, big.NewInt(10))
-				if newGasPrice.Cmp(retryOpts.maxGasPrice) > 0 {
-					opts.GasPrice = new(big.Int).Set(retryOpts.maxGasPrice)
+				if newGasPrice.Cmp(retryOpts.MaxGasPrice) > 0 {
+					opts.GasPrice = new(big.Int).Set(retryOpts.MaxGasPrice)
 				} else {
 					opts.GasPrice = newGasPrice
 				}
@@ -163,7 +163,7 @@ func TransactWithGasAdjustment(
 			}
 		} else {
 			nRetries++
-			if nRetries >= retryOpts.maxNonGasRetries {
+			if nRetries >= retryOpts.MaxNonGasRetries {
 				return nil, fmt.Errorf("failed to send transaction after %d retries: %w", nRetries, err)
 			}
 			logrus.WithError(err).Infof("Retrying with same gas price %v, attempt %d", opts.GasPrice, nRetries)
