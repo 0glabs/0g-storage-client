@@ -68,5 +68,5 @@ func uploadDir(*cobra.Command, []string) {
 	logrus.WithFields(logrus.Fields{
 		"txnHash":  txnHash,
 		"rootHash": rootHash,
-	}).Info("Directory uploaded done")
+	}).Info("Directory uploaded successfully")
 }
