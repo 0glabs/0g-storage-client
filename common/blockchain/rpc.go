@@ -44,7 +44,7 @@ func NewWeb3(url, key string, opt ...providers.Option) (*web3go.Client, error) {
 	option.WithSignerManager(sm)
 
 	if Web3LogEnabled {
-		option = option.WithLogger(logrus.StandardLogger().Out)
+		option = option.WithLooger(logrus.StandardLogger().Out)
 	}
 
 	return web3go.NewClientWithOption(url, *option)
