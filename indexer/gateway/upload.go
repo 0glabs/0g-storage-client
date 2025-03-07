@@ -97,9 +97,9 @@ func uploadSegmentWithProof(
 	opt := transfer.UploadOption{
 		ExpectedReplica: expectedReplica,
 	}
-	fileSegments := transfer.FileSegmentsWithProof{
+	fileSegements := transfer.FileSegmentsWithProof{
 		Segments: []node.SegmentWithProof{segment},
 		FileInfo: fileInfo,
 	}
-	return transfer.NewFileSegmentUploader(clients).Upload(ctx, fileSegments, opt)
+	return transfer.NewFileSegementUploader(clients).Upload(ctx, fileSegements, opt)
 }
