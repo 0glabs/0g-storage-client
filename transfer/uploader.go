@@ -61,12 +61,14 @@ type UploadOption struct {
 	SkipTx           bool                // skip sending transaction on chain, this can set to true only if the data has already settled on chain before
 	Fee              *big.Int            // fee in neuron
 	Nonce            *big.Int            // nonce for transaction
+	MaxGasPrice      *big.Int            // max gas price for transaction
 }
 
 // BatchUploadOption upload option for a batching
 type BatchUploadOption struct {
 	Fee         *big.Int       // fee in neuron
 	Nonce       *big.Int       // nonce for transaction
+	MaxGasPrice *big.Int       // max gas price for transaction
 	TaskSize    uint           // number of files to upload simutanously
 	DataOptions []UploadOption // upload option for single file, nonce and fee are ignored
 }
@@ -187,6 +189,7 @@ func (uploader *Uploader) SplitableUpload(ctx context.Context, data core.Iterabl
 			opts := BatchUploadOption{
 				Fee:         nil,
 				Nonce:       nil,
+				MaxGasPrice: opt.MaxGasPrice,
 				DataOptions: make([]UploadOption, 0),
 			}
 			for i := l; i < r; i += 1 {
@@ -295,7 +298,7 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 	var receipt *types.Receipt
 	if len(toSubmitDatas) > 0 {
 		var err error
-		if txHash, receipt, err = uploader.SubmitLogEntry(ctx, toSubmitDatas, toSubmitTags, opts.Nonce, opts.Fee); err != nil {
+		if txHash, receipt, err = uploader.SubmitLogEntry(ctx, toSubmitDatas, toSubmitTags, opts.Nonce, opts.Fee, opts.MaxGasPrice); err != nil {
 			return txHash, nil, errors.WithMessage(err, "Failed to submit log entry")
 		}
 		// Wait for storage node to retrieve log entry from blockchain
@@ -380,7 +383,7 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 	if !opt.SkipTx || info == nil {
 		var receipt *types.Receipt
 
-		txHash, receipt, err = uploader.SubmitLogEntry(ctx, []core.IterableData{data}, [][]byte{opt.Tags}, opt.Nonce, opt.Fee)
+		txHash, receipt, err = uploader.SubmitLogEntry(ctx, []core.IterableData{data}, [][]byte{opt.Tags}, opt.Nonce, opt.Fee, opt.MaxGasPrice)
 		if err != nil {
 			return txHash, tree.Root(), errors.WithMessage(err, "Failed to submit log entry")
 		}
@@ -473,7 +476,7 @@ func (uploader *Uploader) UploadFile(ctx context.Context, path string, option ..
 }
 
 // SubmitLogEntry submit the data to 0g storage contract by sending a transaction
-func (uploader *Uploader) SubmitLogEntry(ctx context.Context, datas []core.IterableData, tags [][]byte, nonce *big.Int, fee *big.Int) (common.Hash, *types.Receipt, error) {
+func (uploader *Uploader) SubmitLogEntry(ctx context.Context, datas []core.IterableData, tags [][]byte, nonce, fee, maxGasPrice *big.Int) (common.Hash, *types.Receipt, error) {
 	// Construct submission
 	submissions := make([]contract.Submission, len(datas))
 	for i := 0; i < len(datas); i++ {
@@ -494,7 +497,7 @@ func (uploader *Uploader) SubmitLogEntry(ctx context.Context, datas []core.Itera
 		opts.Nonce = nonce
 	}
 
-	var tx *types.Transaction
+	var receipt *types.Receipt
 	pricePerSector, err := uploader.market.PricePerSector(&bind.CallOpts{Context: ctx})
 	if err != nil {
 		return common.Hash{}, nil, errors.WithMessage(err, "Failed to read price per sector")
@@ -506,7 +509,7 @@ func (uploader *Uploader) SubmitLogEntry(ctx context.Context, datas []core.Itera
 			opts.Value = submissions[0].Fee(pricePerSector)
 		}
 		uploader.logger.WithField("fee(neuron)", opts.Value).Info("submit with fee")
-		tx, err = contract.TransactWithGasAdjustment(uploader.flow, "submit", opts, nil, submissions[0])
+		receipt, err = contract.TransactWithGasAdjustment(uploader.flow, "submit", opts, &contract.TxRetryOption{MaxGasPrice: maxGasPrice}, submissions[0])
 	} else {
 		if fee != nil {
 			opts.Value = fee
@@ -517,17 +520,17 @@ func (uploader *Uploader) SubmitLogEntry(ctx context.Context, datas []core.Itera
 			}
 		}
 		uploader.logger.WithField("fee(neuron)", opts.Value).Info("batch submit with fee")
-		tx, err = contract.TransactWithGasAdjustment(uploader.flow, "batchSubmit", opts, nil, submissions)
+		receipt, err = contract.TransactWithGasAdjustment(uploader.flow, "batchSubmit", opts, &contract.TxRetryOption{MaxGasPrice: maxGasPrice}, submissions)
 	}
 	if err != nil {
 		return common.Hash{}, nil, errors.WithMessage(err, "Failed to send transaction to append log entry")
 	}
 
-	uploader.logger.WithField("hash", tx.Hash().Hex()).Info("Succeeded to send transaction to append log entry")
+	uploader.logger.WithField("hash", receipt.TransactionHash.Hex()).Info("Succeeded to send transaction to append log entry")
 
 	// Wait for successful execution
-	receipt, err := uploader.flow.WaitForReceipt(ctx, tx.Hash(), true)
-	return tx.Hash(), receipt, err
+	// receipt, err := uploader.flow.WaitForReceipt(ctx, tx.Hash(), true)
+	return receipt.TransactionHash, receipt, err
 }
 
 // Wait for log entry ready on storage node.

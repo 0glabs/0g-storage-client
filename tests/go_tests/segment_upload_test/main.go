@@ -98,7 +98,7 @@ func runTest() error {
 	if err != nil {
 		return errors.WithMessage(err, "failed to initialize uploader")
 	}
-	_, _, err = uploader.SubmitLogEntry(ctx, []core.IterableData{data}, make([][]byte, 1), nil, nil)
+	_, _, err = uploader.SubmitLogEntry(ctx, []core.IterableData{data}, make([][]byte, 1), nil, nil, nil)
 	if err != nil {
 		return errors.WithMessage(err, "failed to sub log entry")
 	}

@@ -56,6 +56,7 @@ type uploadArgument struct {
 	routines         int
 
 	fragmentSize int64
+	maxGasPrice  uint
 
 	timeout time.Duration
 }
@@ -79,6 +80,7 @@ func bindUploadFlags(cmd *cobra.Command, args *uploadArgument) {
 	cmd.Flags().Int64Var(&args.fragmentSize, "fragment-size", 1024*1024*1024*4, "the size of fragment to split into when file is too large")
 
 	cmd.Flags().IntVar(&args.routines, "routines", runtime.GOMAXPROCS(0), "number of go routines for uploading simutanously")
+	cmd.Flags().UintVar(&args.maxGasPrice, "max-gas-price", 0, "max gas price to send transaction")
 
 	cmd.Flags().DurationVar(&args.timeout, "timeout", 0, "cli task timeout, 0 for no timeout")
 }
@@ -124,6 +126,11 @@ func upload(*cobra.Command, []string) {
 	if uploadArgs.finalityRequired {
 		finalityRequired = transfer.FileFinalized
 	}
+
+	var maxGasPrice *big.Int
+	if uploadArgs.maxGasPrice > 0 {
+		maxGasPrice = big.NewInt(int64(uploadArgs.maxGasPrice))
+	}
 	opt := transfer.UploadOption{
 		Tags:             hexutil.MustDecode(uploadArgs.tags),
 		FinalityRequired: finalityRequired,
@@ -132,6 +139,7 @@ func upload(*cobra.Command, []string) {
 		SkipTx:           uploadArgs.skipTx,
 		Fee:              fee,
 		Nonce:            nonce,
+		MaxGasPrice: 	  maxGasPrice,
 	}
 
 	file, err := core.Open(uploadArgs.file)

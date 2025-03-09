@@ -10,9 +10,9 @@ import (
 	"github.com/0glabs/0g-storage-client/common/blockchain"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/openweb3/web3go"
+	"github.com/openweb3/web3go/types"
 	"github.com/sirupsen/logrus"
 )
 
@@ -29,8 +29,8 @@ type TxRetryOption struct {
 }
 
 var SpecifiedBlockError = "Specified block header does not exist"
-var DefaultTimeout = 30 * time.Second
-var DefaultMaxNonGasRetries = 10
+var DefaultTimeout = 15 * time.Second
+var DefaultMaxNonGasRetries = 5
 
 func IsRetriableSubmitLogEntryError(msg string) bool {
 	return strings.Contains(msg, SpecifiedBlockError) || strings.Contains(msg, "mempool") || strings.Contains(msg, "timeout")
@@ -110,7 +110,7 @@ func TransactWithGasAdjustment(
 	opts *bind.TransactOpts,
 	retryOpts *TxRetryOption,
 	params ...interface{},
-) (*types.Transaction, error) {
+) (*types.Receipt, error) {
 	// Set timeout and max non-gas retries from retryOpts if provided.
 	if retryOpts == nil {
 		retryOpts = &TxRetryOption{
@@ -118,6 +118,16 @@ func TransactWithGasAdjustment(
 			MaxNonGasRetries: DefaultMaxNonGasRetries,
 		}
 	}
+
+	if retryOpts.MaxNonGasRetries == 0 {
+		retryOpts.MaxNonGasRetries = DefaultMaxNonGasRetries
+	}
+
+	if retryOpts.Timeout == 0 {
+		retryOpts.Timeout = DefaultTimeout
+	}
+
+	logrus.WithField("timeout", retryOpts.Timeout).WithField("maxNonGasRetries", retryOpts.MaxNonGasRetries).Debug("Set retry options")
 
 	if opts.GasPrice == nil {
 		// Get the current gas price if not set.
@@ -138,9 +148,16 @@ func TransactWithGasAdjustment(
 		opts.Context = ctx
 		tx, err := contract.FlowTransactor.contract.Transact(opts, method, params...)
 		cancel() // cancel this iteration's context
+		var receipt *types.Receipt
 		if err == nil {
-			return tx, nil
+			// Wait for successful execution
+			receipt, err = contract.WaitForReceipt(ctx, tx.Hash(), true, blockchain.RetryOption{NRetries: retryOpts.MaxNonGasRetries})
+			if err == nil {
+				return receipt, nil
+			}
 		}
+
+		logrus.WithError(err).Error("Failed to send transaction")
 
 		errStr := strings.ToLower(err.Error())
 
