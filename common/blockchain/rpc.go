@@ -69,19 +69,13 @@ func WaitForReceipt(ctx context.Context, client *web3go.Client, txHash common.Ha
 		opt = opts[0]
 	} else {
 		opt.Interval = time.Second * 3
-		opt.NRetries = 20
 	}
 
 	if opt.Interval == 0 {
 		opt.Interval = time.Second * 3
 	}
 
-	if opt.NRetries == 0 {
-		opt.NRetries = 20
-	}
-
 	reminder := util.NewReminder(opt.logger, time.Minute)
-	nRetries := 0
 	for receipt == nil {
 		if receipt, err = client.WithContext(ctx).Eth.TransactionReceipt(txHash); err != nil {
 			return nil, err
@@ -92,11 +86,6 @@ func WaitForReceipt(ctx context.Context, client *web3go.Client, txHash common.Ha
 		// remind
 		if receipt == nil {
 			reminder.RemindWith("Transaction not executed yet", "hash", txHash)
-		}
-
-		nRetries += 1
-		if nRetries >= opt.NRetries {
-			return nil, errors.Errorf("Transaction not executed after %v retries, timeout", opt.NRetries)
 		}
 
 		time.Sleep(opt.Interval)
