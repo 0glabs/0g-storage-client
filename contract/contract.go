@@ -30,7 +30,7 @@ type TxRetryOption struct {
 
 var SpecifiedBlockError = "Specified block header does not exist"
 var DefaultTimeout = 15 * time.Second
-var DefaultMaxNonGasRetries = 5
+var DefaultMaxNonGasRetries = 20
 
 func IsRetriableSubmitLogEntryError(msg string) bool {
 	return strings.Contains(msg, SpecifiedBlockError) || strings.Contains(msg, "mempool") || strings.Contains(msg, "timeout")
@@ -147,15 +147,17 @@ func TransactWithGasAdjustment(
 		ctx, cancel := context.WithTimeout(context.Background(), retryOpts.Timeout)
 		opts.Context = ctx
 		tx, err := contract.FlowTransactor.contract.Transact(opts, method, params...)
-		cancel() // cancel this iteration's context
+		
 		var receipt *types.Receipt
 		if err == nil {
 			// Wait for successful execution
 			receipt, err = contract.WaitForReceipt(ctx, tx.Hash(), true, blockchain.RetryOption{NRetries: retryOpts.MaxNonGasRetries})
 			if err == nil {
+				cancel() // cancel this iteration's context
 				return receipt, nil
 			}
 		}
+		cancel() // cancel this iteration's context
 
 		logrus.WithError(err).Error("Failed to send transaction")
 
@@ -169,7 +171,7 @@ func TransactWithGasAdjustment(
 			if retryOpts.MaxGasPrice == nil {
 				return nil, fmt.Errorf("mempool full and no max gas price is set, failed to send transaction: %w", err)
 			} else {
-				newGasPrice := new(big.Int).Mul(opts.GasPrice, big.NewInt(11))
+				newGasPrice := new(big.Int).Mul(opts.GasPrice, big.NewInt(15))
 				newGasPrice.Div(newGasPrice, big.NewInt(10))
 				if newGasPrice.Cmp(retryOpts.MaxGasPrice) > 0 {
 					opts.GasPrice = new(big.Int).Set(retryOpts.MaxGasPrice)
