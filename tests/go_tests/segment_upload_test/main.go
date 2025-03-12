@@ -98,9 +98,12 @@ func runTest() error {
 	if err != nil {
 		return errors.WithMessage(err, "failed to initialize uploader")
 	}
-	_, _, err = uploader.SubmitLogEntry(ctx, []core.IterableData{data}, make([][]byte, 1), nil, nil)
+	_, _, err = uploader.SubmitLogEntry(ctx, []core.IterableData{data}, make([][]byte, 1), transfer.SubmitLogEntryOption{
+		NRetries: 5,
+		Step:     15,
+	})
 	if err != nil {
-		return errors.WithMessage(err, "failed to sub log entry")
+		return errors.WithMessage(err, "failed to submit log entry")
 	}
 	// wait for log entry
 	var info *node.FileInfo

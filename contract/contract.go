@@ -10,9 +10,10 @@ import (
 	"github.com/0glabs/0g-storage-client/common/blockchain"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/openweb3/web3go"
+	"github.com/openweb3/web3go/types"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -24,16 +25,18 @@ type FlowContract struct {
 
 type TxRetryOption struct {
 	Timeout          time.Duration
-	maxNonGasRetries int
-	maxGasPrice      *big.Int
+	MaxNonGasRetries int
+	MaxGasPrice      *big.Int
+	Step             int64
 }
 
-var specifiedBlockError = "Specified block header does not exist"
-var defaultTimeout = 30 * time.Second
-var defaultMaxNonGasRetries = 10
+var SpecifiedBlockError = "Specified block header does not exist"
+var DefaultTimeout = 15 * time.Minute
+var DefaultMaxNonGasRetries = 20
+var DefaultStep = int64(15)
 
-func isRetriableSubmitLogEntryError(msg string) bool {
-	return strings.Contains(msg, specifiedBlockError) || strings.Contains(msg, "mempool") || strings.Contains(msg, "timeout")
+func IsRetriableSubmitLogEntryError(msg string) bool {
+	return strings.Contains(msg, SpecifiedBlockError) || strings.Contains(msg, "mempool") || strings.Contains(msg, "timeout")
 }
 
 func NewFlowContract(flowAddress common.Address, clientWithSigner *web3go.Client) (*FlowContract, error) {
@@ -50,6 +53,22 @@ func NewFlowContract(flowAddress common.Address, clientWithSigner *web3go.Client
 	}
 
 	return &FlowContract{contract, flow, clientWithSigner}, nil
+}
+
+func (f *FlowContract) GetNonce(ctx context.Context) (*big.Int, error) {
+	sm, err := f.clientWithSigner.GetSignerManager()
+	if err != nil {
+		return nil, err
+	}
+
+	addr := sm.List()[0].Address()
+
+	nonce, err := f.clientWithSigner.Eth.TransactionCount(addr, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return nonce, nil
 }
 
 func (f *FlowContract) GetGasPrice() (*big.Int, error) {
@@ -110,20 +129,45 @@ func TransactWithGasAdjustment(
 	opts *bind.TransactOpts,
 	retryOpts *TxRetryOption,
 	params ...interface{},
-) (*types.Transaction, error) {
+) (*types.Receipt, error) {
 	// Set timeout and max non-gas retries from retryOpts if provided.
 	if retryOpts == nil {
 		retryOpts = &TxRetryOption{
-			Timeout:          defaultTimeout,
-			maxNonGasRetries: defaultMaxNonGasRetries,
+			MaxNonGasRetries: DefaultMaxNonGasRetries,
 		}
 	}
+
+	if retryOpts.MaxNonGasRetries == 0 {
+		retryOpts.MaxNonGasRetries = DefaultMaxNonGasRetries
+	}
+
+	if retryOpts.Step == 0 {
+		retryOpts.Step = DefaultStep
+	}
+
+	if t, ok := opts.Context.Deadline(); ok {
+		retryOpts.Timeout = time.Until(t)
+	}
+
+	logrus.WithField("timeout", retryOpts.Timeout).WithField("maxNonGasRetries", retryOpts.MaxNonGasRetries).Debug("Set retry options")
+
+	if opts.Nonce == nil {
+		// Get the current nonce if not set.
+		nonce, err := contract.GetNonce(opts.Context)
+		if err != nil {
+			return nil, err
+		}
+		// add one to the nonce
+		opts.Nonce = nonce
+	}
+
+	logrus.WithField("nonce", opts.Nonce).Info("Set nonce")
 
 	if opts.GasPrice == nil {
 		// Get the current gas price if not set.
 		gasPrice, err := contract.GetGasPrice()
 		if err != nil {
-			return nil, fmt.Errorf("failed to get gas price: %w", err)
+			return nil, errors.WithMessage(err, "failed to get gas price")
 		}
 		opts.GasPrice = gasPrice
 		logrus.WithField("gasPrice", opts.GasPrice).Debug("Receive current gas price from chain node")
@@ -131,47 +175,115 @@ func TransactWithGasAdjustment(
 
 	logrus.WithField("gasPrice", opts.GasPrice).Info("Set gas price")
 
-	nRetries := 0
-	for {
-		// Create a fresh context per iteration.
-		ctx, cancel := context.WithTimeout(context.Background(), retryOpts.Timeout)
-		opts.Context = ctx
-		tx, err := contract.FlowTransactor.contract.Transact(opts, method, params...)
-		cancel() // cancel this iteration's context
-		if err == nil {
-			return tx, nil
-		}
+	receiptCh := make(chan *types.Receipt, 1)
+	errCh := make(chan error, 1)
+	failCh := make(chan error, 1)
 
-		errStr := strings.ToLower(err.Error())
-
-		if !isRetriableSubmitLogEntryError(errStr) {
-			return nil, fmt.Errorf("failed to send transaction: %w", err)
-		}
-
-		if strings.Contains(errStr, "mempool") || strings.Contains(errStr, "timeout") {
-			if retryOpts.maxGasPrice == nil {
-				return nil, fmt.Errorf("mempool full and no max gas price is set, failed to send transaction: %w", err)
-			} else {
-				newGasPrice := new(big.Int).Mul(opts.GasPrice, big.NewInt(11))
-				newGasPrice.Div(newGasPrice, big.NewInt(10))
-				if newGasPrice.Cmp(retryOpts.maxGasPrice) > 0 {
-					opts.GasPrice = new(big.Int).Set(retryOpts.maxGasPrice)
-				} else {
-					opts.GasPrice = newGasPrice
-				}
-				logrus.WithError(err).Infof("Increasing gas price to %v due to mempool/timeout error", opts.GasPrice)
-			}
-		} else {
-			nRetries++
-			if nRetries >= retryOpts.maxNonGasRetries {
-				return nil, fmt.Errorf("failed to send transaction after %d retries: %w", nRetries, err)
-			}
-			logrus.WithError(err).Infof("Retrying with same gas price %v, attempt %d", opts.GasPrice, nRetries)
-		}
-
-		time.Sleep(10 * time.Second)
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if retryOpts.Timeout > 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), retryOpts.Timeout)
+	} else {
+		ctx, cancel = context.WithCancel(context.Background())
 	}
 
+	// calculate number of gas retry by dividing max gas price by current gas price and the ration
+	nGasRetry := 0
+	if retryOpts.MaxGasPrice != nil {
+		gasPrice := opts.GasPrice
+		for gasPrice.Cmp(retryOpts.MaxGasPrice) <= 0 {
+			gasPrice = new(big.Int).Mul(gasPrice, big.NewInt(retryOpts.Step))
+			gasPrice.Div(gasPrice, big.NewInt(10))
+			nGasRetry++
+		}
+	}
+
+	go func() {
+		nRetries := 0
+		for {
+			select {
+			case <-ctx.Done():
+				// main or another goroutine canceled the context
+				logrus.Info("Context canceled; stopping outer loop")
+				return
+			default:
+			}
+			tx, err := contract.FlowTransactor.contract.Transact(opts, method, params...)
+
+			var receipt *types.Receipt
+			if err == nil {
+				// Wait for successful execution
+				go func() {
+					receipt, err = contract.WaitForReceipt(ctx, tx.Hash(), true, blockchain.RetryOption{NRetries: retryOpts.MaxNonGasRetries})
+					if err == nil {
+						receiptCh <- receipt
+						return
+					}
+					errCh <- err
+				}()
+				// even if the receipt is received, this loop will continue until the context is canceled
+				time.Sleep(30 * time.Second)
+				err = fmt.Errorf("timeout")
+			}
+
+			logrus.WithError(err).Error("Failed to send transaction")
+
+			errStr := strings.ToLower(err.Error())
+
+			if !IsRetriableSubmitLogEntryError(errStr) {
+				if strings.Contains(errStr, "invalid nonce") {
+					return
+				}
+				failCh <- errors.WithMessage(err, "failed to send transaction")
+				return
+			}
+
+			// If the error is due to mempool full or timeout, retry with a higher gas price
+			if strings.Contains(errStr, "mempool") || strings.Contains(errStr, "timeout") {
+				if retryOpts.MaxGasPrice == nil {
+					failCh <- errors.WithMessage(err, "mempool full and no max gas price is set, failed to send transaction")
+					return
+				} else if opts.GasPrice.Cmp(retryOpts.MaxGasPrice) >= 0 {
+					return
+				} else {
+					newGasPrice := new(big.Int).Mul(opts.GasPrice, big.NewInt(retryOpts.Step))
+					newGasPrice.Div(newGasPrice, big.NewInt(10))
+					if newGasPrice.Cmp(retryOpts.MaxGasPrice) > 0 {
+						opts.GasPrice = new(big.Int).Set(retryOpts.MaxGasPrice)
+					} else {
+						opts.GasPrice = newGasPrice
+					}
+					logrus.WithError(err).Infof("Increasing gas price to %v due to mempool/timeout error", opts.GasPrice)
+				}
+			} else {
+				nRetries++
+				if nRetries >= retryOpts.MaxNonGasRetries {
+					failCh <- errors.WithMessage(err, "failed to send transaction")
+					return
+				}
+				logrus.WithError(err).Infof("Retrying with same gas price %v, attempt %d", opts.GasPrice, nRetries)
+			}
+		}
+	}()
+
+	nErr := 0
+	for {
+		select {
+		case receipt := <-receiptCh:
+			cancel()
+			return receipt, nil
+		case err := <-errCh:
+			nErr++
+			if nErr >= nGasRetry {
+				failCh <- errors.WithMessage(err, "All gas price retries failed")
+				cancel()
+				return nil, err
+			}
+		case err := <-failCh:
+			cancel()
+			return nil, err
+		}
+	}
 }
 
 func (submission Submission) Fee(pricePerSector *big.Int) *big.Int {

@@ -20,6 +20,7 @@ import (
 var Web3LogEnabled bool
 
 type RetryOption struct {
+	NRetries int
 	Interval time.Duration
 	logger   *logrus.Logger
 }
@@ -70,11 +71,17 @@ func WaitForReceipt(ctx context.Context, client *web3go.Client, txHash common.Ha
 		opt.Interval = time.Second * 3
 	}
 
+	if opt.Interval == 0 {
+		opt.Interval = time.Second * 3
+	}
+
 	reminder := util.NewReminder(opt.logger, time.Minute)
 	for receipt == nil {
 		if receipt, err = client.WithContext(ctx).Eth.TransactionReceipt(txHash); err != nil {
 			return nil, err
 		}
+
+		logrus.WithField("txHash", txHash).WithField("receipt", receipt).Info("Transaction receipt")
 
 		// remind
 		if receipt == nil {
