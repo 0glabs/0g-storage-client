@@ -59,15 +59,36 @@ func (c *FileLocationCache) Close() {
 }
 
 func (c *FileLocationCache) GetFileLocations(ctx context.Context, txSeq uint64) ([]*shard.ShardedNode, error) {
-	if nodes, ok := c.cache.Get(txSeq); ok {
-		return nodes, nil
+	nodes, ok := c.cache.Get(txSeq)
+	cachedNodes := make(map[string]bool)
+	if ok {
+		for _, node := range nodes {
+			cachedNodes[node.URL] = true
+		}
 	}
+	newNodes, err := c.getFileLocation(ctx, txSeq, cachedNodes)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(newNodes) > 0 {
+		// concat new nodes with cached nodes
+		nodes = append(nodes, newNodes...)
+	}
+
+	return nodes, nil
+}
+
+func (c *FileLocationCache) getFileLocation(ctx context.Context, txSeq uint64, cachedNodes map[string]bool) ([]*shard.ShardedNode, error) {
 	var nodes []*shard.ShardedNode
 	// fetch from trusted
 	selected := make(map[string]struct{})
 	trusted := defaultNodeManager.TrustedClients()
 	var segNum uint64
 	for _, v := range trusted {
+		if _, ok := cachedNodes[v.URL()]; ok {
+			continue
+		}
 		start := time.Now()
 		fileInfo, err := v.GetFileInfoByTxSeq(ctx, txSeq)
 		if fileInfo != nil {
@@ -170,4 +191,5 @@ func (c *FileLocationCache) GetFileLocations(ctx context.Context, txSeq uint64) 
 		c.latestFindFile.Store(txSeq, time.Now())
 	}
 	return nil, nil
+	
 }
