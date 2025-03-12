@@ -59,34 +59,33 @@ func (c *FileLocationCache) Close() {
 }
 
 func (c *FileLocationCache) GetFileLocations(ctx context.Context, txSeq uint64) ([]*shard.ShardedNode, error) {
+	var nodes []*shard.ShardedNode
 	nodes, ok := c.cache.Get(txSeq)
-	cachedNodes := make(map[string]bool)
-	if ok {
-		for _, node := range nodes {
-			cachedNodes[node.URL] = true
-		}
+	if !ok {
+		nodes = make([]*shard.ShardedNode, 0)
 	}
-	newNodes, err := c.getFileLocation(ctx, txSeq, cachedNodes)
+
+	newNodes, err := c.getFileLocation(ctx, txSeq, nodes)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(newNodes) > 0 {
-		// concat new nodes with cached nodes
-		nodes = append(nodes, newNodes...)
-	}
-
-	return nodes, nil
+	return newNodes, nil
 }
 
-func (c *FileLocationCache) getFileLocation(ctx context.Context, txSeq uint64, cachedNodes map[string]bool) ([]*shard.ShardedNode, error) {
-	var nodes []*shard.ShardedNode
+func (c *FileLocationCache) getFileLocation(ctx context.Context, txSeq uint64, cachedNodes []*shard.ShardedNode) ([]*shard.ShardedNode, error) {
+	nodes := cachedNodes
+	cachedUrl := make(map[string]bool)
+	for _, v := range cachedNodes {
+		cachedUrl[v.URL] = true
+	}
+
 	// fetch from trusted
 	selected := make(map[string]struct{})
 	trusted := defaultNodeManager.TrustedClients()
 	var segNum uint64
 	for _, v := range trusted {
-		if _, ok := cachedNodes[v.URL()]; ok {
+		if _, ok := cachedUrl[v.URL()]; ok {
 			continue
 		}
 		start := time.Now()
@@ -108,7 +107,7 @@ func (c *FileLocationCache) getFileLocation(ctx context.Context, txSeq uint64, c
 		})
 		selected[v.URL()] = struct{}{}
 	}
-	if segNum == 0 {
+	if len(nodes) == 0 && segNum == 0 {
 		return nil, fmt.Errorf("file info not found")
 	}
 	logrus.Debugf("find file #%v from trusted nodes, got %v nodes holding the file", txSeq, len(nodes))
@@ -191,5 +190,5 @@ func (c *FileLocationCache) getFileLocation(ctx context.Context, txSeq uint64, c
 		c.latestFindFile.Store(txSeq, time.Now())
 	}
 	return nil, nil
-	
+
 }
