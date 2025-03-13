@@ -70,10 +70,11 @@ type UploadOption struct {
 type BatchUploadOption struct {
 	Fee         *big.Int       // fee in neuron
 	Nonce       *big.Int       // nonce for transaction
+	TaskSize    uint           // number of files to upload simultaneously
+
 	MaxGasPrice *big.Int       // max gas price for transaction
 	NRetries    int            // number of retries for uploading
 	Step        int64          // step for uploading
-	TaskSize    uint           // number of files to upload simutanously
 	DataOptions []UploadOption // upload option for single file, nonce and fee are ignored
 }
 

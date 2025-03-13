@@ -81,7 +81,9 @@ func bindUploadFlags(cmd *cobra.Command, args *uploadArgument) {
 
 	cmd.Flags().Int64Var(&args.fragmentSize, "fragment-size", 1024*1024*1024*4, "the size of fragment to split into when file is too large")
 
-	cmd.Flags().IntVar(&args.routines, "routines", runtime.GOMAXPROCS(0), "number of go routines for uploading simutanously")
+
+	cmd.Flags().IntVar(&args.routines, "routines", runtime.GOMAXPROCS(0), "number of go routines for uploading simultaneously")
+
 	cmd.Flags().UintVar(&args.maxGasPrice, "max-gas-price", 0, "max gas price to send transaction")
 	cmd.Flags().IntVar(&args.nRetries, "n-retries", 0, "number of retries for uploading when it's not gas price issue")
 	cmd.Flags().Int64Var(&args.step, "step", 15, "step of gas price increasing, step / 10 (for 15, the new gas price is 1.5 * last gas price)")
