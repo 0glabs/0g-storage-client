@@ -151,7 +151,7 @@ func (manager *IPLocationManager) write() error {
 
 	data, err := json.MarshalIndent(all, "", "    ")
 	if err != nil {
-		return errors.WithMessage(err, "Failed to marshal IP locaions")
+		return errors.WithMessage(err, "Failed to marshal IP locations")
 	}
 
 	if err = os.WriteFile(manager.config.CacheFile, data, os.ModePerm); err != nil {
