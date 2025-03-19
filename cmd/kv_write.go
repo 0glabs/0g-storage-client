@@ -39,6 +39,7 @@ var (
 		fee   float64
 		nonce uint
 
+		method  string
 		timeout time.Duration
 	}
 
@@ -79,6 +80,7 @@ func init() {
 
 	kvWriteCmd.Flags().Float64Var(&kvWriteArgs.fee, "fee", 0, "fee paid in a0gi")
 	kvWriteCmd.Flags().UintVar(&kvWriteArgs.nonce, "nonce", 0, "nonce of upload transaction")
+	kvWriteCmd.Flags().StringVar(&kvWriteArgs.method, "method", "random", "method for selecting nodes, can be max, min, random, or positive number, if provided a number, will fail if the requirement cannot be met")
 
 	rootCmd.AddCommand(kvWriteCmd)
 }
@@ -114,6 +116,7 @@ func kvWrite(*cobra.Command, []string) {
 		SkipTx:           kvWriteArgs.skipTx,
 		Fee:              fee,
 		Nonce:            nonce,
+		Method:           kvWriteArgs.method,
 	}
 
 	var clients []*node.ZgsClient
@@ -125,7 +128,7 @@ func kvWrite(*cobra.Command, []string) {
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to initialize indexer client")
 		}
-		if clients, err = indexerClient.SelectNodes(ctx, 0, max(1, opt.ExpectedReplica), []string{}); err != nil {
+		if clients, err = indexerClient.SelectNodes(ctx, 0, max(1, opt.ExpectedReplica), []string{}, opt.Method); err != nil {
 			logrus.WithError(err).Fatal("failed to select nodes from indexer")
 		}
 	}

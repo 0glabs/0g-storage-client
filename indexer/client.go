@@ -76,7 +76,7 @@ func (c *Client) GetFileLocations(ctx context.Context, root string) ([]*shard.Sh
 }
 
 // SelectNodes get node list from indexer service and select a subset of it, which is sufficient to store expected number of replications.
-func (c *Client) SelectNodes(ctx context.Context, segNum uint64, expectedReplica uint, dropped []string) ([]*node.ZgsClient, error) {
+func (c *Client) SelectNodes(ctx context.Context, segNum uint64, expectedReplica uint, dropped []string, method string) ([]*node.ZgsClient, error) {
 	allNodes, err := c.GetShardedNodes(ctx)
 	if err != nil {
 		return nil, err
@@ -107,7 +107,7 @@ func (c *Client) SelectNodes(ctx context.Context, segNum uint64, expectedReplica
 		})
 	}
 	// randomly select proper subset
-	trusted, ok := shard.Select(nodes, expectedReplica, true)
+	trusted, ok := shard.Select(nodes, expectedReplica, method)
 	if !ok {
 		return nil, fmt.Errorf("cannot select a subset from the returned nodes that meets the replication requirement")
 	}
@@ -122,8 +122,8 @@ func (c *Client) SelectNodes(ctx context.Context, segNum uint64, expectedReplica
 }
 
 // NewUploaderFromIndexerNodes return an uploader with selected storage nodes from indexer service.
-func (c *Client) NewUploaderFromIndexerNodes(ctx context.Context, segNum uint64, w3Client *web3go.Client, expectedReplica uint, dropped []string) (*transfer.Uploader, error) {
-	clients, err := c.SelectNodes(ctx, segNum, expectedReplica, dropped)
+func (c *Client) NewUploaderFromIndexerNodes(ctx context.Context, segNum uint64, w3Client *web3go.Client, expectedReplica uint, dropped []string, method string) (*transfer.Uploader, error) {
+	clients, err := c.SelectNodes(ctx, segNum, expectedReplica, dropped, method)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +143,7 @@ func (c *Client) Upload(ctx context.Context, w3Client *web3go.Client, data core.
 	}
 	dropped := make([]string, 0)
 	for {
-		uploader, err := c.NewUploaderFromIndexerNodes(ctx, data.NumSegments(), w3Client, expectedReplica, dropped)
+		uploader, err := c.NewUploaderFromIndexerNodes(ctx, data.NumSegments(), w3Client, expectedReplica, dropped, option[0].Method)
 		if err != nil {
 			return eth_common.Hash{}, err
 		}
@@ -172,7 +172,7 @@ func (c *Client) BatchUpload(ctx context.Context, w3Client *web3go.Client, datas
 	}
 	dropped := make([]string, 0)
 	for {
-		uploader, err := c.NewUploaderFromIndexerNodes(ctx, maxSegNum, w3Client, expectedReplica, dropped)
+		uploader, err := c.NewUploaderFromIndexerNodes(ctx, maxSegNum, w3Client, expectedReplica, dropped, option[0].Method)
 		if err != nil {
 			return eth_common.Hash{}, nil, err
 		}
@@ -189,9 +189,9 @@ func (c *Client) BatchUpload(ctx context.Context, w3Client *web3go.Client, datas
 
 // NewUploaderFromIndexerNodes return a file segment uploader with selected storage nodes from indexer service.
 func (c *Client) NewFileSegmentUploaderFromIndexerNodes(
-	ctx context.Context, segNum uint64, expectedReplica uint, dropped []string) (*transfer.FileSegmentUploader, error) {
+	ctx context.Context, segNum uint64, expectedReplica uint, dropped []string, method string) (*transfer.FileSegmentUploader, error) {
 
-	clients, err := c.SelectNodes(ctx, segNum, expectedReplica, dropped)
+	clients, err := c.SelectNodes(ctx, segNum, expectedReplica, dropped, method)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +224,7 @@ func (c *Client) UploadFileSegments(
 	numSeg := core.NumSplits(int64(fileSeg.FileInfo.Tx.Size), core.DefaultSegmentSize)
 	dropped := make([]string, 0)
 	for {
-		uploader, err := c.NewFileSegmentUploaderFromIndexerNodes(ctx, numSeg, expectedReplica, dropped)
+		uploader, err := c.NewFileSegmentUploaderFromIndexerNodes(ctx, numSeg, expectedReplica, dropped, option[0].Method)
 		if err != nil {
 			return err
 		}

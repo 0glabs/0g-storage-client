@@ -59,6 +59,7 @@ type uploadArgument struct {
 	maxGasPrice  uint
 	nRetries     int
 	step         int64
+	method       string
 
 	timeout time.Duration
 }
@@ -85,6 +86,7 @@ func bindUploadFlags(cmd *cobra.Command, args *uploadArgument) {
 	cmd.Flags().UintVar(&args.maxGasPrice, "max-gas-price", 0, "max gas price to send transaction")
 	cmd.Flags().IntVar(&args.nRetries, "n-retries", 0, "number of retries for uploading when it's not gas price issue")
 	cmd.Flags().Int64Var(&args.step, "step", 15, "step of gas price increasing, step / 10 (for 15, the new gas price is 1.5 * last gas price)")
+	cmd.Flags().StringVar(&args.method, "method", "random", "method for selecting nodes, can be max, min, random, or positive number, if provided a number, will fail if the requirement cannot be met")
 
 	cmd.Flags().DurationVar(&args.timeout, "timeout", 0, "cli task timeout, 0 for no timeout")
 }
@@ -146,6 +148,7 @@ func upload(*cobra.Command, []string) {
 		MaxGasPrice:      maxGasPrice,
 		NRetries:         uploadArgs.nRetries,
 		Step:             uploadArgs.step,
+		Method:           uploadArgs.method,
 	}
 
 	file, err := core.Open(uploadArgs.file)
@@ -186,7 +189,7 @@ func newUploader(ctx context.Context, segNum uint64, args uploadArgument, w3clie
 			return nil, nil, errors.WithMessage(err, "failed to initialize indexer client")
 		}
 
-		up, err := indexerClient.NewUploaderFromIndexerNodes(ctx, segNum, w3client, opt.ExpectedReplica, nil)
+		up, err := indexerClient.NewUploaderFromIndexerNodes(ctx, segNum, w3client, opt.ExpectedReplica, nil, opt.Method)
 		if err != nil {
 			return nil, nil, err
 		}

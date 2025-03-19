@@ -94,7 +94,7 @@ func runTest() error {
 		return errors.WithMessage(err, "failed to initialize indexer client")
 	}
 	defer indexerClient.Close()
-	uploader, err := indexerClient.NewUploaderFromIndexerNodes(ctx, data.NumSegments(), w3client, 1, nil)
+	uploader, err := indexerClient.NewUploaderFromIndexerNodes(ctx, data.NumSegments(), w3client, 1, nil, "random")
 	if err != nil {
 		return errors.WithMessage(err, "failed to initialize uploader")
 	}
