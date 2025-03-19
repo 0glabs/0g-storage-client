@@ -226,8 +226,6 @@ func TransactWithGasAdjustment(
 				err = fmt.Errorf("timeout")
 			}
 
-			logrus.WithError(err).Error("Failed to send transaction")
-
 			errStr := strings.ToLower(err.Error())
 
 			if !IsRetriableSubmitLogEntryError(errStr) {
@@ -271,6 +269,7 @@ func TransactWithGasAdjustment(
 		select {
 		case receipt := <-receiptCh:
 			cancel()
+
 			return receipt, nil
 		case err := <-errCh:
 			nErr++
