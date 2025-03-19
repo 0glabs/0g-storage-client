@@ -111,7 +111,7 @@ func (c *FileLocationCache) getFileLocation(ctx context.Context, txSeq uint64, c
 		return nil, fmt.Errorf("file info not found")
 	}
 	logrus.Debugf("find file #%v from trusted nodes, got %v nodes holding the file", txSeq, len(nodes))
-	if _, covered := shard.Select(nodes, 1, false); covered {
+	if _, covered := shard.Select(nodes, 1, "random"); covered {
 		c.cache.Add(txSeq, nodes)
 		return nodes, nil
 	}
@@ -176,7 +176,7 @@ func (c *FileLocationCache) getFileLocation(ctx context.Context, txSeq uint64, c
 				break
 			}
 		}
-		if _, covered := shard.Select(nodes, 1, false); covered {
+		if _, covered := shard.Select(nodes, 1, "random"); covered {
 			c.cache.Add(txSeq, nodes)
 			return nodes, nil
 		}

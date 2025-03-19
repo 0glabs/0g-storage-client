@@ -64,6 +64,7 @@ type UploadOption struct {
 	MaxGasPrice      *big.Int            // max gas price for transaction
 	NRetries         int                 // number of retries for uploading
 	Step             int64               // step for uploading
+	Method           string              // method for selecting nodes, can be "max", "random" or certain positive number in string
 }
 
 // BatchUploadOption upload option for a batching
@@ -74,6 +75,7 @@ type BatchUploadOption struct {
 	NRetries    int            // number of retries for uploading
 	Step        int64          // step for uploading
 	TaskSize    uint           // number of files to upload simutanously
+	Method      string         // method for selecting nodes, can be "max", "random" or certain positive number in string
 	DataOptions []UploadOption // upload option for single file, nonce and fee are ignored
 }
 
@@ -238,6 +240,7 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 			Fee:         nil,
 			Nonce:       nil,
 			DataOptions: make([]UploadOption, n),
+			Method:      "max",
 		}
 	}
 	opts.TaskSize = max(opts.TaskSize, 1)
@@ -343,7 +346,7 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 				}
 			}
 			// Upload file to storage node
-			if err := uploader.uploadFile(ctx, info, datas[i], trees[i], opts.DataOptions[i].ExpectedReplica, opts.DataOptions[i].TaskSize); err != nil {
+			if err := uploader.uploadFile(ctx, info, datas[i], trees[i], opts.DataOptions[i].ExpectedReplica, opts.DataOptions[i].TaskSize, opts.Method); err != nil {
 				errs <- errors.WithMessage(err, "Failed to upload file")
 				return
 			}
@@ -426,7 +429,7 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 		}
 	}
 	// Upload file to storage node
-	if err := uploader.uploadFile(ctx, info, data, tree, opt.ExpectedReplica, opt.TaskSize); err != nil {
+	if err := uploader.uploadFile(ctx, info, data, tree, opt.ExpectedReplica, opt.TaskSize, opt.Method); err != nil {
 		return txHash, tree.Root(), errors.WithMessage(err, "Failed to upload file")
 	}
 
@@ -637,12 +640,12 @@ func (uploader *Uploader) waitForLogEntry(ctx context.Context, root common.Hash,
 	return info, nil
 }
 
-func (uploader *Uploader) newSegmentUploader(ctx context.Context, info *node.FileInfo, data core.IterableData, tree *merkle.Tree, expectedReplica uint, taskSize uint) (*segmentUploader, error) {
+func (uploader *Uploader) newSegmentUploader(ctx context.Context, info *node.FileInfo, data core.IterableData, tree *merkle.Tree, expectedReplica, taskSize uint, method string) (*segmentUploader, error) {
 	shardConfigs, err := getShardConfigs(ctx, uploader.clients)
 	if err != nil {
 		return nil, err
 	}
-	if !shard.CheckReplica(shardConfigs, expectedReplica) {
+	if !shard.CheckReplica(shardConfigs, expectedReplica, method) {
 		return nil, fmt.Errorf("selected nodes cannot cover all shards")
 	}
 	// compute index in flow
@@ -690,7 +693,7 @@ func (uploader *Uploader) newSegmentUploader(ctx context.Context, info *node.Fil
 	}, nil
 }
 
-func (uploader *Uploader) uploadFile(ctx context.Context, info *node.FileInfo, data core.IterableData, tree *merkle.Tree, expectedReplica uint, taskSize uint) error {
+func (uploader *Uploader) uploadFile(ctx context.Context, info *node.FileInfo, data core.IterableData, tree *merkle.Tree, expectedReplica, taskSize uint, method string) error {
 	stageTimer := time.Now()
 
 	if taskSize == 0 {
@@ -702,7 +705,7 @@ func (uploader *Uploader) uploadFile(ctx context.Context, info *node.FileInfo, d
 		"nodeNum": len(uploader.clients),
 	}).Info("Begin to upload file")
 
-	segmentUploader, err := uploader.newSegmentUploader(ctx, info, data, tree, expectedReplica, taskSize)
+	segmentUploader, err := uploader.newSegmentUploader(ctx, info, data, tree, expectedReplica, taskSize, method)
 	if err != nil {
 		return err
 	}
@@ -761,7 +764,7 @@ func (uploader *FileSegmentUploader) Upload(ctx context.Context, fileSeg FileSeg
 		}).Debug("Begin to upload file segments with proof")
 	}
 
-	fsUploader, err := uploader.newFileSegmentUploader(ctx, fileSeg, opt.ExpectedReplica, opt.TaskSize)
+	fsUploader, err := uploader.newFileSegmentUploader(ctx, fileSeg, opt.ExpectedReplica, opt.TaskSize, opt.Method)
 	if err != nil {
 		return err
 	}
@@ -785,7 +788,7 @@ func (uploader *FileSegmentUploader) Upload(ctx context.Context, fileSeg FileSeg
 }
 
 func (uploader *FileSegmentUploader) newFileSegmentUploader(
-	ctx context.Context, fileSeg FileSegmentsWithProof, expectedReplica uint, taskSize uint) (*fileSegmentUploader, error) {
+	ctx context.Context, fileSeg FileSegmentsWithProof, expectedReplica, taskSize uint, method string) (*fileSegmentUploader, error) {
 
 	//  get shard configurations
 	shardConfigs, err := getShardConfigs(ctx, uploader.clients)
@@ -794,7 +797,7 @@ func (uploader *FileSegmentUploader) newFileSegmentUploader(
 	}
 
 	// validate replica requirements
-	if !shard.CheckReplica(shardConfigs, expectedReplica) {
+	if !shard.CheckReplica(shardConfigs, expectedReplica, method) {
 		return nil, fmt.Errorf("selected nodes cannot cover all shards")
 	}
 

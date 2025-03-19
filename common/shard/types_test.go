@@ -40,7 +40,7 @@ func TestSelect(t *testing.T) {
 		makeShardNode(16, 14),
 		makeShardNode(16, 15),
 	}
-	selected, found := Select(shardedNodes, 2, false)
+	selected, found := Select(shardedNodes, 2, "min")
 	assert.Equal(t, found, true)
 	fmt.Println(selected)
 	assert.Equal(t, len(selected), 5)
@@ -49,7 +49,7 @@ func TestSelect(t *testing.T) {
 	assert.DeepEqual(t, selected[2], makeShardNode(4, 3))
 	assert.DeepEqual(t, selected[3], makeShardNode(8, 1))
 	assert.DeepEqual(t, selected[4], makeShardNode(8, 5))
-	selected, found = Select(shardedNodes, 3, false)
+	selected, found = Select(shardedNodes, 3, "min")
 	assert.Equal(t, found, true)
 	assert.Equal(t, len(selected), 15)
 	assert.DeepEqual(t, selected[0], makeShardNode(1, 0))
@@ -67,8 +67,27 @@ func TestSelect(t *testing.T) {
 	assert.DeepEqual(t, selected[12], makeShardNode(16, 11))
 	assert.DeepEqual(t, selected[13], makeShardNode(16, 13))
 	assert.DeepEqual(t, selected[14], makeShardNode(16, 15))
-	_, found = Select(shardedNodes, 4, false)
+	_, found = Select(shardedNodes, 4, "max")
 	assert.Equal(t, found, false)
+
+	selected, found = Select(shardedNodes, 1, "16")
+	assert.Equal(t, found, true)
+	assert.Equal(t, len(selected), 16)
+	for i := 0; i < 16; i++ {
+		assert.DeepEqual(t, selected[i], makeShardNode(16, uint(i)))
+	}
+
+	selected, found = Select(shardedNodes, 2, "max")
+	assert.Equal(t, found, true)
+	assert.Equal(t, len(selected), 21)
+	for i := 0; i < 16; i++ {
+		assert.DeepEqual(t, selected[i], makeShardNode(16, uint(i)))
+	}
+	assert.DeepEqual(t, selected[16], makeShardNode(8, 1))
+	assert.DeepEqual(t, selected[17], makeShardNode(8, 5))
+	assert.DeepEqual(t, selected[18], makeShardNode(4, 0))
+	assert.DeepEqual(t, selected[19], makeShardNode(4, 2))
+	assert.DeepEqual(t, selected[20], makeShardNode(4, 3))
 }
 
 func TestNextSegmentIndex(t *testing.T) {

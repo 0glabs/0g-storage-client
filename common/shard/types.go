@@ -2,6 +2,7 @@ package shard
 
 import (
 	"sort"
+	"strconv"
 
 	"github.com/0glabs/0g-storage-client/common/util"
 )
@@ -93,14 +94,14 @@ func (node *shardSegmentTreeNode) insert(numShard uint, shardId uint, expectedRe
 
 // select a set of given sharded node and make the data is replicated at least expctedReplica times
 // return the selected nodes and if selection is successful
-func Select(nodes []*ShardedNode, expectedReplica uint, random bool) ([]*ShardedNode, bool) {
+func Select(nodes []*ShardedNode, expectedReplica uint, method string) ([]*ShardedNode, bool) {
 	selected := make([]*ShardedNode, 0)
 	if expectedReplica == 0 {
 		return selected, true
 	}
 
 	// shuffle or sort nodes before selection
-	nodes = prepareSelectionNodes(nodes, random)
+	nodes = prepareSelectionNodes(nodes, method)
 
 	// build segment tree to select proper nodes by shard configs
 	root := shardSegmentTreeNode{
@@ -120,17 +121,25 @@ func Select(nodes []*ShardedNode, expectedReplica uint, random bool) ([]*Sharded
 	return make([]*ShardedNode, 0), false
 }
 
-func CheckReplica(shardConfigs []*ShardConfig, expectedReplica uint) bool {
+func CheckReplica(shardConfigs []*ShardConfig, expectedReplica uint, method string) bool {
 	shardedNodes := NewShardNodesFromConfig(shardConfigs)
-	_, ok := Select(shardedNodes, expectedReplica, false)
+	_, ok := Select(shardedNodes, expectedReplica, method)
 	return ok
 }
 
 // Helper function to pre-process (sort or shuffle) the nodes before selection
-func prepareSelectionNodes(nodes []*ShardedNode, random bool) []*ShardedNode {
-	if random {
+func prepareSelectionNodes(nodes []*ShardedNode, method string) []*ShardedNode {
+	if method == "random" {
 		util.Shuffle(nodes)
-	} else {
+	} else if method == "max" {
+		// Sort nodes based on NumShard and ShardId
+		sort.Slice(nodes, func(i, j int) bool {
+			if nodes[i].Config.NumShard == nodes[j].Config.NumShard {
+				return nodes[i].Config.ShardId < nodes[j].Config.ShardId
+			}
+			return nodes[i].Config.NumShard > nodes[j].Config.NumShard
+		})
+	} else if method == "min" {
 		// Sort nodes based on NumShard and ShardId
 		sort.Slice(nodes, func(i, j int) bool {
 			if nodes[i].Config.NumShard == nodes[j].Config.NumShard {
@@ -138,6 +147,22 @@ func prepareSelectionNodes(nodes []*ShardedNode, random bool) []*ShardedNode {
 			}
 			return nodes[i].Config.NumShard < nodes[j].Config.NumShard
 		})
+	} else {
+		// Attempt to parse `method` as a positive integer
+		size, err := strconv.Atoi(method)
+		if err != nil || size <= 0 {
+			// If parsing fails or size <= 0, return an empty slice
+			return []*ShardedNode{}
+		}
+
+		// Filter nodes whose NumShard == size
+		var filtered []*ShardedNode
+		for _, n := range nodes {
+			if n.Config.NumShard == uint64(size) {
+				filtered = append(filtered, n)
+			}
+		}
+		return filtered
 	}
 
 	return nodes
