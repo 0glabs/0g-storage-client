@@ -406,7 +406,7 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 	txHash := common.Hash{}
 	// Append log on blockchain
 	if !opt.SkipTx || info == nil {
-
+		uploader.logger.WithField("root", tree.Root()).Info("Prepare to submit log entry")
 		// Submit log entry to smart contract.
 		submitOpts := SubmitLogEntryOption{
 			Fee:         opt.Fee,
@@ -594,16 +594,19 @@ func (uploader *Uploader) waitForLogEntry(ctx context.Context, root common.Hash,
 	}).Info("Wait for log entry on storage node")
 
 	reminder := util.NewReminder(uploader.logger, time.Minute)
+	submitLog, err := uploader.flow.ParseSubmit(*receipt.Logs[0].ToEthLog())
+	if err != nil {
+		return nil, errors.WithMessage(err, "Failed to parse submit log and get tx seq")
+	}
 
 	var info *node.FileInfo
-	var err error
 
 	for {
 		time.Sleep(time.Second)
 
 		ok := true
 		for _, client := range uploader.clients {
-			info, err = client.GetFileInfo(ctx, root)
+			info, err = client.GetFileInfoByTxSeq(ctx, submitLog.SubmissionIndex.Uint64())
 			if err != nil {
 				return nil, err
 			}
@@ -701,8 +704,9 @@ func (uploader *Uploader) uploadFile(ctx context.Context, info *node.FileInfo, d
 	}
 
 	uploader.logger.WithFields(logrus.Fields{
-		"segNum":  data.NumSegments(),
-		"nodeNum": len(uploader.clients),
+		"segNum":   data.NumSegments(),
+		"nodeNum":  len(uploader.clients),
+		"sequence": info.Tx.Seq,
 	}).Info("Begin to upload file")
 
 	segmentUploader, err := uploader.newSegmentUploader(ctx, info, data, tree, expectedReplica, taskSize, method)
