@@ -291,7 +291,7 @@ class BlockchainNode(TestNode):
             dummy_reward_contract, _ = deploy_contract("DummyReward", [])
             self.log.debug("DummyReward deployed")
 
-            flow_contract, _ = deploy_contract("Flow", [mine_period, 0])
+            flow_contract, _ = deploy_contract("Flow", [0])
             self.log.debug("Flow deployed")
 
             mine_contract, _ = deploy_contract("PoraMineTest", [0])
@@ -302,7 +302,7 @@ class BlockchainNode(TestNode):
             mine_contract.functions.setTargetSubmissions(2).transact(TX_PARAMS)
             self.log.debug("Mine Initialized")
 
-            flow_initialize_hash = flow_contract.functions.initialize(dummy_market_contract.address).transact(TX_PARAMS)
+            flow_initialize_hash = flow_contract.functions.initialize(dummy_market_contract.address, mine_period).transact(TX_PARAMS)
             self.log.debug("Flow Initialized")
 
             self.wait_for_transaction_receipt(w3, flow_initialize_hash)
@@ -325,7 +325,7 @@ class BlockchainNode(TestNode):
             reward_contract, _ = deploy_contract("ChunkLinearReward", [lifetime_seconds])
             self.log.debug("Reward deployed")
             
-            flow_contract, _ = deploy_contract("FixedPriceFlow", [mine_period, 0])
+            flow_contract, _ = deploy_contract("FixedPriceFlow", [0])
             self.log.debug("Flow deployed")
             
             mine_contract.functions.initialize(1, flow_contract.address, reward_contract.address).transact(TX_PARAMS)
@@ -342,7 +342,7 @@ class BlockchainNode(TestNode):
             reward_contract.functions.setBaseReward(10 ** 18).transact(TX_PARAMS)
             self.log.debug("Reward Initialized")
             
-            flow_initialize_hash = flow_contract.functions.initialize(market_contract.address).transact(TX_PARAMS)
+            flow_initialize_hash = flow_contract.functions.initialize(market_contract.address, mine_period).transact(TX_PARAMS)
             self.log.debug("Flow Initialized")
             
             self.wait_for_transaction_receipt(w3, flow_initialize_hash)

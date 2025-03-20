@@ -119,8 +119,6 @@ class ClientTestFramework(TestFramework):
             "--skip-tx="+str(skip_tx),
             "--log-level",
             "debug",
-            "--gas-limit",
-            "10000000",
         ]
         if node_rpc_url is not None:
             upload_args.append("--node")

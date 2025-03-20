@@ -75,6 +75,7 @@ class FileUploadDownloadTest(ClientTestFramework):
             ','.join([x.rpc_url for x in self.nodes]),
             None,
             file_to_upload,
+            skip_tx=False,
         )
 
         self.log.info("root: %s", root)

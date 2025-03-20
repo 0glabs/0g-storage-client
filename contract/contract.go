@@ -128,7 +128,7 @@ func TransactWithGasAdjustment(
 	method string,
 	opts *bind.TransactOpts,
 	retryOpts *TxRetryOption,
-	params ...interface{},
+	params ...any,
 ) (*types.Receipt, error) {
 	// Set timeout and max non-gas retries from retryOpts if provided.
 	if retryOpts == nil {

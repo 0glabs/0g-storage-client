@@ -51,6 +51,7 @@ func uploadDir(*cobra.Command, []string) {
 		TaskSize:         uploadDirArgs.taskSize,
 		ExpectedReplica:  uploadDirArgs.expectedReplica,
 		SkipTx:           uploadDirArgs.skipTx,
+		Method:           uploadDirArgs.method,
 	}
 
 	uploader, closer, err := newUploader(ctx, 0, uploadDirArgs, w3client, opt)

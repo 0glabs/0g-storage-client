@@ -208,6 +208,7 @@ func (uploader *Uploader) SplitableUpload(ctx context.Context, data core.Iterabl
 				NRetries:    opt.NRetries,
 				Step:        opt.Step,
 				DataOptions: make([]UploadOption, 0),
+				Method:      opt.Method,
 			}
 			for i := l; i < r; i += 1 {
 				opts.DataOptions = append(opts.DataOptions, opt)
@@ -240,7 +241,7 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 			Fee:         nil,
 			Nonce:       nil,
 			DataOptions: make([]UploadOption, n),
-			Method:      "max",
+			Method:      "min",
 		}
 	}
 	opts.TaskSize = max(opts.TaskSize, 1)
@@ -314,6 +315,8 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 	// Append log on blockchain
 	var txHash common.Hash
 	var receipt *types.Receipt
+	rootSeqMap := make(map[common.Hash]uint64)
+
 	if len(toSubmitDatas) > 0 {
 		submitOpt := SubmitLogEntryOption{
 			Fee:         opts.Fee,
@@ -326,8 +329,29 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 		if txHash, receipt, err = uploader.SubmitLogEntry(ctx, toSubmitDatas, toSubmitTags, submitOpt); err != nil {
 			return txHash, nil, errors.WithMessage(err, "Failed to submit log entry")
 		}
+		seqNums, err := uploader.ParseLogs(ctx, receipt.Logs)
+		if err != nil {
+			return txHash, nil, errors.WithMessage(err, "Failed to parse logs")
+		}
 		// Wait for storage node to retrieve log entry from blockchain
-		if _, err := uploader.waitForLogEntry(ctx, lastTreeToSubmit.Root(), TransactionPacked, receipt); err != nil {
+		if len(seqNums) != len(toSubmitDatas) {
+			return txHash, nil, errors.New("log entry event count mismatch")
+		}
+
+		logIndex := 0
+		for i := 0; i < n; i += 1 {
+			opt := opts.DataOptions[i]
+			if !opt.SkipTx || fileInfos[i] == nil {
+				rootSeqMap[trees[i].Root()] = seqNums[logIndex]
+				logIndex += 1
+			}
+		}
+
+		if logIndex != len(seqNums) {
+			return txHash, nil, errors.New("log entry event count mismatch after mapping to data")
+		}
+
+		if _, err := uploader.waitForLogEntry(ctx, lastTreeToSubmit.Root(), TransactionPacked, rootSeqMap[lastTreeToSubmit.Root()]); err != nil {
 			return txHash, nil, errors.WithMessage(err, "Failed to check if log entry available on storage node")
 		}
 	}
@@ -339,20 +363,21 @@ func (uploader *Uploader) BatchUpload(ctx context.Context, datas []core.Iterable
 			info := fileInfos[i]
 			if info == nil {
 				var err error
-				info, err = uploader.waitForLogEntry(ctx, trees[i].Root(), TransactionPacked, receipt)
+				info, err = uploader.waitForLogEntry(ctx, trees[i].Root(), TransactionPacked, rootSeqMap[trees[i].Root()])
+
 				if err != nil {
 					errs <- errors.WithMessage(err, "Failed to get file info from storage node")
 					return
 				}
 			}
 			// Upload file to storage node
-			if err := uploader.uploadFile(ctx, info, datas[i], trees[i], opts.DataOptions[i].ExpectedReplica, opts.DataOptions[i].TaskSize, opts.Method); err != nil {
+			if err := uploader.uploadFile(ctx, info, datas[i], trees[i], opts.DataOptions[i].ExpectedReplica, opts.DataOptions[i].TaskSize, opts.DataOptions[i].Method); err != nil {
 				errs <- errors.WithMessage(err, "Failed to upload file")
 				return
 			}
 
 			// Wait for transaction finality
-			if _, err := uploader.waitForLogEntry(ctx, trees[i].Root(), opts.DataOptions[i].FinalityRequired, receipt); err != nil {
+			if _, err := uploader.waitForLogEntry(ctx, trees[i].Root(), opts.DataOptions[i].FinalityRequired, info.Tx.Seq); err != nil {
 				errs <- errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
 				return
 			}
@@ -418,12 +443,20 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 		var receipt *types.Receipt
 
 		txHash, receipt, err = uploader.SubmitLogEntry(ctx, []core.IterableData{data}, [][]byte{opt.Tags}, submitOpts)
-		if err != nil {
+		if err != nil || receipt == nil || receipt.Logs == nil || len(receipt.Logs) == 0 {
 			return txHash, tree.Root(), errors.WithMessage(err, "Failed to submit log entry")
 		}
 
+		seqNums, err := uploader.ParseLogs(ctx, receipt.Logs)
+		if err != nil {
+			return txHash, tree.Root(), errors.WithMessage(err, "Failed to parse logs")
+		}
+		if len(seqNums) != 1 {
+			return txHash, tree.Root(), errors.New("log entry event count mismatch")
+		}
+
 		// Wait for storage node to retrieve log entry from blockchain
-		info, err = uploader.waitForLogEntry(ctx, tree.Root(), TransactionPacked, receipt)
+		info, err = uploader.waitForLogEntry(ctx, tree.Root(), TransactionPacked, seqNums[0])
 		if err != nil {
 			return txHash, tree.Root(), errors.WithMessage(err, "Failed to check if log entry available on storage node")
 		}
@@ -434,7 +467,7 @@ func (uploader *Uploader) Upload(ctx context.Context, data core.IterableData, op
 	}
 
 	// Wait for transaction finality
-	if _, err = uploader.waitForLogEntry(ctx, tree.Root(), opt.FinalityRequired, nil); err != nil {
+	if _, err = uploader.waitForLogEntry(ctx, tree.Root(), opt.FinalityRequired, info.Tx.Seq); err != nil {
 		return txHash, tree.Root(), errors.WithMessage(err, "Failed to wait for transaction finality on storage node")
 	}
 
@@ -586,19 +619,28 @@ func (uploader *Uploader) SubmitLogEntry(ctx context.Context, datas []core.Itera
 	return receipt.TransactionHash, receipt, err
 }
 
+func (uploader *Uploader) ParseLogs(ctx context.Context, logs []*types.Log) ([]uint64, error) {
+	submits := make([]uint64, 0)
+	for _, log := range logs {
+		submit, err := uploader.flow.ParseSubmit(*log.ToEthLog())
+		if err != nil {
+			continue
+		}
+		submits = append(submits, submit.SubmissionIndex.Uint64())
+	}
+	return submits, nil
+}
+
 // Wait for log entry ready on storage node.
-func (uploader *Uploader) waitForLogEntry(ctx context.Context, root common.Hash, finalityRequired FinalityRequirement, receipt *types.Receipt) (*node.FileInfo, error) {
+func (uploader *Uploader) waitForLogEntry(ctx context.Context, root common.Hash, finalityRequired FinalityRequirement, txSeq uint64) (*node.FileInfo, error) {
 	uploader.logger.WithFields(logrus.Fields{
 		"root":     root,
 		"finality": finalityRequired,
 	}).Info("Wait for log entry on storage node")
 
 	reminder := util.NewReminder(uploader.logger, time.Minute)
-	submitLog, err := uploader.flow.ParseSubmit(*receipt.Logs[0].ToEthLog())
-	if err != nil {
-		return nil, errors.WithMessage(err, "Failed to parse submit log and get tx seq")
-	}
 
+	var err error
 	var info *node.FileInfo
 
 	for {
@@ -606,18 +648,15 @@ func (uploader *Uploader) waitForLogEntry(ctx context.Context, root common.Hash,
 
 		ok := true
 		for _, client := range uploader.clients {
-			info, err = client.GetFileInfoByTxSeq(ctx, submitLog.SubmissionIndex.Uint64())
+			info, err = client.GetFileInfoByTxSeq(ctx, txSeq)
 			if err != nil {
 				return nil, err
 			}
 			// log entry unavailable yet
 			if info == nil {
 				fields := logrus.Fields{}
-				if receipt != nil {
-					if status, err := client.GetStatus(ctx); err == nil {
-						fields["txBlockNumber"] = receipt.BlockNumber
-						fields["zgsNodeSyncHeight"] = status.LogSyncHeight
-					}
+				if status, err := client.GetStatus(ctx); err == nil {
+					fields["zgsNodeSyncHeight"] = status.LogSyncHeight
 				}
 
 				reminder.Remind("Log entry is unavailable yet", fields)
@@ -707,6 +746,7 @@ func (uploader *Uploader) uploadFile(ctx context.Context, info *node.FileInfo, d
 		"segNum":   data.NumSegments(),
 		"nodeNum":  len(uploader.clients),
 		"sequence": info.Tx.Seq,
+		"root":     tree.Root(),
 	}).Info("Begin to upload file")
 
 	segmentUploader, err := uploader.newSegmentUploader(ctx, info, data, tree, expectedReplica, taskSize, method)
@@ -725,6 +765,8 @@ func (uploader *Uploader) uploadFile(ctx context.Context, info *node.FileInfo, d
 	uploader.logger.WithFields(logrus.Fields{
 		"duration": time.Since(stageTimer),
 		"segNum":   data.NumSegments(),
+		"sequence": info.Tx.Seq,
+		"root":     tree.Root(),
 	}).Info("Completed to upload file")
 
 	return nil
