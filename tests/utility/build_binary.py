@@ -9,7 +9,7 @@ from enum import Enum, unique
 from utility.utils import is_windows_platform, wait_until
 
 # v1.0.0-ci release
-GITHUB_DOWNLOAD_URL="https://api.github.com/repos/0glabs/0g-storage-node/releases/152560136"
+GITHUB_DOWNLOAD_URL = "https://api.github.com/repos/0glabs/0g-storage-node/releases/152560136"
 
 CONFLUX_BINARY = "conflux.exe" if is_windows_platform() else "conflux"
 BSC_BINARY = "geth.exe" if is_windows_platform() else "geth"
@@ -18,18 +18,20 @@ CLIENT_BINARY = "0g-storage-client.exe" if is_windows_platform() else "0g-storag
 
 CLI_GIT_REV = "98d74b7e7e6084fc986cb43ce2c66692dac094a6"
 
+
 @unique
 class BuildBinaryResult(Enum):
     AlreadyExists = 0
     Installed = 1
     NotInstalled = 2
 
+
 def build_conflux(dir: str) -> BuildBinaryResult:
     # Download or build conflux binary if absent
     result = __download_from_github(
         dir=dir,
         binary_name=CONFLUX_BINARY,
-        github_url=GITHUB_DOWNLOAD_URL, 
+        github_url=GITHUB_DOWNLOAD_URL,
         asset_name=__asset_name(CONFLUX_BINARY, zip=True),
     )
 
@@ -43,6 +45,7 @@ def build_conflux(dir: str) -> BuildBinaryResult:
         build_cmd="cargo build --release --bin conflux",
         compiled_relative_path=["target", "release"],
     )
+
 
 def build_bsc(dir: str) -> BuildBinaryResult:
     # Download bsc binary if absent
@@ -58,6 +61,7 @@ def build_bsc(dir: str) -> BuildBinaryResult:
     assert result != BuildBinaryResult.NotInstalled, "Cannot download binary from github [%s]" % BSC_BINARY
 
     return result
+
 
 def build_zg(dir: str) -> BuildBinaryResult:
     # Download or build 0gchain binary if absent
@@ -79,6 +83,7 @@ def build_zg(dir: str) -> BuildBinaryResult:
         compiled_relative_path=[],
     )
 
+
 def build_cli(dir: str) -> BuildBinaryResult:
     # Build 0g-storage-client binary if absent
     return __build_from_github(
@@ -89,6 +94,7 @@ def build_cli(dir: str) -> BuildBinaryResult:
         build_cmd="go build",
         compiled_relative_path=[],
     )
+
 
 def __asset_name(binary_name: str, zip: bool = False) -> str:
     sys = platform.system().lower()
@@ -102,22 +108,30 @@ def __asset_name(binary_name: str, zip: bool = False) -> str:
     else:
         raise RuntimeError("Unable to recognize platform")
 
-def __build_from_github(dir: str, binary_name: str, github_url: str, build_cmd: str, compiled_relative_path: list[str], git_rev = None) -> BuildBinaryResult:
+
+def __build_from_github(
+    dir: str,
+    binary_name: str,
+    github_url: str,
+    build_cmd: str,
+    compiled_relative_path: list[str],
+    git_rev=None,
+) -> BuildBinaryResult:
     if git_rev is None:
         versioned_binary_name = binary_name
     elif binary_name.endswith(".exe"):
         versioned_binary_name = binary_name.removesuffix(".exe") + f"_{git_rev}.exe"
     else:
         versioned_binary_name = f"{binary_name}_{git_rev}"
-    
+
     binary_path = os.path.join(dir, binary_name)
     versioned_binary_path = os.path.join(dir, versioned_binary_name)
     if os.path.exists(versioned_binary_path):
         __create_sym_link(versioned_binary_name, binary_name, dir)
         return BuildBinaryResult.AlreadyExists
-    
+
     start_time = time.time()
-    
+
     # clone code from github to a temp folder
     code_tmp_dir_name = (binary_name[:-4] if is_windows_platform() else binary_name) + "_tmp"
     code_tmp_dir = os.path.join(dir, code_tmp_dir_name)
@@ -145,14 +159,18 @@ def __build_from_github(dir: str, binary_name: str, github_url: str, build_cmd: 
 
     shutil.rmtree(code_tmp_dir, ignore_errors=True)
 
-    print("Completed to build binary " + binary_name + ", Elapsed: " + str(int(time.time() - start_time)) + " seconds", flush=True)
+    print(
+        "Completed to build binary " + binary_name + ", Elapsed: " + str(int(time.time() - start_time)) + " seconds",
+        flush=True,
+    )
 
     return BuildBinaryResult.Installed
 
-def __create_sym_link(src, dst, path = None):
+
+def __create_sym_link(src, dst, path=None):
     if src == dst:
         return
-    
+
     origin_path = os.getcwd()
     if path is not None:
         os.chdir(path)
@@ -171,6 +189,7 @@ def __create_sym_link(src, dst, path = None):
 
     os.chdir(origin_path)
 
+
 def __download_from_github(dir: str, binary_name: str, github_url: str, asset_name: str) -> BuildBinaryResult:
     if not os.path.exists(dir):
         os.makedirs(dir, exist_ok=True)
@@ -178,9 +197,9 @@ def __download_from_github(dir: str, binary_name: str, github_url: str, asset_na
     binary_path = os.path.join(dir, binary_name)
     if os.path.exists(binary_path):
         return BuildBinaryResult.AlreadyExists
-    
+
     print("Begin to download binary from github: %s" % binary_name, flush=True)
-    
+
     start_time = time.time()
 
     req = requests.get(github_url)
@@ -194,7 +213,7 @@ def __download_from_github(dir: str, binary_name: str, github_url: str, asset_na
     if download_url is None:
         print(f"Cannot find asset by name {asset_name}", flush=True)
         return BuildBinaryResult.NotInstalled
-    
+
     content = requests.get(download_url).content
 
     # Supports to read from zipped binary
@@ -203,17 +222,22 @@ def __download_from_github(dir: str, binary_name: str, github_url: str, asset_na
         with open(asset_path, "xb") as f:
             f.write(content)
         shutil.unpack_archive(asset_path, dir)
-        assert os.path.exists(binary_path), f"Cannot find binary after unzip, binary = {binary_name}, asset = {asset_name}"
+        assert os.path.exists(
+            binary_path
+        ), f"Cannot find binary after unzip, binary = {binary_name}, asset = {asset_name}"
     else:
         with open(binary_path, "xb") as f:
-            f.write(content)    
+            f.write(content)
 
     if not is_windows_platform():
         st = os.stat(binary_path)
         os.chmod(binary_path, st.st_mode | stat.S_IEXEC)
-    
+
     wait_until(lambda: os.access(binary_path, os.X_OK), timeout=120)
 
-    print("Completed to download binary, Elapsed: " + str(int(time.time() - start_time)) + " seconds", flush=True)
+    print(
+        "Completed to download binary, Elapsed: " + str(int(time.time() - start_time)) + " seconds",
+        flush=True,
+    )
 
     return BuildBinaryResult.Installed

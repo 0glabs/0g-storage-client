@@ -18,10 +18,10 @@ class SkipTxTest(ClientTestFramework):
         self.num_nodes = 1
 
     def run_test(self):
-        node_idx = 0 
+        node_idx = 0
 
         file_to_upload = tempfile.NamedTemporaryFile(dir=self.root_dir, delete=False)
-        data = random.randbytes(256 * 2048) 
+        data = random.randbytes(256 * 2048)
         file_to_upload.write(data)
         file_to_upload.close()
         w3 = Web3(HTTPProvider(self.blockchain_nodes[0].rpc_url))
@@ -42,7 +42,7 @@ class SkipTxTest(ClientTestFramework):
         client = self.nodes[node_idx]
         wait_until(lambda: client.zgs_get_file_info(root) is not None)
         wait_until(lambda: client.zgs_get_file_info(root)["finalized"])
-        
+
         self._download_file_use_cli(self.nodes[node_idx].rpc_url, None, root)
         assert_equal(w3.eth.get_transaction_count(GENESIS_ACCOUNT.address), nonce + 1)
 
@@ -54,10 +54,11 @@ class SkipTxTest(ClientTestFramework):
             self.nodes[node_idx].rpc_url,
             None,
             file_to_upload,
-            skip_tx=True
+            skip_tx=True,
         )
         wait_until(lambda: self.contract.num_submissions() == 1)
         assert_equal(w3.eth.get_transaction_count(GENESIS_ACCOUNT.address), nonce)
+
 
 if __name__ == "__main__":
     SkipTxTest().main()

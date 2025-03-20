@@ -18,7 +18,12 @@ def zg_node_init_genesis(binary: str, root_dir: str, num_nodes: int):
     if not os.path.exists(binary):
         build_zg(os.path.dirname(binary))
 
-    shell_script = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "config", "0gchain-init-genesis.sh")  # test_framework folder
+    shell_script = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)),
+        "..",
+        "config",
+        "0gchain-init-genesis.sh",
+    )  # test_framework folder
 
     zgchaind_dir = os.path.join(root_dir, "0gchaind")
     os.mkdir(zgchaind_dir)

@@ -41,9 +41,7 @@ class BSCNode(BlockchainNode):
         data_dir = os.path.join(root_dir, "blockchain_node" + str(index))
         rpc_url = "http://" + local_conf["HTTPHost"] + ":" + str(local_conf["HTTPPort"])
 
-        self.genesis_config = os.path.join(
-            __file_path__, "..", "config", "genesis.json"
-        )
+        self.genesis_config = os.path.join(__file_path__, "..", "config", "genesis.json")
         self.binary = binary
 
         self.node_id = encode_hex(priv_to_addr(ec_random_keys()[0]))

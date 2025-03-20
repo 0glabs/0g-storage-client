@@ -11,11 +11,7 @@ class ContractProxy:
         self.blockchain_nodes = blockchain_nodes
 
     def _get_contract(self, node_idx=0):
-        return (
-            self.contract
-            if node_idx == 0
-            else self.blockchain_nodes[node_idx].get_contract(self.contract_address)
-        )
+        return self.contract if node_idx == 0 else self.blockchain_nodes[node_idx].get_contract(self.contract_address)
 
     def _call(self, fn_name, node_idx, *args):
         assert node_idx < len(self.blockchain_nodes)
@@ -36,28 +32,32 @@ class ContractProxy:
         tx_params = copy(TX_PARAMS)
         tx_params["value"] = value
         return getattr(contract.functions, fn_name)(**args).transact(tx_params)
-    
+
     def _logs(self, event_name, node_idx, **args):
         assert node_idx < len(self.blockchain_nodes)
 
         contract = self._get_contract(node_idx)
-    
-        return getattr(contract.events, event_name).create_filter(fromBlock =0, toBlock="latest").get_all_entries()
 
-    def transfer(self, value, node_idx = 0):
+        return getattr(contract.events, event_name).create_filter(fromBlock=0, toBlock="latest").get_all_entries()
+
+    def transfer(self, value, node_idx=0):
         tx_params = copy(TX_PARAMS)
         tx_params["value"] = value
 
         contract = self._get_contract(node_idx)
         contract.receive.transact(tx_params)
-    
+
     def address(self):
         return self.contract_address
 
 
 class FlowContractProxy(ContractProxy):
     def submit(
-        self, submission_nodes, node_idx=0, tx_prarams=None, parent_hash=None,
+        self,
+        submission_nodes,
+        node_idx=0,
+        tx_prarams=None,
+        parent_hash=None,
     ):
         assert node_idx < len(self.blockchain_nodes)
 
@@ -65,7 +65,6 @@ class FlowContractProxy(ContractProxy):
 
         if tx_prarams is not None:
             combined_tx_prarams.update(tx_prarams)
-            
 
         contract = self._get_contract(node_idx)
         # print(contract.functions.submit(submission_nodes).estimate_gas(combined_tx_prarams))
@@ -85,7 +84,7 @@ class FlowContractProxy(ContractProxy):
 
     def epoch(self, node_idx=0):
         return self.get_mine_context(node_idx)[0]
-    
+
     def update_context(self, node_idx=0):
         return self._send("makeContext", node_idx)
 
@@ -102,21 +101,20 @@ class MineContractProxy(ContractProxy):
 
     def set_quality(self, quality, node_idx=0):
         return self._send("setQuality", node_idx, _targetQuality=quality)
-    
 
 
 class RewardContractProxy(ContractProxy):
     def reward_distributes(self, node_idx=0):
         return self._logs("DistributeReward", node_idx)
 
-    def donate(self, value, node_idx = 0):
+    def donate(self, value, node_idx=0):
         return self._send_payable("donate", node_idx, value)
-    
-    def base_reward(self, node_idx = 0):
+
+    def base_reward(self, node_idx=0):
         return self._call("baseReward", node_idx)
 
-    def first_rewardable_chunk(self, node_idx = 0):
+    def first_rewardable_chunk(self, node_idx=0):
         return self._call("firstRewardableChunk", node_idx)
 
-    def reward_deadline(self, node_idx = 0):
+    def reward_deadline(self, node_idx=0):
         return self._call("rewardDeadline", node_idx, 0)

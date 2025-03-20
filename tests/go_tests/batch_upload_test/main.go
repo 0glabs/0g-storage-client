@@ -40,6 +40,7 @@ func runTest() error {
 		}
 		opts[i] = transfer.UploadOption{
 			FinalityRequired: transfer.FileFinalized,
+			Method:           "min",
 		}
 	}
 	indexerClient, err := indexer.NewClient(indexerUrl, indexer.IndexerClientOption{LogOption: common.LogOption{Logger: logrus.StandardLogger()}})
@@ -49,6 +50,7 @@ func runTest() error {
 	_, roots, err := indexerClient.BatchUpload(ctx, w3client, datas, transfer.BatchUploadOption{
 		TaskSize:    5,
 		DataOptions: opts,
+		Method:      "min",
 	})
 	if err != nil {
 		return errors.WithMessage(err, "failed to upload file")

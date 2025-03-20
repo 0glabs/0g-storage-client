@@ -23,17 +23,14 @@ class KVTest(ClientTestFramework):
             None,
             to_stream_id(0),
             "0,1,2,3,4,5,6,7,8,9,10",
-            "0,1,2,3,4,5,6,7,8,9,10"
+            "0,1,2,3,4,5,6,7,8,9,10",
         )
         wait_until(lambda: self.kv_nodes[0].kv_get_trasanction_result(0) == "Commit")
-        res = self._kv_read_use_cli(
-            self.kv_nodes[0].rpc_url,
-            to_stream_id(0),
-            "0,1,2,3,4,5,6,7,8,9,10,11"
-        )
+        res = self._kv_read_use_cli(self.kv_nodes[0].rpc_url, to_stream_id(0), "0,1,2,3,4,5,6,7,8,9,10,11")
         for i in range(11):
             assert_equal(res[str(i)], str(i))
         assert_equal(res["11"], "")
+
 
 if __name__ == "__main__":
     KVTest().main()

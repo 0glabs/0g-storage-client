@@ -47,12 +47,7 @@ class ConfluxNode(BlockchainNode):
         # Overwrite with personalized configs.
         local_conf.update(updated_config)
         data_dir = os.path.join(root_dir, "blockchain_node" + str(index))
-        rpc_url = (
-            "http://"
-            + local_conf["public_address"]
-            + ":"
-            + str(local_conf["jsonrpc_http_eth_port"])
-        )
+        rpc_url = "http://" + local_conf["public_address"] + ":" + str(local_conf["jsonrpc_http_eth_port"])
         self.ip = local_conf["public_address"]
         self.port = str(local_conf["tcp_port"])
 
@@ -62,12 +57,7 @@ class ConfluxNode(BlockchainNode):
             self.auto_mining = False
 
         # setup core space rpc
-        core_space_rpc_url = (
-            "http://"
-            + local_conf["public_address"]
-            + ":"
-            + str(local_conf["jsonrpc_local_http_port"])
-        )
+        core_space_rpc_url = "http://" + local_conf["public_address"] + ":" + str(local_conf["jsonrpc_local_http_port"])
 
         self.core_space_rpc = SimpleRpcProxy(core_space_rpc_url, timeout=rpc_timeout)
 
@@ -85,9 +75,7 @@ class ConfluxNode(BlockchainNode):
 
     def __getattr__(self, name):
         """Dispatches any unrecognised messages to the RPC connection."""
-        assert self.rpc_connected and self.rpc is not None, self._node_msg(
-            "Error: no RPC connection"
-        )
+        assert self.rpc_connected and self.rpc is not None, self._node_msg("Error: no RPC connection")
         if name.startswith("eth_") or name.startswith("parity_"):
             return getattr(self.rpc, name)
         else:
@@ -104,9 +92,7 @@ class ConfluxNode(BlockchainNode):
                 except TransactionNotFound:
                     tx_receipt = None
                     if parent_hash:
-                        parent_hash = self.generatefixedblock(
-                            parent_hash, [], 1, False, None, None
-                        )
+                        parent_hash = self.generatefixedblock(parent_hash, [], 1, False, None, None)
                     else:
                         self.generateoneblock(1, BLOCK_SIZE_LIMIT)
                     time.sleep(0.5)
@@ -152,9 +138,7 @@ class ConfluxNode(BlockchainNode):
     def generateoneblock(self, num_txs, block_size_limit):
         return self.core_space_rpc.generateoneblock([num_txs, block_size_limit])
 
-    def generatefixedblock(
-        self, parent_hash, referee, num_txs, adaptive, difficulty, pos_reference
-    ):
+    def generatefixedblock(self, parent_hash, referee, num_txs, adaptive, difficulty, pos_reference):
         return self.core_space_rpc.generatefixedblock(
             [parent_hash, referee, num_txs, adaptive, difficulty, pos_reference]
         )
@@ -187,9 +171,7 @@ def connect_nodes(nodes, a, node_num, timeout=60):
     from_connection.addnode(key, peer_addr)
     # poll until hello handshake complete to avoid race conditions
     # with transaction relaying
-    wait_until(
-        lambda: check_handshake(from_connection, to_connection.key), timeout=timeout
-    )
+    wait_until(lambda: check_handshake(from_connection, to_connection.key), timeout=timeout)
 
 
 def sync_blocks(rpc_connections, *, sync_count=True, wait=1, timeout=60):
@@ -210,20 +192,14 @@ def sync_blocks(rpc_connections, *, sync_count=True, wait=1, timeout=60):
             return
         time.sleep(wait)
     raise AssertionError(
-        "Block sync timed out:{}".format(
-            "".join("\n  {!r}".format(b) for b in best_hash + block_count)
-        )
+        "Block sync timed out:{}".format("".join("\n  {!r}".format(b) for b in best_hash + block_count))
     )
 
 
 def disconnect_nodes(nodes, from_connection, node_num):
     try:
-        nodes[from_connection].removenode(
-            nodes[node_num].key, get_peer_addr(nodes[node_num])
-        )
-        nodes[node_num].removenode(
-            nodes[from_connection].key, get_peer_addr(nodes[from_connection])
-        )
+        nodes[from_connection].removenode(nodes[node_num].key, get_peer_addr(nodes[node_num]))
+        nodes[node_num].removenode(nodes[from_connection].key, get_peer_addr(nodes[from_connection]))
     except Exception as e:
         # If this node is disconnected between calculating the peer id
         # and issuing the disconnect, don't worry about it.
@@ -233,28 +209,16 @@ def disconnect_nodes(nodes, from_connection, node_num):
 
     # wait to disconnect
     wait_until(
-        lambda: [
-            peer
-            for peer in nodes[from_connection].getpeerinfo()
-            if peer["nodeid"] == nodes[node_num].key
-        ]
-        == [],
+        lambda: [peer for peer in nodes[from_connection].getpeerinfo() if peer["nodeid"] == nodes[node_num].key] == [],
         timeout=5,
     )
     wait_until(
-        lambda: [
-            peer
-            for peer in nodes[node_num].getpeerinfo()
-            if peer["nodeid"] == nodes[from_connection].key
-        ]
-        == [],
+        lambda: [peer for peer in nodes[node_num].getpeerinfo() if peer["nodeid"] == nodes[from_connection].key] == [],
         timeout=5,
     )
 
 
-def connect_sample_nodes(
-    nodes, log, sample=3, latency_min=0, latency_max=300, timeout=30
-):
+def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, timeout=30):
     """
     Establish connections among nodes with each node having 'sample' outgoing peers.
     It first lets all the nodes link as a loop, then randomly pick 'sample-1'
@@ -291,9 +255,7 @@ def connect_sample_nodes(
 
     for t in threads:
         t.join(timeout)
-        assert (
-            not t.is_alive()
-        ), "Node[{}] connect to other nodes timeout in {} seconds".format(t.a, timeout)
+        assert not t.is_alive(), "Node[{}] connect to other nodes timeout in {} seconds".format(t.a, timeout)
         assert not t.failed, "connect_sample_nodes failed."
 
 
@@ -315,9 +277,7 @@ class ConnectThread(threading.Thread):
                     p = self.peers[i]
                     connect_nodes(self.nodes, self.a, p)
                 for p in self.latencies[self.a]:
-                    self.nodes[self.a].addlatency(
-                        self.nodes[p].key, self.latencies[self.a][p]
-                    )
+                    self.nodes[self.a].addlatency(self.nodes[p].key, self.latencies[self.a][p])
                 if len(self.nodes[self.a].getpeerinfo()) >= self.min_peers:
                     break
                 else:

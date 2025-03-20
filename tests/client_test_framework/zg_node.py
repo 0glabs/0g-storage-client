@@ -12,27 +12,31 @@ ZGNODE_PORT_CATEGORY_P2P = 1
 ZGNODE_PORT_CATEGORY_RPC = 2
 ZGNODE_PORT_CATEGORY_PPROF = 3
 
+
 def zg_node_init_genesis(binary: str, root_dir: str, num_nodes: int):
     assert num_nodes > 0, "Invalid number of blockchain nodes: %s" % num_nodes
 
     if not os.path.exists(binary):
-            build_zg(os.path.dirname(binary))
+        build_zg(os.path.dirname(binary))
 
     shell_script = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), # test_framework folder
-        "..", "config", "0gchain-init-genesis.sh"
+        os.path.dirname(os.path.realpath(__file__)),  # test_framework folder
+        "..",
+        "config",
+        "0gchain-init-genesis.sh",
     )
     sys = platform.system().lower()
     if sys == "darwin":
         shell_script = os.path.join(
-            os.path.dirname(os.path.realpath(__file__)), # test_framework folder
-            "..", "config", "0gchain-init-genesis-mac.sh"
+            os.path.dirname(os.path.realpath(__file__)),  # test_framework folder
+            "..",
+            "config",
+            "0gchain-init-genesis-mac.sh",
         )
-
 
     zgchaind_dir = os.path.join(root_dir, "0gchaind")
     os.mkdir(zgchaind_dir)
-    
+
     log_file = tempfile.NamedTemporaryFile(dir=zgchaind_dir, delete=False, prefix="init_genesis_", suffix=".log")
     p2p_port_start = arrange_port(ZGNODE_PORT_CATEGORY_P2P, 0)
 
@@ -45,6 +49,7 @@ def zg_node_init_genesis(binary: str, root_dir: str, num_nodes: int):
     log_file.close()
 
     assert ret.returncode == 0, "Failed to init 0gchain genesis, see more details in log file: %s" % log_file.name
+
 
 class ZGNode(BlockchainNode):
     def __init__(
@@ -74,18 +79,25 @@ class ZGNode(BlockchainNode):
 
         self.config_file = None
         self.args = [
-            binary, "start",
-            "--home", data_dir,
+            binary,
+            "start",
+            "--home",
+            data_dir,
             # overwrite json rpc http port: 8545
-            "--json-rpc.address", "127.0.0.1:%s" % blockchain_rpc_port(index),
+            "--json-rpc.address",
+            "127.0.0.1:%s" % blockchain_rpc_port(index),
             # overwrite json rpc ws port: 8546
-            "--json-rpc.ws-address", "127.0.0.1:%s" % arrange_port(ZGNODE_PORT_CATEGORY_WS, index),
+            "--json-rpc.ws-address",
+            "127.0.0.1:%s" % arrange_port(ZGNODE_PORT_CATEGORY_WS, index),
             # overwrite p2p port: 26656
-            "--p2p.laddr", "tcp://127.0.0.1:%s" % arrange_port(ZGNODE_PORT_CATEGORY_P2P, index),
+            "--p2p.laddr",
+            "tcp://127.0.0.1:%s" % arrange_port(ZGNODE_PORT_CATEGORY_P2P, index),
             # overwrite rpc port: 26657
-            "--rpc.laddr", "tcp://127.0.0.1:%s" % arrange_port(ZGNODE_PORT_CATEGORY_RPC, index),
+            "--rpc.laddr",
+            "tcp://127.0.0.1:%s" % arrange_port(ZGNODE_PORT_CATEGORY_RPC, index),
             # overwrite pprof port: 6060
-            "--rpc.pprof_laddr", "127.0.0.1:%s" % arrange_port(ZGNODE_PORT_CATEGORY_PPROF, index),
+            "--rpc.pprof_laddr",
+            "127.0.0.1:%s" % arrange_port(ZGNODE_PORT_CATEGORY_PPROF, index),
         ]
 
         for k, v in updated_config.items():
@@ -94,4 +106,4 @@ class ZGNode(BlockchainNode):
                 self.args.append(str(v))
 
     def setup_config(self):
-        """ Already batch initialized by shell script in framework """
+        """Already batch initialized by shell script in framework"""

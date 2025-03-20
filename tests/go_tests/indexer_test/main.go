@@ -41,6 +41,7 @@ func runTest() error {
 	}
 	if _, err := indexerClient.Upload(ctx, w3client, data, transfer.UploadOption{
 		FinalityRequired: transfer.FileFinalized,
+		Method:           "min",
 	}); err != nil {
 		return errors.WithMessage(err, "failed to upload file")
 	}
