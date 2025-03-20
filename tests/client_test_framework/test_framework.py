@@ -23,14 +23,17 @@ from utility.utils import PortMin, is_windows_platform, wait_until
 from client_utility.utils import indexer_port
 from client_utility.build_binary import build_kv
 
+
 class TestStatus(Enum):
     PASSED = 1
     FAILED = 2
+
 
 TEST_EXIT_PASSED = 0
 TEST_EXIT_FAILED = 1
 
 __file_path__ = os.path.dirname(os.path.realpath(__file__))
+
 
 class ClientTestFramework(TestFramework):
     def __init__(self, blockchain_node_type=BlockChainNodeType.ZG):
@@ -45,15 +48,9 @@ class ClientTestFramework(TestFramework):
         binary_ext = ".exe" if is_windows_platform() else ""
         tests_dir = os.path.dirname(__file_path__)
         root_dir = os.path.dirname(tests_dir)
-        self.__default_zgs_node_binary__ = os.path.join(
-            tests_dir, "tmp", "zgs_node" + binary_ext
-        )
-        self.__default_zgs_cli_binary__ = os.path.join(
-            root_dir, "0g-storage-client"  + binary_ext
-        )
-        self.__default_zgs_kv_binary__ = os.path.join(
-            tests_dir, "tmp", "zgs_kv" + binary_ext
-        )
+        self.__default_zgs_node_binary__ = os.path.join(tests_dir, "tmp", "zgs_node" + binary_ext)
+        self.__default_zgs_cli_binary__ = os.path.join(root_dir, "0g-storage-client" + binary_ext)
+        self.__default_zgs_kv_binary__ = os.path.join(tests_dir, "tmp", "zgs_kv" + binary_ext)
 
     def add_arguments(self, parser: argparse.ArgumentParser):
         super().add_arguments(parser)
@@ -71,19 +68,13 @@ class ClientTestFramework(TestFramework):
         self.log.setLevel(logging.DEBUG)
 
         # Create file handler to log all messages
-        fh = logging.FileHandler(
-            self.options.tmpdir + "/test_framework.log", encoding="utf-8"
-        )
+        fh = logging.FileHandler(self.options.tmpdir + "/test_framework.log", encoding="utf-8")
         fh.setLevel(logging.DEBUG)
 
         # Create console handler to log messages to stderr. By default this logs only error messages, but can be configured with --loglevel.
         ch = logging.StreamHandler(sys.stdout)
         # User can provide log level as a number or string (eg DEBUG). loglevel was caught as a string, so try to convert it to an int
-        ll = (
-            int(self.options.loglevel)
-            if self.options.loglevel.isdigit()
-            else self.options.loglevel.upper()
-        )
+        ll = int(self.options.loglevel) if self.options.loglevel.isdigit() else self.options.loglevel.upper()
         ch.setLevel(ll)
 
         # Format logs the same as bitcoind's debug.log with microprecision (so log files can be concatenated and sorted)
@@ -106,8 +97,8 @@ class ClientTestFramework(TestFramework):
         node_rpc_url,
         indexer_url,
         file_to_upload,
-        fragment_size = None,
-        skip_tx = True,
+        fragment_size=None,
+        skip_tx=True,
     ):
         upload_args = [
             self.cli_binary,
@@ -116,7 +107,7 @@ class ClientTestFramework(TestFramework):
             blockchain_node_rpc_url,
             "--key",
             encode_hex(key),
-            "--skip-tx="+str(skip_tx),
+            "--skip-tx=" + str(skip_tx),
             "--log-level",
             "debug",
         ]
@@ -144,7 +135,7 @@ class ClientTestFramework(TestFramework):
                 stdout=output_fileno,
                 stderr=output_fileno,
             )
-            
+
             return_code = proc.wait(timeout=60)
 
             output.seek(0)
@@ -162,19 +153,23 @@ class ClientTestFramework(TestFramework):
         finally:
             output.close()
 
-        assert return_code == 0, "%s upload file failed, output: %s, log: %s" % (self.cli_binary, output_name, lines)
+        assert return_code == 0, "%s upload file failed, output: %s, log: %s" % (
+            self.cli_binary,
+            output_name,
+            lines,
+        )
 
         return root
-    
+
     def _download_file_use_cli(
         self,
         node_rpc_url,
         indexer_url,
-        root = None,
-        roots = None,
-        file_to_download = None,
-        with_proof = True,
-        remove = True,
+        root=None,
+        roots=None,
+        file_to_download=None,
+        with_proof=True,
+        remove=True,
     ):
         if file_to_download is None:
             file_to_download = os.path.join(self.root_dir, "download_{}_{}".format(root, time.time()))
@@ -213,7 +208,7 @@ class ClientTestFramework(TestFramework):
                 stdout=output_fileno,
                 stderr=output_fileno,
             )
-            
+
             return_code = proc.wait(timeout=60)
             output.seek(0)
             lines = output.readlines()
@@ -223,13 +218,17 @@ class ClientTestFramework(TestFramework):
         finally:
             output.close()
 
-        assert return_code == 0, "%s download file failed, output: %s, log: %s" % (self.cli_binary, output_name, lines)
+        assert return_code == 0, "%s download file failed, output: %s, log: %s" % (
+            self.cli_binary,
+            output_name,
+            lines,
+        )
 
         if remove:
             os.remove(file_to_download)
 
         return
-    
+
     def _kv_write_use_cli(
         self,
         blockchain_node_rpc_url,
@@ -239,7 +238,7 @@ class ClientTestFramework(TestFramework):
         stream_id,
         kv_keys,
         kv_values,
-        skip_tx = True,
+        skip_tx=True,
     ):
         kv_write_args = [
             self.cli_binary,
@@ -248,7 +247,7 @@ class ClientTestFramework(TestFramework):
             blockchain_node_rpc_url,
             "--key",
             encode_hex(key),
-            "--skip-tx="+str(skip_tx),
+            "--skip-tx=" + str(skip_tx),
             "--stream-id",
             stream_id,
             "--stream-keys",
@@ -279,7 +278,7 @@ class ClientTestFramework(TestFramework):
                 stdout=output_fileno,
                 stderr=output_fileno,
             )
-            
+
             return_code = proc.wait(timeout=60)
 
             output.seek(0)
@@ -290,16 +289,15 @@ class ClientTestFramework(TestFramework):
         finally:
             output.close()
 
-        assert return_code == 0, "%s write kv failed, output: %s, log: %s" % (self.cli_binary, output_name, lines)
+        assert return_code == 0, "%s write kv failed, output: %s, log: %s" % (
+            self.cli_binary,
+            output_name,
+            lines,
+        )
 
         return
 
-    def _kv_read_use_cli(
-        self,
-        node_rpc_url,
-        stream_id,
-        kv_keys
-    ):
+    def _kv_read_use_cli(self, node_rpc_url, stream_id, kv_keys):
         kv_read_args = [
             self.cli_binary,
             "kv-read",
@@ -325,7 +323,7 @@ class ClientTestFramework(TestFramework):
                 stdout=output_fileno,
                 stderr=output_fileno,
             )
-            
+
             return_code = proc.wait(timeout=60)
             output.seek(0)
             lines = output.readlines()
@@ -335,7 +333,11 @@ class ClientTestFramework(TestFramework):
         finally:
             output.close()
 
-        assert return_code == 0, "%s read kv failed, output: %s, log: %s" % (self.cli_binary, output_name, lines)
+        assert return_code == 0, "%s read kv failed, output: %s, log: %s" % (
+            self.cli_binary,
+            output_name,
+            lines,
+        )
 
         return json.loads(lines[0].decode("utf-8").strip())
 
@@ -357,8 +359,8 @@ class ClientTestFramework(TestFramework):
 
         time.sleep(1)
         node.wait_for_rpc_connection()
-    
-    def setup_indexer(self, trusted, discover_node, discover_ports = None):
+
+    def setup_indexer(self, trusted, discover_node, discover_ports=None):
         indexer_args = [
             self.cli_binary,
             "indexer",
@@ -378,12 +380,8 @@ class ClientTestFramework(TestFramework):
         self.log.info("start indexer with args: {}".format(indexer_args))
         data_dir = os.path.join(self.root_dir, "indexer0")
         os.mkdir(data_dir)
-        stdout = tempfile.NamedTemporaryFile(
-            dir=data_dir, prefix="stdout", delete=False
-        )
-        stderr = tempfile.NamedTemporaryFile(
-            dir=data_dir, prefix="stderr", delete=False
-        )
+        stdout = tempfile.NamedTemporaryFile(dir=data_dir, prefix="stdout", delete=False)
+        stderr = tempfile.NamedTemporaryFile(dir=data_dir, prefix="stderr", delete=False)
         self.indexer_process = subprocess.Popen(
             indexer_args,
             stdout=stdout,
@@ -399,6 +397,7 @@ class ClientTestFramework(TestFramework):
                 return response.status_code is not None
             except requests.RequestException:
                 return False
+
         wait_until(lambda: is_port_available(self.indexer_rpc_url), timeout=20)
 
     def stop_indexer(self):
@@ -416,7 +415,7 @@ class ClientTestFramework(TestFramework):
 
         for node in self.kv_nodes:
             node.stop()
-        
+
         self.stop_indexer()
 
     def stop_kv_node(self, index):
@@ -440,7 +439,8 @@ class ClientTestFramework(TestFramework):
             os.makedirs(self.options.tmpdir, exist_ok=True)
         else:
             self.options.tmpdir = os.getenv(
-                "ZG_CLIENT_TESTS_LOG_DIR", default=tempfile.mkdtemp(prefix="zg_client_test_")
+                "ZG_CLIENT_TESTS_LOG_DIR",
+                default=tempfile.mkdtemp(prefix="zg_client_test_"),
             )
 
         self.root_dir = self.options.tmpdir
@@ -453,7 +453,7 @@ class ClientTestFramework(TestFramework):
 
             if os.path.islink(dst):
                 os.remove(dst)
-            elif os.path.isdir(dst): 
+            elif os.path.isdir(dst):
                 shutil.rmtree(dst)
             elif os.path.exists(dst):
                 os.remove(dst)
@@ -471,9 +471,7 @@ class ClientTestFramework(TestFramework):
         self.contract_path = os.path.abspath(self.options.contract)
         self.kv_binary = os.path.abspath(self.options.zgs_kv)
 
-        assert os.path.exists(self.contract_path), (
-            "%s should be exist" % self.contract_path
-        )
+        assert os.path.exists(self.contract_path), "%s should be exist" % self.contract_path
 
         if self.options.random_seed is not None:
             random.seed(self.options.random_seed)

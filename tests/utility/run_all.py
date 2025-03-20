@@ -12,8 +12,20 @@ DEFAULT_PORT_MIN = 11000
 DEFAULT_PORT_MAX = 65535
 DEFAULT_PORT_RANGE = 1000
 
+
 def print_testcase_result(color, glyph, script, start_time):
-    print(color[1] + glyph + " Testcase " + script + "\telapsed: " + str(int(time.time() - start_time)) + " seconds" + color[0], flush=True)
+    print(
+        color[1]
+        + glyph
+        + " Testcase "
+        + script
+        + "\telapsed: "
+        + str(int(time.time() - start_time))
+        + " seconds"
+        + color[0],
+        flush=True,
+    )
+
 
 def run_single_test(py, script, test_dir, index, port_min, port_max):
     try:
@@ -58,7 +70,14 @@ def run_single_test(py, script, test_dir, index, port_min, port_max):
         raise err
     print_testcase_result(BLUE, TICK, script, start_time)
 
-def run_all(test_dir: str, test_subdirs: list[str]=[], slow_tests: set[str]={}, long_manual_tests: set[str]={}, single_run_tests: set[str]={}):
+
+def run_all(
+    test_dir: str,
+    test_subdirs: list[str] = [],
+    slow_tests: set[str] = {},
+    long_manual_tests: set[str] = {},
+    single_run_tests: set[str] = {},
+):
     tmp_dir = os.path.join(test_dir, "tmp")
     if not os.path.exists(tmp_dir):
         os.makedirs(tmp_dir, exist_ok=True)
@@ -102,7 +121,11 @@ def run_all(test_dir: str, test_subdirs: list[str]=[], slow_tests: set[str]={}, 
         for file in os.listdir(subdir_path):
             if file.endswith("_test.py"):
                 rel_path = os.path.join(subdir, file)
-                if rel_path not in slow_tests and rel_path not in long_manual_tests and rel_path not in single_run_tests:
+                if (
+                    rel_path not in slow_tests
+                    and rel_path not in long_manual_tests
+                    and rel_path not in single_run_tests
+                ):
                     TEST_SCRIPTS.append(rel_path)
 
     executor = ProcessPoolExecutor(max_workers=options.max_workers)
@@ -115,15 +138,11 @@ def run_all(test_dir: str, test_subdirs: list[str]=[], slow_tests: set[str]={}, 
     i = 0
     # Start slow tests first to avoid waiting for long-tail jobs
     for script in slow_tests:
-        f = executor.submit(
-            run_single_test, py, script, test_dir, i, options.port_min, options.port_max
-        )
+        f = executor.submit(run_single_test, py, script, test_dir, i, options.port_min, options.port_max)
         test_results.append((script, f))
         i += 1
     for script in TEST_SCRIPTS:
-        f = executor.submit(
-            run_single_test, py, script, test_dir, i, options.port_min, options.port_max
-        )
+        f = executor.submit(run_single_test, py, script, test_dir, i, options.port_min, options.port_max)
         test_results.append((script, f))
         i += 1
 
@@ -137,9 +156,7 @@ def run_all(test_dir: str, test_subdirs: list[str]=[], slow_tests: set[str]={}, 
 
     # Run single tests one by one
     for script in single_run_tests:
-        f = executor.submit(
-            run_single_test, py, script, test_dir, i, options.port_min, options.port_max
-        )
+        f = executor.submit(run_single_test, py, script, test_dir, i, options.port_min, options.port_max)
         try:
             f.result()
         except subprocess.CalledProcessError as err:
@@ -154,4 +171,3 @@ def run_all(test_dir: str, test_subdirs: list[str]=[], slow_tests: set[str]={}, 
         for c in failed:
             print(c)
         sys.exit(1)
-

@@ -15,20 +15,20 @@ class FileUploadDownloadTest(ClientTestFramework):
         self.num_blockchain_nodes = 1
         self.num_nodes = 4
         self.zgs_node_configs[0] = {
-            "db_max_num_sectors": 2 ** 30,
-            "shard_position": "0/4"
+            "db_max_num_sectors": 2**30,
+            "shard_position": "0/4",
         }
         self.zgs_node_configs[1] = {
-            "db_max_num_sectors": 2 ** 30,
-            "shard_position": "1/4"
+            "db_max_num_sectors": 2**30,
+            "shard_position": "1/4",
         }
         self.zgs_node_configs[2] = {
-            "db_max_num_sectors": 2 ** 30,
-            "shard_position": "2/4"
+            "db_max_num_sectors": 2**30,
+            "shard_position": "2/4",
         }
         self.zgs_node_configs[3] = {
-            "db_max_num_sectors": 2 ** 30,
-            "shard_position": "3/4"
+            "db_max_num_sectors": 2**30,
+            "shard_position": "3/4",
         }
 
     def run_test(self):
@@ -56,9 +56,7 @@ class FileUploadDownloadTest(ClientTestFramework):
         ]
 
         for i, v in enumerate(data_size):
-            self.__test_upload_download_file(
-                v, i + 1, True
-            )
+            self.__test_upload_download_file(v, i + 1, True)
 
     def __test_upload_download_file(self, size, submission_index, rand_data=True):
         self.log.info("file size: %d", size)
@@ -72,7 +70,7 @@ class FileUploadDownloadTest(ClientTestFramework):
         root = self._upload_file_use_cli(
             self.blockchain_nodes[0].rpc_url,
             GENESIS_ACCOUNT.key,
-            ','.join([x.rpc_url for x in self.nodes]),
+            ",".join([x.rpc_url for x in self.nodes]),
             None,
             file_to_upload,
             skip_tx=False,
@@ -85,9 +83,10 @@ class FileUploadDownloadTest(ClientTestFramework):
             client = self.nodes[node_idx]
             wait_until(lambda: client.zgs_get_file_info(root) is not None)
             wait_until(lambda: client.zgs_get_file_info(root)["finalized"])
-        
-        self._download_file_use_cli(','.join([x.rpc_url for x in self.nodes]), None, root, with_proof=True)
-        self._download_file_use_cli(','.join([x.rpc_url for x in self.nodes]), None, root, with_proof=False)
+
+        self._download_file_use_cli(",".join([x.rpc_url for x in self.nodes]), None, root, with_proof=True)
+        self._download_file_use_cli(",".join([x.rpc_url for x in self.nodes]), None, root, with_proof=False)
+
 
 if __name__ == "__main__":
     FileUploadDownloadTest().main()

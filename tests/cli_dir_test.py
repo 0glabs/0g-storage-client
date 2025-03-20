@@ -13,6 +13,7 @@ from utility.utils import wait_until
 from client_test_framework.test_framework import ClientTestFramework
 from splitable_upload_test import files_are_equal
 
+
 def directories_are_equal(dir1, dir2):
     for root, dirs, files in os.walk(dir1):
         rel_path = os.path.relpath(root, dir1)  # relative path within the directory structure
@@ -42,7 +43,7 @@ def directories_are_equal(dir1, dir2):
 
             if not os.path.exists(dir2_sub) or not os.path.isdir(dir2_sub):
                 return False
-            
+
             if not directories_are_equal(dir1_sub, dir2_sub):
                 return False
 
@@ -56,25 +57,26 @@ def directories_are_equal(dir1, dir2):
 
     return True
 
+
 class DirectoryUploadDownloadTest(ClientTestFramework):
     def setup_params(self):
         self.num_blockchain_nodes = 1
         self.num_nodes = 4
         self.zgs_node_configs[0] = {
-            "db_max_num_sectors": 2 ** 30,
-            "shard_position": "0/4"
+            "db_max_num_sectors": 2**30,
+            "shard_position": "0/4",
         }
         self.zgs_node_configs[1] = {
-            "db_max_num_sectors": 2 ** 30,
-            "shard_position": "1/4"
+            "db_max_num_sectors": 2**30,
+            "shard_position": "1/4",
         }
         self.zgs_node_configs[2] = {
-            "db_max_num_sectors": 2 ** 30,
-            "shard_position": "2/4"
+            "db_max_num_sectors": 2**30,
+            "shard_position": "2/4",
         }
         self.zgs_node_configs[3] = {
-            "db_max_num_sectors": 2 ** 30,
-            "shard_position": "3/4"
+            "db_max_num_sectors": 2**30,
+            "shard_position": "3/4",
         }
 
     def run_test(self):
@@ -84,15 +86,15 @@ class DirectoryUploadDownloadTest(ClientTestFramework):
         # Create regular file under the temporary directory
         file_path = os.path.join(temp_dir.name, f"file_0.txt")
         file_size = random.randint(*file_size_range)
-        with open(file_path, 'wb') as f:
+        with open(file_path, "wb") as f:
             f.write(os.urandom(file_size))
-        
-         # Create subdirectory with files
+
+        # Create subdirectory with files
         subdir_path = os.path.join(temp_dir.name, f"subdir_0")
         os.makedirs(subdir_path)
         sub_file_path = os.path.join(subdir_path, f"subfile_0.txt")
         sub_file_size = random.randint(*file_size_range)
-        with open(sub_file_path, 'wb') as f:
+        with open(sub_file_path, "wb") as f:
             f.write(os.urandom(sub_file_size))
 
         # Create symbolic links
@@ -100,12 +102,18 @@ class DirectoryUploadDownloadTest(ClientTestFramework):
         symlink_path = os.path.join(temp_dir.name, f"symlink_0")
         os.symlink(target, symlink_path)
 
-        self.log.info("Uploading directory '%s' with %d file, %d directory, %d symbolic link", temp_dir.name, 1, 1, 1)
+        self.log.info(
+            "Uploading directory '%s' with %d file, %d directory, %d symbolic link",
+            temp_dir.name,
+            1,
+            1,
+            1,
+        )
 
         root_hash = self._upload_directory_use_cli(
             self.blockchain_nodes[0].rpc_url,
             GENESIS_ACCOUNT.key,
-            ','.join([x.rpc_url for x in self.nodes]),
+            ",".join([x.rpc_url for x in self.nodes]),
             None,
             temp_dir,
         )
@@ -119,8 +127,15 @@ class DirectoryUploadDownloadTest(ClientTestFramework):
             wait_until(lambda: client.zgs_get_file_info(root_hash)["finalized"])
 
         directory_to_download = os.path.join(self.root_dir, "download")
-        self._download_directory_use_cli(','.join([x.rpc_url for x in self.nodes]), None, root=root_hash, with_proof=True, dir_to_download=directory_to_download, remove=False)
-        assert(directories_are_equal(temp_dir.name, directory_to_download))
+        self._download_directory_use_cli(
+            ",".join([x.rpc_url for x in self.nodes]),
+            None,
+            root=root_hash,
+            with_proof=True,
+            dir_to_download=directory_to_download,
+            remove=False,
+        )
+        assert directories_are_equal(temp_dir.name, directory_to_download)
 
     def _upload_directory_use_cli(
         self,
@@ -129,8 +144,8 @@ class DirectoryUploadDownloadTest(ClientTestFramework):
         node_rpc_url,
         indexer_url,
         dir_to_upload,
-        fragment_size = None,
-        skip_tx = True,
+        fragment_size=None,
+        skip_tx=True,
     ):
         upload_args = [
             self.cli_binary,
@@ -139,7 +154,7 @@ class DirectoryUploadDownloadTest(ClientTestFramework):
             blockchain_node_rpc_url,
             "--key",
             encode_hex(key),
-            "--skip-tx="+str(skip_tx),
+            "--skip-tx=" + str(skip_tx),
             "--log-level",
             "debug",
             "--gas-limit",
@@ -169,17 +184,17 @@ class DirectoryUploadDownloadTest(ClientTestFramework):
                 stdout=output_fileno,
                 stderr=output_fileno,
             )
-            
+
             return_code = proc.wait(timeout=60)
 
             output.seek(0)
             lines = output.readlines()
 
-            ansi_escape = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
+            ansi_escape = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 
             for line in lines:
                 line = line.decode("utf-8")
-                line_clean = ansi_escape.sub('', line) # clean ANSI escape sequences
+                line_clean = ansi_escape.sub("", line)  # clean ANSI escape sequences
                 self.log.debug("line: %s", line_clean)
 
                 if match := re.search(r"rootHash=(0x[a-fA-F0-9]+)", line_clean):
@@ -191,7 +206,11 @@ class DirectoryUploadDownloadTest(ClientTestFramework):
         finally:
             output.close()
 
-        assert return_code == 0, "%s upload directory failed, output: %s, log: %s" % (self.cli_binary, output_name, lines)
+        assert return_code == 0, "%s upload directory failed, output: %s, log: %s" % (
+            self.cli_binary,
+            output_name,
+            lines,
+        )
 
         return root
 
@@ -199,11 +218,11 @@ class DirectoryUploadDownloadTest(ClientTestFramework):
         self,
         node_rpc_url,
         indexer_url,
-        root = None,
-        roots = None,
-        dir_to_download = None,
-        with_proof = True,
-        remove = True,
+        root=None,
+        roots=None,
+        dir_to_download=None,
+        with_proof=True,
+        remove=True,
     ):
         if dir_to_download is None:
             dir_to_download = os.path.join(self.root_dir, "download_{}_{}".format(root, time.time()))
@@ -242,7 +261,7 @@ class DirectoryUploadDownloadTest(ClientTestFramework):
                 stdout=output_fileno,
                 stderr=output_fileno,
             )
-            
+
             return_code = proc.wait(timeout=60)
             output.seek(0)
             lines = output.readlines()
@@ -252,12 +271,17 @@ class DirectoryUploadDownloadTest(ClientTestFramework):
         finally:
             output.close()
 
-        assert return_code == 0, "%s download directory failed, output: %s, log: %s" % (self.cli_binary, output_name, lines)
+        assert return_code == 0, "%s download directory failed, output: %s, log: %s" % (
+            self.cli_binary,
+            output_name,
+            lines,
+        )
 
         if remove:
             os.remove(dir_to_download)
 
         return
+
 
 if __name__ == "__main__":
     DirectoryUploadDownloadTest().main()

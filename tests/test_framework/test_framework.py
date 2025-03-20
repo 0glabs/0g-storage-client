@@ -15,7 +15,11 @@ from pathlib import Path
 
 from eth_utils import encode_hex
 from test_framework.bsc_node import BSCNode
-from test_framework.contract_proxy import FlowContractProxy, MineContractProxy, RewardContractProxy
+from test_framework.contract_proxy import (
+    FlowContractProxy,
+    MineContractProxy,
+    RewardContractProxy,
+)
 from test_framework.zgs_node import ZgsNode
 from test_framework.blockchain_node import BlockChainNodeType
 from test_framework.conflux_node import ConfluxNode, connect_sample_nodes
@@ -162,7 +166,9 @@ class TestFramework:
                 wait_until(lambda: node.eth_blockNumber() is not None)
                 wait_until(lambda: int(node.eth_blockNumber(), 16) > 0)
 
-        contract, tx_hash, mine_contract, reward_contract = self.blockchain_nodes[0].setup_contract(self.enable_market, self.mine_period, self.lifetime_seconds)
+        contract, tx_hash, mine_contract, reward_contract = self.blockchain_nodes[0].setup_contract(
+            self.enable_market, self.mine_period, self.lifetime_seconds
+        )
         self.contract = FlowContractProxy(contract, self.blockchain_nodes)
         self.mine_contract = MineContractProxy(mine_contract, self.blockchain_nodes)
         self.reward_contract = RewardContractProxy(reward_contract, self.blockchain_nodes)
@@ -303,7 +309,9 @@ class TestFramework:
         self.log.addHandler(ch)
 
     def _check_cli_binary(self):
-        if Path(self.cli_binary).absolute() == Path(self.__default_zgs_cli_binary__).absolute() and not os.path.exists(self.cli_binary):
+        if Path(self.cli_binary).absolute() == Path(self.__default_zgs_cli_binary__).absolute() and not os.path.exists(
+            self.cli_binary
+        ):
             dir = Path(self.cli_binary).parent.absolute()
             build_cli(dir)
 
@@ -357,7 +365,11 @@ class TestFramework:
                 line = line.decode("utf-8")
                 self.log.debug("line: %s", line)
                 if "root" in line:
-                    filtered_line = re.sub(r"\x1b\[([0-9,A-Z]{1,2}(;[0-9]{1,2})?(;[0-9]{3})?)?[m|K]?", "", line)
+                    filtered_line = re.sub(
+                        r"\x1b\[([0-9,A-Z]{1,2}(;[0-9]{1,2})?(;[0-9]{3})?)?[m|K]?",
+                        "",
+                        line,
+                    )
                     index = filtered_line.find("root=")
                     if index > 0:
                         root = filtered_line[index + 5 : index + 5 + 66]
@@ -367,7 +379,11 @@ class TestFramework:
         finally:
             output.close()
 
-        assert return_code == 0, "%s upload file failed, output: %s, log: %s" % (self.cli_binary, output_name, lines)
+        assert return_code == 0, "%s upload file failed, output: %s, log: %s" % (
+            self.cli_binary,
+            output_name,
+            lines,
+        )
 
         return root
 
@@ -376,7 +392,12 @@ class TestFramework:
         self.contract.submit(submissions)
         self.num_deployed_contracts += 1
         wait_until(lambda: self.contract.num_submissions() == self.num_deployed_contracts)
-        self.log.info("Submission completed, data root: %s, submissions(%s) = %s", data_root, len(submissions), submissions)
+        self.log.info(
+            "Submission completed, data root: %s, submissions(%s) = %s",
+            data_root,
+            len(submissions),
+            submissions,
+        )
         return data_root
 
     def __upload_file__(self, node_index: int, random_data_size: int) -> str:

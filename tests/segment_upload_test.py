@@ -4,6 +4,7 @@ from client_test_framework.test_framework import ClientTestFramework
 from config.node_config import GENESIS_PRIV_KEY
 from client_utility.run_go_test import run_go_test
 
+
 class FileSegmentUploadTest(ClientTestFramework):
     def setup_params(self):
         self.num_blockchain_nodes = 1
@@ -20,10 +21,11 @@ class FileSegmentUploadTest(ClientTestFramework):
             GENESIS_PRIV_KEY,
             self.blockchain_nodes[0].rpc_url,
             ",".join([x.rpc_url for x in self.nodes]),
-            self.indexer_rpc_url
+            self.indexer_rpc_url,
         ]
         self.log.info("run go test with args: {}".format(test_args))
         run_go_test(self.root_dir, test_args)
-        
+
+
 if __name__ == "__main__":
     FileSegmentUploadTest().main()
