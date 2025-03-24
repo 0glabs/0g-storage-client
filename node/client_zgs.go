@@ -58,8 +58,8 @@ func (c *ZgsClient) CheckFileFinalized(ctx context.Context, txSeqOrRoot TxSeqOrR
 }
 
 // GetFileInfo Call zgs_getFileInfo RPC to get the information of a file by file data root from the node.
-func (c *ZgsClient) GetFileInfo(ctx context.Context, root common.Hash) (*FileInfo, error) {
-	return providers.CallContext[*FileInfo](c, ctx, "zgs_getFileInfo", root)
+func (c *ZgsClient) GetFileInfo(ctx context.Context, root common.Hash, needAvailable bool) (*FileInfo, error) {
+	return providers.CallContext[*FileInfo](c, ctx, "zgs_getFileInfo", root, needAvailable)
 }
 
 // GetFileInfoByTxSeq Call zgs_getFileInfoByTxSeq RPC to get the information of a file by file sequence id from the node.

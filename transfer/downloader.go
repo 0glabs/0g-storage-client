@@ -117,7 +117,7 @@ func (downloader *Downloader) Download(ctx context.Context, root, filename strin
 func (downloader *Downloader) queryFile(ctx context.Context, root common.Hash) (info *node.FileInfo, err error) {
 	// do not require file finalized
 	for _, v := range downloader.clients {
-		info, err = v.GetFileInfo(ctx, root)
+		info, err = v.GetFileInfo(ctx, root, true)
 		if err != nil {
 			return nil, err
 		}

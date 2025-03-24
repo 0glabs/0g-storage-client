@@ -156,7 +156,7 @@ func checkLogExistence(ctx context.Context, clients []*node.ZgsClient, root comm
 	var info *node.FileInfo
 	var err error
 	for _, client := range clients {
-		info, err = client.GetFileInfo(ctx, root)
+		info, err = client.GetFileInfo(ctx, root, true)
 		if err != nil {
 			return nil, err
 		}
@@ -695,7 +695,7 @@ func (uploader *Uploader) newSegmentUploader(ctx context.Context, info *node.Fil
 	clientTasks := make([][]*uploadTask, 0)
 	for clientIndex, shardConfig := range shardConfigs {
 		// skip finalized nodes
-		info, _ := uploader.clients[clientIndex].GetFileInfo(ctx, tree.Root())
+		info, _ := uploader.clients[clientIndex].GetFileInfo(ctx, tree.Root(), true)
 		if info != nil && info.Finalized {
 			continue
 		}
@@ -865,7 +865,7 @@ func (uploader *FileSegmentUploader) newFileSegmentUploader(
 			}
 
 			// skip finalized nodes
-			nodeInfo, _ := uploader.clients[clientIndex].GetFileInfo(ctx, segment.Root)
+			nodeInfo, _ := uploader.clients[clientIndex].GetFileInfo(ctx, segment.Root, true)
 			if nodeInfo != nil && nodeInfo.Finalized {
 				continue
 			}

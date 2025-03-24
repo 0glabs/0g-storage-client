@@ -115,7 +115,7 @@ waitLoop:
 	for tryN, maxTries := 0, 15; tryN < maxTries; tryN++ {
 		time.Sleep(time.Second)
 		for _, client := range zgsClients {
-			info, err = client.GetFileInfo(ctx, tree.Root())
+			info, err = client.GetFileInfo(ctx, tree.Root(), true)
 			if err != nil {
 				return errors.WithMessage(err, "failed to get file info")
 			}
@@ -145,7 +145,7 @@ checkLoop:
 	for tryN, maxTries := 0, 15; tryN < maxTries; tryN++ {
 		time.Sleep(time.Second)
 		for _, client := range zgsClients {
-			info, err = client.GetFileInfo(ctx, tree.Root())
+			info, err = client.GetFileInfo(ctx, tree.Root(), true)
 			if err != nil {
 				return errors.WithMessage(err, "failed to get file info")
 			}

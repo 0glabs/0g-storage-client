@@ -83,7 +83,7 @@ func getFileStatus(c *gin.Context) (interface{}, error) {
 	var notFinalized bool
 
 	for _, client := range allClients {
-		info, err := client.GetFileInfo(context.Background(), root)
+		info, err := client.GetFileInfo(context.Background(), root, false)
 		if err != nil {
 			return nil, err
 		}

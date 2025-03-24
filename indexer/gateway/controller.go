@@ -51,7 +51,7 @@ func (ctrl *RestController) getAvailableFileLocations(ctx context.Context, cid C
 	// find corresponding tx sequence
 	hash := eth_common.HexToHash(cid.Root)
 	for _, client := range ctrl.nodeManager.TrustedClients() {
-		info, err := client.GetFileInfo(ctx, hash)
+		info, err := client.GetFileInfo(ctx, hash, true)
 		if err == nil && info != nil {
 			return ctrl.fileLocationCache.GetFileLocations(ctx, info.Tx.Seq)
 		}
@@ -130,7 +130,7 @@ func getOverallFileInfo(ctx context.Context, clients []*node.ZgsClient, cid Cid)
 		if cid.TxSeq != nil {
 			info, err = client.GetFileInfoByTxSeq(ctx, *cid.TxSeq)
 		} else {
-			info, err = client.GetFileInfo(ctx, rootHash)
+			info, err = client.GetFileInfo(ctx, rootHash, true)
 		}
 
 		if err != nil {
