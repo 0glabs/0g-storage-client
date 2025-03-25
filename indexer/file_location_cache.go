@@ -65,6 +65,8 @@ func (c *FileLocationCache) GetFileLocations(ctx context.Context, txSeq uint64) 
 		nodes = make([]*shard.ShardedNode, 0)
 	}
 
+	logrus.WithField("txSeq", txSeq).Debugf("GetFileLocations from cache, got %v nodes", len(nodes))
+
 	newNodes, err := c.getFileLocation(ctx, txSeq, nodes)
 	if err != nil {
 		return nil, err
@@ -85,7 +87,7 @@ func (c *FileLocationCache) getFileLocation(ctx context.Context, txSeq uint64, c
 	trusted := defaultNodeManager.TrustedClients()
 	var segNum uint64
 	for _, v := range trusted {
-		if _, ok := cachedUrl[v.URL()]; ok {
+		if cachedUrl[v.URL()] {
 			continue
 		}
 		start := time.Now()
@@ -93,6 +95,7 @@ func (c *FileLocationCache) getFileLocation(ctx context.Context, txSeq uint64, c
 		if fileInfo != nil {
 			segNum = core.NumSplits(int64(fileInfo.Tx.Size), core.DefaultSegmentSize)
 		}
+		logrus.WithField("fileInfo", fileInfo).Debug("File info in getFileLocation")
 		if err != nil || fileInfo == nil || !fileInfo.Finalized {
 			continue
 		}
@@ -182,13 +185,12 @@ func (c *FileLocationCache) getFileLocation(ctx context.Context, txSeq uint64, c
 		}
 		if val, ok := c.latestFindFile.Load(txSeq); ok {
 			if time.Since(val.(time.Time)) < defaultFindFileCooldown {
-				return nil, nil
+				return nodes, nil
 			}
 		}
 		logrus.Debugf("triggering FindFile for tx seq %v", txSeq)
 		c.discoverNode.FindFile(ctx, txSeq)
 		c.latestFindFile.Store(txSeq, time.Now())
 	}
-	return nil, nil
-
+	return nodes, nil
 }
