@@ -90,7 +90,6 @@ def build_cli(dir: str) -> BuildBinaryResult:
         dir=dir,
         binary_name=CLIENT_BINARY,
         github_url="https://github.com/0glabs/0g-storage-client.git",
-        git_rev=CLI_GIT_REV,
         build_cmd="go build",
         compiled_relative_path=[],
     )

@@ -89,7 +89,7 @@ func runTest() error {
 
 	client0 := node.MustNewZgsClient(zgsNodeUrls[0])
 	for {
-		info, err := client0.GetFileInfo(ctx, root)
+		info, err := client0.GetFileInfo(ctx, root, true)
 		if err != nil {
 			return errors.WithMessage(err, "failed to get file info")
 		}

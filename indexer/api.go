@@ -66,7 +66,7 @@ func (api *IndexerApi) GetFileLocations(ctx context.Context, root string) (locat
 	var txSeq uint64
 	found := false
 	for _, client := range trustedClients {
-		info, err := client.GetFileInfo(ctx, hash)
+		info, err := client.GetFileInfo(ctx, hash, true)
 		if err != nil || info == nil {
 			continue
 		}
