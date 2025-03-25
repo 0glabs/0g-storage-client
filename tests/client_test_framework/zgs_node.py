@@ -97,7 +97,7 @@ class ZgsNode(TestNode):
         return None if encodedSegment is None else base64.b64decode(encodedSegment)
 
     def zgs_get_file_info(self, data_root):
-        return self.rpc.zgs_getFileInfo([data_root])
+        return self.rpc.zgs_getFileInfo([data_root, True])
 
     def zgs_get_file_info_by_tx_seq(self, tx_seq):
         return self.rpc.zgs_getFileInfoByTxSeq([tx_seq])

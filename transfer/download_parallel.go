@@ -37,8 +37,11 @@ type segmentDownloader struct {
 var _ parallel.Interface = (*segmentDownloader)(nil)
 
 func newSegmentDownloader(downloader *Downloader, info *node.FileInfo, shardConfigs []*shard.ShardConfig, file *download.DownloadingFile, withProof bool) (*segmentDownloader, error) {
-	startSegmentIndex := info.Tx.StartEntryIndex / core.DefaultSegmentMaxChunks
-	endSegmentIndex := (info.Tx.StartEntryIndex + core.NumSplits(int64(info.Tx.Size), core.DefaultChunkSize) - 1) / core.DefaultSegmentMaxChunks
+	downloader.logger.WithFields(logrus.Fields{
+		"start entry index": info.Tx.StartEntryIndex,
+		"size":              info.Tx.Size,
+	}).Debug("File Info")
+	startSegmentIndex, endSegmentIndex := core.SegmentRange(info.Tx.StartEntryIndex, info.Tx.Size)
 
 	offset := file.Metadata().Offset / core.DefaultSegmentSize
 
@@ -92,6 +95,12 @@ func (downloader *segmentDownloader) ParallelDo(ctx context.Context, routine, ta
 	for i := 0; i < len(downloader.shardConfigs); i += 1 {
 		nodeIndex := (routine + i) % len(downloader.shardConfigs)
 		if (downloader.startSegmentIndex+segmentIndex)%downloader.shardConfigs[nodeIndex].NumShard != downloader.shardConfigs[nodeIndex].ShardId {
+			downloader.logger.WithFields(logrus.Fields{
+				"node index": nodeIndex,
+				"segment":    fmt.Sprintf("%v/(%v-%v)", downloader.startSegmentIndex+segmentIndex, downloader.startSegmentIndex, downloader.endSegmentIndex),
+				"chunks":     fmt.Sprintf("[%v, %v)", startIndex, endIndex),
+				"shard id":   downloader.shardConfigs[nodeIndex].ShardId,
+			}).Debug("Skip downloading segment")
 			continue
 		}
 		// try download from current node
