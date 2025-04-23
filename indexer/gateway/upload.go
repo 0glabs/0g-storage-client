@@ -95,7 +95,9 @@ func uploadSegmentWithProof(
 	}
 
 	opt := transfer.UploadOption{
-		ExpectedReplica: expectedReplica,
+		FinalityRequired: transfer.FileFinalized,
+		ExpectedReplica:  expectedReplica,
+		Method:           "min",
 	}
 	fileSegements := transfer.FileSegmentsWithProof{
 		Segments: []node.SegmentWithProof{segment},
