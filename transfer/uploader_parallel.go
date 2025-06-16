@@ -88,8 +88,26 @@ func (uploader *segmentUploader) ParallelDo(ctx context.Context, routine int, ta
 		segIndex += uploadTask.numShard
 	}
 
+	uploader.logger.WithFields(logrus.Fields{
+		"total":          numSegments,
+		"from_seg_index": startSegIndex,
+		"to_seg_index":   segIndex,
+		"step":           uploadTask.numShard,
+		"root":           core.SegmentRoot(segments[0].Data),
+		"to_node":        uploader.clients[uploadTask.clientIndex].URL(),
+	}).Debug("Segments uploading")
+
 	for i := 0; i < tooManyDataRetries; i++ {
 		_, err := uploader.clients[uploadTask.clientIndex].UploadSegmentsByTxSeq(ctx, segments, uploader.txSeq)
+		if err != nil {
+			logrus.WithFields(logrus.Fields{
+				"taskId":      task,
+				"segIndex":    segIndex,
+				"startSegIdx": startSegIndex,
+				"numSegments": numSegments,
+			}).Error("Failed to upload segments", err)
+
+		}
 		if err == nil || isDuplicateError(err.Error()) {
 			break
 		}
@@ -102,16 +120,15 @@ func (uploader *segmentUploader) ParallelDo(ctx context.Context, routine int, ta
 		return nil, errors.WithMessage(err, "Failed to upload segment")
 	}
 
-	if uploader.logger.IsLevelEnabled(logrus.DebugLevel) {
-		uploader.logger.WithFields(logrus.Fields{
-			"total":          numSegments,
-			"from_seg_index": startSegIndex,
-			"to_seg_index":   segIndex,
-			"step":           uploadTask.numShard,
-			"root":           core.SegmentRoot(segments[0].Data),
-			"to_node":        uploader.clients[uploadTask.clientIndex].URL(),
-		}).Debug("Segments uploaded")
-	}
+	uploader.logger.WithFields(logrus.Fields{
+		"total":          numSegments,
+		"from_seg_index": startSegIndex,
+		"to_seg_index":   segIndex,
+		"step":           uploadTask.numShard,
+		"root":           core.SegmentRoot(segments[0].Data),
+		"to_node":        uploader.clients[uploadTask.clientIndex].URL(),
+	}).Debug("Segments uploaded")
+
 	return nil, nil
 }
 
