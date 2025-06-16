@@ -636,6 +636,7 @@ func (uploader *Uploader) waitForLogEntry(ctx context.Context, root common.Hash,
 	uploader.logger.WithFields(logrus.Fields{
 		"root":     root,
 		"finality": finalityRequired,
+		"txSeq":    txSeq,
 	}).Info("Wait for log entry on storage node")
 
 	reminder := util.NewReminder(uploader.logger, time.Minute)
@@ -668,6 +669,7 @@ func (uploader *Uploader) waitForLogEntry(ctx context.Context, root common.Hash,
 				reminder.Remind("Log entry is available, but not finalized yet", logrus.Fields{
 					"cached":           info.IsCached,
 					"uploadedSegments": info.UploadedSegNum,
+					"txSeq":            info.Tx.Seq,
 				})
 				ok = false
 				break
